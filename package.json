@@ -1,0 +1,44 @@
+{
+  "name": "t17mind",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "build:pwa": "tsc && vite build --config vite.config.pwa.ts && node -e \"require('fs').renameSync('dist-pwa/index.pwa.html','dist-pwa/index.html')\"",
+    "serve:pwa": "node serve-pwa.js",
+    "preview": "vite preview",
+    "check": "tsc --noEmit && svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run",
+    "build:desktop": "node desktop/build.mjs"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.3.0",
+    "jsdom": "^30.0.1",
+    "svelte": "^5.56.9",
+    "svelte-check": "^4.7.6",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.0",
+    "vite-plugin-singlefile": "^2.3.3",
+    "vitest": "^5.0.0"
+  },
+  "dependencies": {
+    "jszip": "^3.10.2",
+    "xlsx": "^0.18.5"
+  },
+  "description": "T17Mind - phan mem so do tu duy (mindmap) chay offline tren trinh duyet, PWA va Windows portable",
+  "license": "MIT",
+  "author": "tungnt2201-dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tungnt2201-dev/T17Mind.git"
+  },
+  "keywords": [
+    "mindmap",
+    "svelte",
+    "canvas",
+    "pwa",
+    "typescript"
+  ]
+}

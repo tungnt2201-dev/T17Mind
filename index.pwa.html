@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>T17Mind</title>
+<!-- P1.15 (đóng gói PWA) — CHỈ có trong bản index.pwa.html (build
+     riêng, nhiều file, phục vụ qua http/https), KHÔNG có trong
+     index.html gốc (bản 1-file, mở trực tiếp qua file://) — 2 API
+     này (Web App Manifest, Service Worker) đều KHÔNG hoạt động qua
+     file://, tách riêng để bản cũ không vướng thẻ vô dụng. -->
+<link rel="manifest" href="./manifest.json" />
+<meta name="theme-color" content="#2f6fed" />
+<link rel="icon" href="./icon-192.png" />
+<link rel="apple-touch-icon" href="./icon-192.png" />
+</head>
+<body>
+<div id="app">
+  <div id="toolbar-root"></div>
+
+  <div id="main">
+    <canvas id="map-canvas"></canvas>
+    <div id="marquee-box"></div>
+    <div id="search-bar-root"></div>
+    <div id="status"></div>
+    <div id="linking-hint">Bấm vào node để chọn làm nguồn của liên kết (Esc để huỷ)</div>
+    <div id="side-panel-root"></div>
+    <div id="explorer-panel-root"></div>
+    <div id="minimap-panel-root"></div>
+    <div id="err-box">
+      <button class="close-btn" id="err-close">✕</button>
+      <h4 id="err-box-title">Không nhập được dữ liệu</h4>
+      <ul id="err-list"></ul>
+    </div>
+  </div>
+</div>
+
+<div id="help-modal-root"></div>
+<div id="maps-modal-root"></div>
+
+<div class="modal-overlay" id="shortcuts-overlay">
+  <div class="modal" style="max-width:480px;">
+    <h2>Phím tắt</h2>
+    <table>
+      <tr><th>Phím</th><th>Việc gì</th></tr>
+      <tr><td><code>←</code></td><td>Chọn node cha</td></tr>
+      <tr><td><code>→</code></td><td>Chọn con đầu tiên (nếu nhánh đang mở)</td></tr>
+      <tr><td><code>↑</code> / <code>↓</code></td><td>Chọn node gần nhất phía trên/dưới trên canvas (theo vị trí thật, không theo cấu trúc cây)</td></tr>
+      <tr><td><code>Home</code></td><td>Về node gốc</td></tr>
+      <tr><td><code>Tab</code></td><td>Thêm nhánh con</td></tr>
+      <tr><td><code>Enter</code></td><td>Thêm node cùng cấp (anh em)</td></tr>
+      <tr><td><code>Delete</code> / <code>Backspace</code></td><td>Xoá node/liên kết/tóm tắt đang chọn</td></tr>
+      <tr><td><code>F2</code> hoặc dblclick</td><td>Sửa nội dung</td></tr>
+      <tr><td><code>C</code></td><td>Gộp/bung theo cấp — xoay 3 nấc: thu gọn hoàn toàn → chỉ hiện con trực tiếp → mở hết. Áp dụng được CẢ CHO GỐC (mức thu gọn tối đa của gốc là chỉ còn 1 mình gốc hiện) — dựa trên node đang chọn, không chọn gì thì không làm gì (hoặc bấm vào chấm tròn, chỉ hiện khi đang thu gọn)</td></tr>
+      <tr><td><code>Shift+C</code></td><td>Mở hết ngay toàn bộ nhánh, bỏ qua các nấc giữa (hoặc giữ Shift khi bấm chấm tròn)</td></tr>
+      <tr><td><code>F</code></td><td>Vừa khung nhìn — canh giữa + chỉnh zoom vừa khít mọi node đang hiển thị</td></tr>
+      <tr><td><code>Ctrl+Z</code></td><td>Hoàn tác</td></tr>
+      <tr><td><code>Ctrl+Shift+Z</code></td><td>Làm lại</td></tr>
+      <tr><td><code>Ctrl+C</code> / <code>Ctrl+X</code> / <code>Ctrl+V</code></td><td>Sao chép / cắt / dán</td></tr>
+      <tr><td><code>Ctrl+D</code></td><td>Nhân bản node</td></tr>
+      <tr><td><code>Ctrl/Shift+click</code></td><td>Chọn nhiều node</td></tr>
+      <tr><td>Kéo vùng trống</td><td>Chọn nhiều bằng khung chữ nhật</td></tr>
+      <tr><td>Giữ <code>Space</code> + kéo</td><td>Kéo di chuyển khung nhìn (pan)</td></tr>
+      <tr><td>Cuộn chuột</td><td>Zoom, lấy đúng vị trí con trỏ làm tâm</td></tr>
+      <tr><td><code>Esc</code></td><td>Huỷ thao tác đang dở (kéo, tạo liên kết...)</td></tr>
+      <tr><td><code>Ctrl+F</code></td><td>Mở ô tìm kiếm — Enter nhảy tới kết quả tiếp theo</td></tr>
+      <tr><td><code>?</code></td><td>Mở/đóng bảng này</td></tr>
+    </table>
+    <div class="close-row"><button class="btn primary" id="shortcuts-close">Đóng</button></div>
+  </div>
+</div>
+
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>

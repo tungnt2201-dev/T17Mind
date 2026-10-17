@@ -1,0 +1,633 @@
+:root {
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --border: #e2e5ea;
+  --text: #20242c;
+  --muted: #6b7280;
+  --accent: #2f6fed;
+  --accent-soft: #eaf0ff;
+  --danger: #d64545;
+  /* P2.15 — thêm 2 token riêng cho thanh công cụ 1-hàng-đôi kiểu
+   * Timeline: hàng 2 nền hơi xám (phân biệt "khu điều khiển ngữ cảnh"
+   * với hàng 1 "khu thương hiệu/tệp"), và bóng đổ dùng chung cho mọi
+   * menu thả xuống nổi lên trên canvas. */
+  --row2-bg: #fafbfc;
+  --menu-shadow: 0 8px 24px rgba(20, 24, 32, 0.12);
+  /* P2.16 — "màu sắc toolbar tương đồng T17 Timeline, nút hiện đại, ít
+   * màu mè": Timeline gần như CHỈ dùng 1 tông xám trung tính cho mọi
+   * icon/chữ trong nút, dành riêng màu xanh (--accent) cho ĐÚNG 2 việc:
+   * nút hành động chính ("+ Note mới") và trạng thái "đang bật/đang mở"
+   * — mọi hover bình thường chỉ đổi sang xám nhạt, KHÔNG ngả xanh nữa
+   * (khác bản P2.15 cũ, mọi nút hover đều viền+nền xanh, tạo cảm giác
+   * "màu mè" dù mỗi lúc chỉ 1 nút hover). 2 token mới: nền xám rất nhạt
+   * dùng cho hover trung tính + cho "chip" nền của cụm icon-vuông bên
+   * phải hàng 1 (Explorer/Minimap/Trợ giúp — giống 3 icon-vuông xám bên
+   * phải cùng của Timeline, LUÔN có nền chip kể cả lúc không hover). */
+  --neutral-hover: #eef0f3;
+  --chip-bg: #f1f2f5;
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, "Segoe UI", Inter, Roboto, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* ---------------------------------------------------------------------
+ * P2.15 — Thanh công cụ 1-khối 2-hàng (thay cho ribbon nhiều tab kiểu
+ * Office đã làm ở P2.1), theo yêu cầu trực tiếp: "số lượng công cụ
+ * chưa nhiều, ribbon tốn thời gian thao tác — gộp thành 1 thanh, bố trí
+ * khoa học, phong cách hiện đại tối giản, tham khảo app T17 Timeline
+ * (cùng dòng T17) để nhất quán ngôn ngữ thiết kế".
+ *
+ * Ngôn ngữ thiết kế lấy từ Timeline: hàng 1 nền trắng (thương hiệu +
+ * hành động chính + menu Tệp/Nhập/Xuất + cụm icon phải), hàng 2 nền hơi
+ * xám `--row2-bg` (công cụ theo NGỮ CẢNH đang làm việc) — nút dạng
+ * "viên thuốc" bo tròn, icon+chữ NẰM NGANG (khác kiểu icon-trên-chữ-
+ * dưới của ribbon cũ), viền mảnh, primary xanh đặc, menu thả xuống có
+ * bóng đổ nổi lên trên canvas — không tab, không cần bấm chuyển, mọi
+ * công cụ LUÔN THẤY NGAY. Dùng ĐÚNG bảng màu hiện có (--bg/--panel/
+ * --border/--text/--muted/--accent/--accent-soft/--danger) + 2 token
+ * mới (--row2-bg/--menu-shadow) khai báo cùng chỗ ở đầu file.
+ * Class đặt tên riêng (tbar- và menu-) — KHÔNG dùng lại "btn"/"group" cũ
+ * vì 3 modal khác (HelpModal, MapsModal, SidePanel) vẫn dùng nguyên
+ * class đó cho nút của họ.
+ * --------------------------------------------------------------------- */
+#toolbar {
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.tbar-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+.tbar-row-main {
+  border-bottom: 1px solid var(--border);
+}
+.tbar-row-tools {
+  background: var(--row2-bg);
+}
+.tbar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text);
+  white-space: nowrap;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+/* P2.16 — ô vuông xanh nhỏ chứa icon thương hiệu, giống mẫu logo của
+ * Timeline (khối vuông xanh + icon trắng trước tên app) — ĐÚNG 1 chỗ
+ * dùng màu ngoài nút primary/trạng thái active, vì đây là bản sắc
+ * thương hiệu, không phải trang trí tuỳ tiện. */
+.tbar-brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  flex-shrink: 0;
+}
+.tbar-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 4px 4px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+.tbar-spacer {
+  flex: 1;
+  min-width: 8px;
+}
+
+/* Nút viên thuốc chuẩn: icon + chữ NẰM NGANG, dùng cho tuyệt đại đa số
+ * hành động ở cả 2 hàng — thay cho kiểu icon-trên-chữ-dưới cồng kềnh
+ * của ribbon cũ, đúng ngôn ngữ nút phẳng nhỏ gọn của Timeline. */
+.tbar-btn {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12.5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+/* P2.16 — icon giờ là SVG (component Icon.svelte, xem ui/icons.ts) —
+ * "currentColor" tự ăn đúng màu chữ hiện tại của nút (xám thường/xanh
+ * active/đỏ danger/trắng trên primary), không lệch tông như emoji cũ.
+ * `.icon-text` là phần CÒN LẠI của 2 icon dạng ký tự thuần (dấu ngoặc
+ * "{ }" cho Tóm tắt, "▭" cho Khoanh vùng) — 2 ký tự này VỐN ĐÃ đơn sắc
+ * (không phải emoji nhiều màu) nên giữ nguyên dạng chữ, không cần vẽ
+ * lại bằng SVG. */
+.tbar-btn .tbar-icon-svg {
+  flex-shrink: 0;
+}
+.tbar-btn .icon-text {
+  font-size: 13px;
+  line-height: 1;
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+/* P2.16 — hover TRUNG TÍNH (xám nhạt) cho mọi nút thường — trước đây
+ * MỌI nút đều viền+nền xanh khi hover, khiến cả thanh công cụ nhấp nháy
+ * xanh liên tục lúc rê chuột qua, đúng thứ người dùng gọi là "màu mè".
+ * Giờ màu xanh CHỈ còn xuất hiện ở 2 nơi có Ý NGHĨA thật (nút chính
+ * primary, trạng thái đang bật/đang mở active/menu-open) — đúng cách
+ * Timeline dùng màu: một tông xám trung tính xuyên suốt, xanh chỉ để
+ * NHẤN đúng chỗ cần chú ý. */
+.tbar-btn:hover {
+  background: var(--neutral-hover);
+}
+.tbar-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.tbar-btn.primary:hover {
+  filter: brightness(1.08);
+}
+.tbar-btn.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.tbar-btn.danger {
+  color: var(--danger);
+}
+.tbar-btn.danger:hover {
+  background: #fdeaea;
+}
+.tbar-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: transparent;
+  border-color: transparent;
+}
+
+/* Nút vuông chỉ-icon — cho hành động 1 biểu tượng đủ rõ nghĩa mà không
+ * cần nhãn chữ (Hoàn tác/Làm lại ở hàng 2: nền trong suốt lúc thường,
+ * giống Timeline không tô nền cho cặp icon này). Riêng biến thể
+ * `.chip` (cụm Explorer/Minimap/Trợ giúp cuối hàng 1) LUÔN có nền xám
+ * nhạt kể cả lúc không hover — đúng y hệt cụm 3 icon-vuông bên phải
+ * cùng của Timeline (sidebar/toàn màn hình/"?"), tách bạch rõ với các
+ * nút chữ+icon còn lại trong hàng. */
+.tbar-icon-group {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.tbar-icon-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  cursor: pointer;
+  color: var(--text);
+  flex-shrink: 0;
+}
+.tbar-icon-btn:hover {
+  background: var(--neutral-hover);
+}
+.tbar-icon-btn.chip {
+  background: var(--chip-bg);
+}
+.tbar-icon-btn.chip:hover {
+  background: var(--neutral-hover);
+}
+.tbar-icon-btn.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.tbar-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* select gốc HTML tự nhiên (Bố cục/Theme), khoác áo viên-thuốc giống
+ * hệt .tbar-btn để không lộ ra là 1 control khác loại giữa hàng nút. */
+.tbar-select {
+  height: 30px;
+  font-size: 12.5px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--panel);
+  flex-shrink: 0;
+  max-width: 180px;
+}
+.tbar-select:hover {
+  background: var(--neutral-hover);
+}
+
+/* Menu thả xuống (Tệp/Nhập/Xuất/Hiển thị) — gộp nhiều thao tác ít-dùng-
+ * hơn vào 1 nút, đúng kỹ thuật Timeline dùng cho "Dữ liệu ▾": nút kích
+ * hoạt trông y hệt .tbar-btn (thêm mũi tên nhỏ), bấm mở 1 panel nổi có
+ * bóng đổ, tự đóng khi bấm ra ngoài hoặc bấm Esc (xem Toolbar.svelte).
+ * .menu-panel dùng position:FIXED, toạ độ top/left tính bằng JS theo
+ * getBoundingClientRect() của nút bấm — KHÔNG dùng absolute neo theo
+ * .menu-wrap, vì hàng chứa nó (.tbar-row) cần overflow-x:auto để cuộn
+ * ngang lúc tràn, mà overflow-x khác "visible" khiến overflow-y cũng
+ * tự động bị ép "auto" (quy tắc CSS), cắt mất mọi panel absolute neo
+ * bên trong — xem ghi chú đầy đủ tại khai báo toggleMenu() trong
+ * Toolbar.svelte (bắt lỗi này bằng ảnh chụp Playwright trong lúc kiểm
+ * thử P2.15: nút sáng đúng trạng thái "đang mở" nhưng panel vô hình). */
+.menu-wrap {
+  flex-shrink: 0;
+}
+.menu-btn .chevron {
+  font-size: 9px;
+  margin-left: 1px;
+  color: var(--muted);
+}
+.menu-btn.menu-open {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.menu-panel {
+  position: fixed;
+  z-index: 50;
+  min-width: 200px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  box-shadow: var(--menu-shadow);
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.menu-item {
+  appearance: none;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 7px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.menu-item:hover {
+  background: var(--neutral-hover);
+}
+.menu-item .tbar-icon-svg {
+  flex-shrink: 0;
+}
+.menu-item .icon-text {
+  font-size: 13px;
+  width: 15px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.menu-item.toggle .check {
+  font-size: 13px;
+  width: 15px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.menu-item.toggle.checked {
+  color: var(--accent);
+}
+.menu-sep {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--border);
+}
+button.btn {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 7px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+button.btn:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+button.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+button.btn.primary:hover {
+  filter: brightness(1.08);
+}
+button.btn.danger {
+  color: var(--danger);
+}
+button.btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+button.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+input[type="file"] {
+  display: none;
+}
+
+#main {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+#map-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+  background-image: radial-gradient(#dfe3e8 1px, transparent 1px);
+  background-size: 22px 22px;
+  cursor: default;
+}
+
+#marquee-box {
+  position: absolute;
+  border: 1.5px dashed var(--accent);
+  background: rgba(47, 111, 237, 0.1);
+  pointer-events: none;
+  display: none;
+  z-index: 900;
+  border-radius: 2px;
+}
+
+#status {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  font-size: 12px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.85);
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+#side-panel {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 270px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(20, 22, 30, 0.08);
+  padding: 14px 16px;
+  display: none;
+  font-size: 12.5px;
+  max-height: calc(100% - 24px);
+  overflow: auto;
+}
+#side-panel.open {
+  display: block;
+}
+#side-panel h4 {
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+#side-panel .row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 9px;
+  gap: 8px;
+}
+#side-panel label {
+  color: var(--muted);
+  white-space: nowrap;
+}
+#side-panel input[type="color"] {
+  width: 34px;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0;
+  cursor: pointer;
+}
+#side-panel input[type="text"],
+#side-panel input[type="url"],
+#side-panel input[type="number"] {
+  width: 130px;
+  padding: 5px 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12.5px;
+}
+#side-panel select {
+  padding: 5px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12.5px;
+  width: 130px;
+}
+#side-panel input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+#side-panel .divider {
+  border-top: 1px solid var(--border);
+  margin: 10px 0;
+}
+#side-panel .small-btn {
+  width: 100%;
+  margin-top: 4px;
+}
+#side-panel .muted {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 22, 26, 0.45);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+.modal-overlay.open {
+  display: flex;
+}
+.modal {
+  background: #fff;
+  border-radius: 12px;
+  max-width: 660px;
+  width: 92%;
+  max-height: 82vh;
+  overflow: auto;
+  padding: 22px 24px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+}
+.modal h2 {
+  margin-top: 0;
+  font-size: 18px;
+}
+.modal h3 {
+  font-size: 14px;
+  margin: 18px 0 6px;
+}
+.modal p,
+.modal li {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: #333;
+}
+.modal code,
+.modal pre {
+  background: #f2f4f7;
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 12.5px;
+}
+.modal pre {
+  padding: 12px;
+  overflow: auto;
+}
+.modal table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+  margin: 8px 0;
+}
+.modal th,
+.modal td {
+  border: 1px solid var(--border);
+  padding: 5px 7px;
+  text-align: left;
+}
+.modal th {
+  background: #f8f9fb;
+}
+.modal .close-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+#err-box {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  max-width: 360px;
+  background: #fff5f5;
+  border: 1px solid #f3b4b4;
+  color: #8a2323;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 12.5px;
+  display: none;
+  z-index: 1500;
+}
+#err-box.open {
+  display: block;
+}
+#err-box h4 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+#err-box ul {
+  margin: 0;
+  padding-left: 18px;
+}
+#err-box .close-btn {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  cursor: pointer;
+  color: #8a2323;
+  background: none;
+  border: none;
+  font-size: 14px;
+}
+
+.t17-editing-input {
+  position: absolute;
+  border: 2px solid var(--accent);
+  border-radius: 6px;
+  outline: none;
+  text-align: center;
+  font-family: inherit;
+  z-index: 1000;
+  padding: 0 4px;
+}
+
+.t17-editing-textarea {
+  text-align: left;
+  padding: 8px 10px;
+  resize: none;
+  overflow: hidden;
+  line-height: 18px;
+  box-sizing: border-box;
+}
+
+#linking-hint {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #14162b;
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 12.5px;
+  display: none;
+  z-index: 1400;
+  pointer-events: none;
+}
+#linking-hint.open {
+  display: block;
+}

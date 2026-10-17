@@ -1,0 +1,9 @@
+{
+  "name": "t17mind-desktop",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Neutralino wrapper tao file .exe portable cho T17Mind",
+  "devDependencies": {
+    "@neutralinojs/neu": "^11.8.0"
+  }
+}

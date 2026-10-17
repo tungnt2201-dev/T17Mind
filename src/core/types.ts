@@ -1,0 +1,313 @@
+/**
+ * core/types.ts
+ * ---------------------------------------------------------------------
+ * Kiểu dữ liệu trung tâm của T17Mind. Đây là "bản đồ dữ liệu" — mọi
+ * module khác trong dự án (layout, render, ui, io) đều dựa vào các
+ * kiểu khai báo ở đây, KHÔNG được tự định nghĩa lại.
+ *
+ * Quy tắc phụ thuộc một chiều: file này không import bất cứ thứ gì
+ * từ layout/, render/, ui/. Nó là đáy của kim tự tháp.
+ * ---------------------------------------------------------------------
+ */
+
+/** Phiên bản cấu trúc dữ liệu hiện tại. Tăng số này mỗi khi đổi hình
+ *  dạng MindNode/MindMap, và viết hàm di trú tương ứng trong migrate.ts */
+export const CURRENT_SCHEMA_VERSION = 16;
+
+export type BorderStyle = "solid" | "dashed" | "dotted" | "none";
+export type EdgeShape = "curve" | "straight";
+export type TextAlign = "left" | "center" | "right";
+/** P2.6b-1 — "auto" giữ NGUYÊN VẸN hành vi hiện tại (một dòng, tự
+ *  cắt bớt nếu node bị ép hẹp thủ công) — bắt buộc phải có trạng thái
+ *  này để KHÔNG đổi giao diện của mọi node/file đã có từ trước, chỉ
+ *  node nào người dùng CHỦ ĐỘNG chọn "wrap"/"shrink" mới đổi cách vẽ. */
+export type TextFit = "auto" | "wrap" | "shrink";
+
+/** Một node trong sơ đồ tư duy. */
+export interface MindNode {
+  readonly id: string;
+  text: string;
+  parentId: string | null;
+  /** id của các con, ĐÚNG THỨ TỰ hiển thị trên sơ đồ. */
+  children: string[];
+  collapsed: boolean;
+
+  notes: string | null;
+  color: string | null;
+  fill: string | null;
+  fillTransparent: boolean;
+  /** P2.6c — mức độ đậm/nhạt của MÀU NỀN khi fillTransparent đang TẮT
+   *  (0-100). Khác fillTransparent (bật/tắt có-không có màu nền hoàn
+   *  toàn) — đây là một mức liên tục áp dụng LÊN TRÊN màu nền đang có.
+   *  Mặc định 100 = đậm hoàn toàn, giữ đúng hành vi trước khi có
+   *  tính năng này. */
+  fillOpacity: number;
+  borderStyle: BorderStyle;
+  borderColor: string | null;
+  link: string | null;
+
+  /** P2.10 — id của ảnh nhúng gắn trên node này, tham chiếu vào
+   *  map.assets (xem ImageAsset bên dưới). null = không có ảnh. KHÔNG
+   *  lưu trực tiếp dữ liệu ảnh trên node — ảnh có thể nặng (base64),
+   *  tách riêng ra map.assets để không làm nặng mọi thao tác đọc/ghi
+   *  thuộc tính khác của node (giống cách Tag tách khỏi node từ P2.7e).
+   *  Đổi qua SetNodeImageCommand riêng (core/commands.ts), KHÔNG qua
+   *  UpdateNodeStyleCommand chung — vì thêm ảnh còn phải ghi thêm vào
+   *  map.assets, một thay đổi ở CẤP MAP chứ không chỉ trên node. */
+  imageAssetId: string | null;
+
+  /** P2.2 — biến node thành mục công việc. */
+  /** Danh sách biểu tượng (ký tự emoji), vẽ thành một hàng phía trên node. */
+  markers: string[];
+  /** 0–100, null = không hiện vòng tiến độ. */
+  progress: number | null;
+  /** 1 (khẩn cấp) tới 5 (thấp), null = không hiện huy hiệu ưu tiên. */
+  priority: number | null;
+  /** P2.7e — id các Tag gán cho node này (tham chiếu vào map.tags,
+   *  KHÔNG còn là chữ tự do như trước — xem TagDef bên dưới). Hiện
+   *  dạng viên thuốc, màu lấy từ chính Tag tương ứng — LÀM TĂNG
+   *  node.height khi có, xem layout/index.ts và
+   *  render/CanvasRenderer.ts#getMeasurer. */
+  tagIds: string[];
+
+  /** Kiểu đường nối từ node này TỚI CÁC CON của nó (không phải tới cha). */
+  edgeColor: string | null;
+  edgeDash: boolean;
+  edgeShape: EdgeShape;
+  /** P2.7 (nâng cấp) — độ dày đường nối TỚI CÁC CON, tự chỉnh tay.
+   *  null = TỰ ĐỘNG theo cấp (cấp càng sâu càng mỏng dần — xem
+   *  render/geometry.ts#computeEdgeWidth), số cụ thể = ép cứng độ dày
+   *  này, bỏ qua tính tự động. */
+  edgeWidth: number | null;
+
+  /** P2.6b-1 — định dạng chữ. null/"auto" = mặc định như trước giờ
+   *  (xem TextFit ở trên). fontSize null = tự động theo cấp (gốc to
+   *  hơn node thường, y hệt hành vi cũ). */
+  fontSize: number | null;
+  /** P2.6c — tên font tự do (ví dụ "Arial", "Times New Roman"). null =
+   *  dùng font hệ thống mặc định như trước giờ. Không kiểm tra font có
+   *  cài trên máy hay không — Canvas tự lùi về font dự phòng nếu không
+   *  tìm thấy, giống hệt cách CSS font-family hoạt động. */
+  fontFamily: string | null;
+  textAlign: TextAlign;
+  textFit: TextFit;
+
+  /** P2.7f — đậm/nghiêng/gạch chân cho chữ chính của node. Độc lập với
+   *  fontWeight tự động theo cấp (gốc vốn đã đậm sẵn — textBold=true
+   *  trên gốc chỉ là "đậm thêm", không đổi gì vì đã đậm nhất định
+   *  dạng rồi; trên node thường thì có tác dụng rõ). */
+  textBold: boolean;
+  textItalic: boolean;
+  textUnderline: boolean;
+
+  /** P2.7f — checkbox hoàn thành kiểu to-do. null = KHÔNG hiện checkbox
+   *  (đa số node bình thường). false/true = có hiện, chưa/đã hoàn
+   *  thành — true tự động gạch ngang chữ khi vẽ (xem
+   *  render/CanvasRenderer.ts), không cần bật thêm textUnderline. */
+  checked: boolean | null;
+
+  /** P2.6b-2 — nhãn trên đường nối cha-con. LƯU TRÊN NODE CON (không
+   *  phải node cha) — đại diện cho nhãn của đường nối TỚI CHÍNH NODE
+   *  NÀY từ cha của nó. null = không có nhãn. Chỉ thật sự VẼ ra khi
+   *  map.showEdgeLabels đang bật (xem MindMap#showEdgeLabels) — tắt
+   *  công tắc không xoá dữ liệu, chỉ ẩn phần vẽ. */
+  edgeLabel: string | null;
+
+  /** Độ lệch thủ công so với vị trí do layout tính ra (kéo tự do). */
+  offsetX: number;
+  offsetY: number;
+  /** Kích thước ép tay; null nghĩa là để layout tự đo theo nội dung chữ. */
+  manualWidth: number | null;
+  manualHeight: number | null;
+
+  /** Toạ độ do layout tính, CHƯA cộng offset thủ công. layout/ ghi. */
+  baseX: number;
+  baseY: number;
+  /** Toạ độ cuối cùng dùng để vẽ = base + offset cộng dồn từ tổ tiên.
+   *  render/ và ui/ chỉ đọc hai trường này, không tự tính. */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Liên kết chéo giữa hai node bất kỳ, không nhất thiết cùng nhánh. */
+export interface Relationship {
+  readonly id: string;
+  fromId: string;
+  toId: string;
+  label: string;
+  color: string | null;
+  /** false = nét liền. Mặc định (undefined khi đọc file cũ) coi là true. */
+  dash: boolean;
+  /** Điểm điều khiển đường cong do người dùng kéo tay; null = tự tính. */
+  bend: { x: number; y: number } | null;
+}
+
+/** Nhóm tóm tắt nhiều node cùng cấp bằng một ngoặc + nhãn. */
+export interface Summary {
+  readonly id: string;
+  nodeIds: string[];
+  label: string;
+  color: string | null;
+}
+
+/**
+ * P2.4 — Khoanh vùng: khung nền bo góc bao quanh một nhóm node BẤT KỲ
+ * trên canvas — khác Summary ở chỗ KHÔNG YÊU CẦU cùng chung một node
+ * cha, có thể gom node ở nhiều nhánh khác hẳn nhau.
+ */
+export interface Boundary {
+  readonly id: string;
+  nodeIds: string[];
+  label: string;
+  fillColor: string | null;
+  borderColor: string | null;
+}
+
+/**
+ * P2.5b — Ghi chú dán: một tờ giấy nhớ nổi tự do trên canvas, KHÔNG
+ * gắn với node nào cả — hoàn toàn độc lập, không tham gia cấu trúc
+ * cây. Khác "notes" trong MindNode (thuộc về một node cụ thể, chỉ đọc
+ * được khi chọn đúng node đó) — ghi chú dán hiện TOÀN BỘ nội dung
+ * ngay trên canvas. Không có width/height lưu sẵn: bề rộng cố định
+ * theo hằng số, chiều cao luôn tính lại từ nội dung (word-wrap), xem
+ * render/CanvasRenderer.ts#wrapStickyText — tránh lưu dữ liệu dẫn xuất
+ * có thể lệch khỏi nội dung thật.
+ */
+export interface StickyNote {
+  readonly id: string;
+  text: string;
+  x: number;
+  y: number;
+  color: string | null;
+}
+
+/** Toàn bộ tài liệu mindmap — đơn vị lưu/mở file. */
+/**
+ * P2.7e — định nghĩa MỘT Tag trong danh sách tập trung của map. Node
+ * chỉ lưu id (xem MindNode.tagIds), không lưu tên/màu trực tiếp — đổi
+ * tên hay đổi màu một Tag ở đây tự động cập nhật MỌI node đang gắn nó,
+ * không cần sửa từng node riêng lẻ.
+ */
+export interface TagDef {
+  id: string;
+  name: string;
+  /** Mã màu hex, ví dụ "#2f6fed" — dùng cho cả nền viên thuốc trên
+   *  node lẫn ô quản lý Tag. */
+  color: string;
+}
+
+/**
+ * P2.10 — một tệp ảnh nhúng trong tài liệu (dùng cho MindNode.imageAssetId).
+ * Lưu dạng base64 NGAY TRONG file JSON/localStorage bình thường (đơn
+ * giản nhất, không cần thay đổi cách lưu hiện có) — nhưng khi xuất ra
+ * định dạng `.t17m` (io/t17m.ts), dữ liệu này được TÁCH RA thành file
+ * nhị phân THẬT bên trong zip (thư mục `assets/`), giống cách phần mềm
+ * XMind nhúng ảnh — nhẹ hơn ~33% so với giữ nguyên base64 trong JSON.
+ */
+export interface ImageAsset {
+  /** Ví dụ "image/png", "image/jpeg" — dùng để đặt tên file trong zip
+   *  lúc xuất `.t17m` và để trình duyệt hiển thị đúng khi xem lại. */
+  mimeType: string;
+  /** Nội dung ảnh mã hoá base64 (KHÔNG kèm tiền tố "data:...;base64,"
+   *  — tiền tố đó được ghép lại mỗi lần cần hiển thị, xem
+   *  ui/dialog.ts#showImagePreview và render/CanvasRenderer.ts). */
+  dataBase64: string;
+}
+
+export interface MindMap {
+  /**
+   * P2.6d — định danh DUY NHẤT của chính tài liệu này (khác hẳn id của
+   * từng node/liên kết bên trong nó) — dùng để lưu riêng từng map vào
+   * localStorage theo khoá `t17mind-map-{mapId}`, không còn dùng
+   * chung một khoá cho mọi map như trước. Sinh một lần khi tạo map
+   * mới hoặc khi nhập một file JSON không có sẵn mapId — SAU ĐÓ GIỮ
+   * NGUYÊN mãi mãi, không sinh lại mỗi lần lưu/mở.
+   */
+  mapId: string;
+  /** P2.6d — tên hiển thị TUỲ CHỌN trong "Map gần đây". null = dùng
+   *  luôn chữ của node gốc làm tên hiển thị (không cần nhập thêm gì).
+   *  Chỉ khác null khi người dùng CHỦ ĐỘNG đổi tên qua "Map gần đây" —
+   *  tên đó không tự đổi theo mỗi khi sửa chữ node gốc nữa. */
+  mapTitle: string | null;
+
+  schemaVersion: number;
+  rootId: string;
+  /** Flat map id -> node, tra cứu O(1). Xem thuật ngữ "flat map". */
+  nodes: Record<string, MindNode>;
+  relationships: Relationship[];
+  summaries: Summary[];
+  boundaries: Boundary[];
+  stickyNotes: StickyNote[];
+
+  /**
+   * P2.6b-2 — công tắc hiển thị MỨC TÀI LIỆU (không phải riêng từng
+   * node/liên kết/tóm tắt). Tắt chỉ ẩn phần VẼ, không xoá dữ liệu bên
+   * dưới — bật lại là thấy y nguyên.
+   *  - showEdgeLabels: mặc định TẮT — nhãn cha-con chỉ hữu ích khi cần,
+   *    bật tràn lan ngay từ đầu sẽ rối canvas với ai không dùng tới.
+   *  - showRelationships / showSummaries: mặc định BẬT — giữ đúng hành
+   *    vi đã có từ P1.8 tới giờ, chỉ tắt khi người dùng chủ động muốn
+   *    nhìn gọn hơn.
+   */
+  showEdgeLabels: boolean;
+  showRelationships: boolean;
+  showSummaries: boolean;
+
+  /**
+   * P2.7a — kiểu bố cục đang dùng cho TOÀN BỘ map (mọi cây độc lập —
+   * gốc chính lẫn mọi nhánh trôi — dùng CHUNG một kiểu, không có khái
+   * niệm "mỗi nhánh trôi một bố cục riêng"). Mặc định "logicRight" —
+   * đúng hành vi duy nhất đã có từ P1.1 tới giờ. Mở sẵn chỗ cho các
+   * kiểu khác ở P2.7b/c/d (cây hai bên, sơ đồ tổ chức, xương cá...)
+   * mà không cần đổi lại trường này lần nữa.
+   */
+  layoutType: LayoutType;
+
+  /** P2.7e — danh sách Tag tập trung của toàn map. */
+  tags: TagDef[];
+
+  /** P2.10 — kho ảnh nhúng tập trung của toàn map, tra theo id (xem
+   *  MindNode.imageAssetId và ImageAsset ở trên) — CÙNG MÔ HÌNH với
+   *  `tags`: node chỉ lưu id, dữ liệu thật nằm ở đây, một chỗ duy nhất. */
+  assets: Record<string, ImageAsset>;
+
+  /** P2.7h (Phần 4) — bật "Kiểu cây tự nhiên": đường nối vẽ dạng dải
+   *  băng thon dần (dày ở cha, mỏng dần khi ra tới con) thay vì nét
+   *  đều một độ dày như mặc định. Áp dụng cho MỌI layout dùng đường
+   *  cong bezier (logicRight/Left/Both/treeDown/treeUp) — orgChart
+   *  luôn có hình dạng riêng (góc vuông), bỏ qua công tắc này. Mặc
+   *  định false — KHÔNG đổi cách vẽ hiện có trừ khi người dùng chủ
+   *  động bật. */
+  organicEdges: boolean;
+
+  /**
+   * P2.11 — id của bộ theme (xem `core/theme.ts#THEMES`) đang ÁP DỤNG
+   * cho map này, hoặc `null` nếu người dùng chưa từng bấm "Áp dụng"
+   * theme nào (giữ nguyên màu tự đặt tay như trước P2.6). Lưu lại giá
+   * trị này để khi TẠO NODE MỚI (AddChildCommand, nhân bản, dán, ghép
+   * map...) biết cần tự động tô màu theo ĐÚNG theme đang bật thay vì
+   * bỏ trắng/copy màu cha — xem `computeThemedStyleForNode`. Không tự
+   * đổi khi người dùng chỉnh tay màu một node lẻ; chỉ đổi khi bấm lại
+   * "Áp dụng" (theme khác) hoặc "Bỏ theme".
+   */
+  activeThemeId: string | null;
+}
+
+export type LayoutType = "logicRight" | "logicLeft" | "logicBoth" | "treeDown" | "orgChart" | "treeUp";
+
+/**
+ * P2.7c — "layout dọc" (độ sâu = trục Y) gồm treeDown, orgChart (dùng
+ * chung thuật toán xếp vị trí với treeDown, chỉ khác kiểu vẽ đường
+ * nối) và treeUp (soi gương dọc của treeDown) — dùng hàm này ở mọi
+ * nơi cần biết "đây có phải layout dọc hay không" (điều hướng phím,
+ * dò khe hở kéo-thả, điểm neo đường nối), tránh lặp lại điều kiện
+ * rải rác nhiều chỗ, dễ quên cập nhật đồng bộ khi thêm layout dọc mới.
+ */
+export function isVerticalLayout(layoutType: LayoutType): boolean {
+  return layoutType === "treeDown" || layoutType === "orgChart" || layoutType === "treeUp";
+}
+
+/** Kết quả xác thực: rỗng nghĩa là dữ liệu hợp lệ. */
+export type ValidationErrors = string[];

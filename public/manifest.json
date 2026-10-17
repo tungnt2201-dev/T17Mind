@@ -1,0 +1,28 @@
+{
+  "name": "T17Mind — Mindmap cá nhân",
+  "short_name": "T17Mind",
+  "description": "Ứng dụng mindmap cá nhân — tự động lưu, hỗ trợ Tag, Explorer, Minimap, xuất SVG/Markdown/XMind.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f7f9",
+  "theme_color": "#2f6fed",
+  "lang": "vi",
+  "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "file_handlers": [
+    {
+      "action": "./index.html",
+      "name": "Mở bằng T17Mind",
+      "accept": {
+        "application/json": [".json"],
+        "application/octet-stream": [".xmind", ".t17m"]
+      },
+      "icons": [{ "src": "./icon-192.png", "sizes": "192x192", "type": "image/png" }],
+      "launch_type": "single-client"
+    }
+  ]
+}
