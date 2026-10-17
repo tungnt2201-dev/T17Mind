@@ -46,6 +46,7 @@
   import type { NodeStylePatch, RelationshipPatch, SummaryPatch, BoundaryPatch, StickyNotePatch } from "../../core/commands";
   import { lightenHex } from "../../core/theme";
   import { showConfirm } from "../dialog";
+  import CardSection from "./CardSection.svelte";
   import type { BorderStyle, EdgeShape, TextAlign, TextFit } from "../../core/types";
 
   export let store: Store;
@@ -541,6 +542,9 @@
         {/if}
       </div>
     </div>
+    <div class="divider"></div>
+
+    <CardSection {store} nodeId={n.id} />
     <div class="divider"></div>
 
     <button type="button" class="section-header" on:click={() => (sectionOpen.work = !sectionOpen.work)}>

@@ -13,7 +13,7 @@ import type { MindMap, MindNode, Relationship, Summary, Boundary } from "./types
 import { CURRENT_SCHEMA_VERSION } from "./types";
 
 /** Sinh id ngẫu nhiên đủ ngắn để đọc, đủ dài để không trùng trong một tài liệu. */
-export function generateId(prefix: "n" | "r" | "s" | "b" | "k" | "m" | "tag" | "img"): string {
+export function generateId(prefix: "n" | "r" | "s" | "b" | "k" | "m" | "tag" | "img" | "card" | "blk"): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
 }
 
@@ -23,6 +23,16 @@ export function generateId(prefix: "n" | "r" | "s" | "b" | "k" | "m" | "tag" | "
  *  định — không ai nhầm "đây là id một map" với "đây là id một node". */
 export function generateMapId(): string {
   return generateId("m");
+}
+
+/** M1 — định danh cho một Card (duy nhất toàn cục, xem types.ts#Card). */
+export function generateCardId(): string {
+  return generateId("card");
+}
+
+/** M1 — định danh cho một khối trong card (duy nhất trong card đó). */
+export function generateBlockId(): string {
+  return generateId("blk");
 }
 
 /** P2.7e — định danh cho một Tag trong danh sách tập trung của map. */
@@ -47,6 +57,7 @@ export function createNode(text: string, parentId: string | null): MindNode {
     borderColor: null,
     link: null,
     imageAssetId: null,
+    cardId: null,
     markers: [],
     progress: null,
     priority: null,
@@ -98,6 +109,7 @@ export function createEmptyMap(title: string): MindMap {
     layoutType: "logicRight",
     tags: [],
     assets: {},
+    cards: {},
     organicEdges: false,
     activeThemeId: null,
   };

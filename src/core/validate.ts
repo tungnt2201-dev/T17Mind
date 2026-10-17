@@ -14,6 +14,7 @@
  */
 import type { MindMap, ValidationErrors } from "./types";
 import { getRootIds } from "./tree";
+import { validateCard } from "./cards";
 
 export function validateMindMap(map: MindMap): ValidationErrors {
   const errors: ValidationErrors = [];
@@ -120,6 +121,21 @@ export function validateMindMap(map: MindMap): ValidationErrors {
     if (!map.assets[node.imageAssetId]) {
       errors.push(`Node "${id}" có imageAssetId tham chiếu ảnh không tồn tại: "${node.imageAssetId}".`);
     }
+  }
+
+  // M1 — Card: node.cardId phải trỏ tới card có thật; mỗi card phải hợp
+  // lệ (khối, bảng hình chữ nhật, ảnh/biểu đồ tham chiếu đúng). Card
+  // KHÔNG có node nào trỏ tới vẫn hợp lệ (card "chưa treo vào đâu").
+  for (const id of allIds) {
+    const node = map.nodes[id];
+    if (!node || node.cardId === null) continue;
+    if (!map.cards[node.cardId]) {
+      errors.push(`Node "${id}" có cardId tham chiếu card không tồn tại: "${node.cardId}".`);
+    }
+  }
+  for (const [key, card] of Object.entries(map.cards)) {
+    if (card.id !== key) errors.push(`Card khoá "${key}" nhưng id bên trong là "${card.id}".`);
+    errors.push(...validateCard(card, map.assets));
   }
 
   // Không có đoạn xác thực riêng cho stickyNotes (P2.5b) — khác

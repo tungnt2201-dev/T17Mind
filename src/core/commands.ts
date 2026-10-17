@@ -37,6 +37,7 @@ import type {
   StickyNote,
   LayoutType,
   TagDef,
+  Card,
 } from "./types";
 import {
   createNode,
@@ -677,7 +678,7 @@ export class MoveNodeCommand implements Command {
  *  thuần chỉ random (cực hiếm trùng), nhưng khi GHÉP HẲN một map khác
  *  vào (P2.9 — MergeMapCommand bên dưới), tốt hơn là đảm bảo TUYỆT ĐỐI
  *  bằng một vòng lặp kiểm tra, giống cách bản phác thảo ban đầu đã làm. */
-function generateUniqueId(prefix: "n" | "r" | "s" | "b" | "k" | "tag" | "img", taken: Set<string>): string {
+function generateUniqueId(prefix: "n" | "r" | "s" | "b" | "k" | "tag" | "img" | "card", taken: Set<string>): string {
   let id: string;
   do {
     id = generateId(prefix);
@@ -729,6 +730,7 @@ export class MergeMapCommand implements Command {
     boundaries: Boundary[];
     stickyNotes: StickyNote[];
     assets: MindMap["assets"];
+    cards: MindMap["cards"];
   } | null = null;
   private newRootIdsInternal: string[] = [];
 
@@ -747,6 +749,7 @@ export class MergeMapCommand implements Command {
       boundaries: deepClone(map.boundaries),
       stickyNotes: deepClone(map.stickyNotes),
       assets: deepClone(map.assets),
+      cards: deepClone(map.cards),
     };
 
     // --- 1) Remap ID node: MỌI node trong file nhập đều nhận id MỚI ---
@@ -763,6 +766,22 @@ export class MergeMapCommand implements Command {
     const takenAssetIds = new Set(Object.keys(map.assets));
     for (const oldAssetId of Object.keys(this.importedMap.assets ?? {})) {
       assetIdRemap.set(oldAssetId, generateUniqueId("img", takenAssetIds));
+    }
+
+    // --- 1c) Card (M1): MỌI card của file nhập đều nhận id MỚI (như node),
+    // và khối ảnh trong card trỏ sang assetId đã remap ở trên. ---
+    const cardIdRemap = new Map<string, string>();
+    const takenCardIds = new Set(Object.keys(map.cards));
+    for (const oldCardId of Object.keys(this.importedMap.cards ?? {})) {
+      cardIdRemap.set(oldCardId, generateUniqueId("card", takenCardIds));
+    }
+    for (const [oldCardId, newCardId] of cardIdRemap) {
+      const card = deepClone((this.importedMap.cards ?? {})[oldCardId] as Card);
+      card.id = newCardId;
+      for (const b of card.blocks) {
+        if (b.type === "image") b.assetId = assetIdRemap.get(b.assetId) ?? b.assetId;
+      }
+      map.cards[newCardId] = card;
     }
 
     // --- 2) Tag: gộp theo TÊN (không phân biệt hoa/thường) ---
@@ -800,6 +819,7 @@ export class MergeMapCommand implements Command {
         children: clonedBase.children.map((c) => nodeIdRemap.get(c)).filter((c): c is string => !!c),
         tagIds: clonedBase.tagIds.map((t) => tagIdRemap.get(t)).filter((t): t is string => !!t),
         imageAssetId: clonedBase.imageAssetId ? assetIdRemap.get(clonedBase.imageAssetId) ?? null : null,
+        cardId: clonedBase.cardId ? cardIdRemap.get(clonedBase.cardId) ?? null : null,
       };
       remappedNodes[newId] = cloned;
     }
@@ -887,6 +907,7 @@ export class MergeMapCommand implements Command {
     map.boundaries = this.snapshot.boundaries;
     map.stickyNotes = this.snapshot.stickyNotes;
     map.assets = this.snapshot.assets;
+    map.cards = this.snapshot.cards;
   }
 }
 

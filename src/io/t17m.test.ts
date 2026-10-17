@@ -87,3 +87,34 @@ describe("io/t17m — xuất/nhập định dạng nguyên bản .t17m (P2.10)",
     expect(Object.keys(result.map.assets)).toHaveLength(0);
   });
 });
+
+describe("io/t17m — Card & Block (M1)", () => {
+  it("round-trip .t17m và JSON phẳng giữ nguyên card, bảng, khối ảnh (ảnh trong card tách ra assets/ thật)", async () => {
+    const { CreateCardForNodeCommand, AddBlockCommand } = await import("../core/cardCommands");
+    const { createCard, createTextBlock, createTableBlock, createImageBlock } = await import("../core/cards");
+    const { exportFlatJson, parseJsonFile } = await import("./json");
+    const map = createEmptyMap("Gốc card");
+    const card = createCard("Báo cáo");
+    const table = createTableBlock(2, 2, "Số liệu");
+    table.cells = [["A", "B"], ["1", "2"]];
+    new CreateCardForNodeCommand(map.rootId, card).apply(map);
+    new AddBlockCommand(card.id, createTextBlock("Đoạn mở đầu")).apply(map);
+    new AddBlockCommand(card.id, table).apply(map);
+    new AddBlockCommand(card.id, createImageBlock("img_cb", "Ảnh 1"), null, {
+      assetId: "img_cb",
+      asset: { mimeType: "image/png", dataBase64: TINY_PNG_BASE64 },
+    }).apply(map);
+
+    const viaT17m = await parseT17mFile(await (await exportT17mFile(map)).arrayBuffer());
+    expect(viaT17m.ok).toBe(true);
+    if (viaT17m.ok) {
+      expect(viaT17m.map.cards[card.id]).toEqual(map.cards[card.id]);
+      expect(viaT17m.map.assets["img_cb"]?.dataBase64).toBe(TINY_PNG_BASE64);
+      expect(viaT17m.map.nodes[map.rootId]?.cardId).toBe(card.id);
+    }
+
+    const viaJson = parseJsonFile(exportFlatJson(map));
+    expect(viaJson.ok).toBe(true);
+    if (viaJson.ok) expect(viaJson.map.cards[card.id]).toEqual(map.cards[card.id]);
+  });
+});

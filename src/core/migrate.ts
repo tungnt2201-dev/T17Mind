@@ -403,6 +403,27 @@ function migrateV15toV16(raw: UnknownRecord): UnknownRecord {
   };
 }
 
+/**
+ * Phiên bản 16 -> 17: thêm Card & Block (M1) — kho `map.cards` (mới,
+ * mặc định rỗng) và con trỏ `node.cardId` (mới, mặc định null). File cũ
+ * không có card nào; `notes` được GIỮ NGUYÊN (không chuyển thành card ở
+ * bước này — xem docs/ROADMAP.md mục 0).
+ */
+function migrateV16toV17(raw: UnknownRecord): UnknownRecord {
+  const rawNodes = (raw.nodes as UnknownRecord | undefined) ?? {};
+  const nodes: UnknownRecord = {};
+  for (const id of Object.keys(rawNodes)) {
+    const n = (rawNodes[id] ?? {}) as UnknownRecord;
+    nodes[id] = { ...n, cardId: typeof n.cardId === "string" ? n.cardId : null };
+  }
+  return {
+    ...raw,
+    schemaVersion: 17,
+    nodes,
+    cards: typeof raw.cards === "object" && raw.cards !== null && !Array.isArray(raw.cards) ? raw.cards : {},
+  };
+}
+
 const MIGRATIONS: Record<number, MigrationFn> = {
   0: migrateV0toV1,
   1: migrateV1toV2,
@@ -420,6 +441,7 @@ const MIGRATIONS: Record<number, MigrationFn> = {
   13: migrateV13toV14,
   14: migrateV14toV15,
   15: migrateV15toV16,
+  16: migrateV16toV17,
 };
 
 /**
@@ -471,6 +493,7 @@ export function migrateToLatest(raw: UnknownRecord): MindMap {
   if (!Array.isArray(safe.tags)) safe.tags = [];
   if (typeof safe.assets !== "object" || safe.assets === null) safe.assets = {};
   if (typeof safe.activeThemeId !== "string") safe.activeThemeId = null;
+  if (typeof safe.cards !== "object" || safe.cards === null || Array.isArray(safe.cards)) safe.cards = {};
 
   // Cùng lý do, cùng cách sửa — nhưng ở CẤP NODE: children/markers/
   // tagIds cũng là mảng, cũng có thể bị "rơi" giống hệt các mảng cấp
@@ -482,6 +505,7 @@ export function migrateToLatest(raw: UnknownRecord): MindMap {
       if (!Array.isArray(node.markers)) node.markers = [];
       if (!Array.isArray(node.tagIds)) node.tagIds = [];
       if (typeof node.imageAssetId !== "string") node.imageAssetId = null;
+      if (typeof node.cardId !== "string") node.cardId = null;
     }
   }
 

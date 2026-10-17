@@ -12,7 +12,7 @@
 
 /** Phiên bản cấu trúc dữ liệu hiện tại. Tăng số này mỗi khi đổi hình
  *  dạng MindNode/MindMap, và viết hàm di trú tương ứng trong migrate.ts */
-export const CURRENT_SCHEMA_VERSION = 16;
+export const CURRENT_SCHEMA_VERSION = 17;
 
 export type BorderStyle = "solid" | "dashed" | "dotted" | "none";
 export type EdgeShape = "curve" | "straight";
@@ -55,6 +55,13 @@ export interface MindNode {
    *  UpdateNodeStyleCommand chung — vì thêm ảnh còn phải ghi thêm vào
    *  map.assets, một thay đổi ở CẤP MAP chứ không chỉ trên node. */
   imageAssetId: string | null;
+
+  /** M1 (Card & Block) — id của Card gắn trên node này, tham chiếu vào
+   *  map.cards. null = node chưa có card. Nhiều node CÓ THỂ trỏ cùng một
+   *  card (card là đơn vị nội dung độc lập; node chỉ là "chỗ treo" nó
+   *  lên sơ đồ — tinh thần Card của Heptabase). Đổi qua các Command ở
+   *  core/cardCommands.ts, KHÔNG qua UpdateNodeStyleCommand. */
+  cardId: string | null;
 
   /** P2.2 — biến node thành mục công việc. */
   /** Danh sách biểu tượng (ký tự emoji), vẽ thành một hàng phía trên node. */
@@ -216,6 +223,69 @@ export interface ImageAsset {
   dataBase64: string;
 }
 
+/**
+ * M1 (Card & Block) — NỘI DUNG của một Card là danh sách khối có thứ tự.
+ * Mỗi khối có `id` duy nhất TRONG card đó (không cần duy nhất toàn map).
+ */
+export type BlockType = "text" | "table" | "image" | "chart";
+
+interface BlockBase {
+  id: string;
+  type: BlockType;
+}
+
+/** Đoạn văn bản (chữ thuần, xuống dòng bằng "\n"). */
+export interface TextBlock extends BlockBase {
+  type: "text";
+  text: string;
+}
+
+export type TableAlign = "left" | "center" | "right";
+
+/** Bảng: `cells[hàng][cột]`, mọi ô là chữ (công thức: chưa hỗ trợ). Luôn
+ *  hình chữ nhật: mọi hàng có cùng số cột = `align.length`. */
+export interface TableBlock extends BlockBase {
+  type: "table";
+  title: string;
+  headerRow: boolean;
+  align: TableAlign[];
+  cells: string[][];
+}
+
+/** Ảnh: dữ liệu nằm ở map.assets (dùng chung cơ chế P2.10). */
+export interface ImageBlock extends BlockBase {
+  type: "image";
+  assetId: string;
+  caption: string;
+}
+
+export type ChartKind = "bar" | "line" | "pie";
+
+/** Biểu đồ (M4): lấy số từ một khối bảng CÙNG card. */
+export interface ChartBlock extends BlockBase {
+  type: "chart";
+  title: string;
+  kind: ChartKind;
+  tableBlockId: string;
+  labelColumn: number;
+  seriesColumns: number[];
+}
+
+export type Block = TextBlock | TableBlock | ImageBlock | ChartBlock;
+
+/**
+ * M1 — Card: một "tờ ghi chú" độc lập với vị trí trên sơ đồ. `id` duy
+ * nhất toàn cục (UUID-like) để sau này có thể nâng lên Thư viện dùng
+ * chung nhiều map mà không phải đổi id. Card không bị xoá khi node
+ * chứa nó bị xoá — nó trở thành card "chưa treo vào đâu" (vẫn nằm
+ * trong map.cards).
+ */
+export interface Card {
+  id: string;
+  title: string;
+  blocks: Block[];
+}
+
 export interface MindMap {
   /**
    * P2.6d — định danh DUY NHẤT của chính tài liệu này (khác hẳn id của
@@ -272,6 +342,9 @@ export interface MindMap {
    *  MindNode.imageAssetId và ImageAsset ở trên) — CÙNG MÔ HÌNH với
    *  `tags`: node chỉ lưu id, dữ liệu thật nằm ở đây, một chỗ duy nhất. */
   assets: Record<string, ImageAsset>;
+
+  /** M1 — kho Card của map (xem MindNode.cardId, Card ở trên). */
+  cards: Record<string, Card>;
 
   /** P2.7h (Phần 4) — bật "Kiểu cây tự nhiên": đường nối vẽ dạng dải
    *  băng thon dần (dày ở cha, mỏng dần khi ra tới con) thay vì nét

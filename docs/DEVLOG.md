@@ -3480,3 +3480,13 @@ Nếu sau này thêm tính năng mới mà thấy cần `window.confirm`/`alert`
 tiếp**, sẽ lặp lại đúng lỗi này. Dùng lại `src/ui/dialog.ts` cho hộp
 thoại, và dùng sự kiện `paste`/`copy` tự nhiên thay vì Clipboard API khi
 cần đọc dữ liệu clipboard.
+
+---
+
+## M1 — Card & Block (17/10/2026)
+
+Thêm Card (tờ nội dung độc lập, gắn vào node qua `node.cardId`) chứa các khối Văn bản / Bảng / Ảnh / Biểu đồ. Schema 16 → 17. Xem `docs/ROADMAP.md` (mục 0 và M1) để biết quyết định thiết kế và phần còn lại.
+
+- Lõi: `src/core/cards.ts` (tạo/kiểm tra), `src/core/cardCommands.ts` (Command, undo/redo), nối `validate.ts`, `migrate.ts`, `MergeMapCommand`.
+- Giao diện: `src/ui/components/CardSection.svelte` trong SidePanel.
+- Lỗi thật bắt được nhờ test: `MergeMapCommand.revert()` ban đầu quên khôi phục `map.cards` — test "ghép 2 lần rồi hoàn tác 2 lần" so sánh JSON toàn map đã phát hiện.

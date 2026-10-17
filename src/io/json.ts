@@ -211,6 +211,7 @@ function importNestedJson(obj: Record<string, unknown>): ImportResult {
     layoutType: (obj as { layoutType?: unknown }).layoutType === "logicLeft" ? "logicLeft" : "logicRight",
     tags,
     assets: {},
+    cards: {},
     organicEdges: (obj as { organicEdges?: unknown }).organicEdges === true,
     activeThemeId: null,
   };

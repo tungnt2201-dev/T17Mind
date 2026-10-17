@@ -333,6 +333,7 @@ function buildMapFromRows(rows: RawRow[], sheetName: string): ImportResult {
       layoutType: "logicRight",
       tags,
       assets: {},
+    cards: {},
       organicEdges: false,
       activeThemeId: null,
     },

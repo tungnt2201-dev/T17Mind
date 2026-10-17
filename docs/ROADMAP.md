@@ -1,0 +1,175 @@
+# T17Mind — Lộ trình v1.x: Bảng biểu · Hình ảnh · Biểu đồ · Kết xuất .md/.docx · Hướng Heptabase
+
+> Phần 1–4 là lộ trình nội dung/xuất file. **Phần 5 (cuối file)** là các tính năng học từ Heptabase và cách chúng nối vào phần 1–4 — đọc cả hai trước khi bắt đầu M1.
+
+## 1. Ý tưởng cốt lõi: "Khối nội dung" (Block)
+
+Hiện mỗi node chỉ có chữ, ghi chú, link và **một** ảnh (`imageAssetId`). Thay vì thêm từng trường riêng cho bảng, biểu đồ…, ta thêm **một khái niệm chung**: node có thể mang **danh sách khối nội dung có thứ tự**.
+
+```ts
+// src/core/types.ts (ĐÃ CÀI ĐẶT ở M1)
+type Block = TextBlock | TableBlock | ImageBlock | ChartBlock;   // mỗi khối có id duy nhất TRONG card
+
+interface Card { id: string; title: string; blocks: Block[] }    // blocks lưu NGAY TRONG card, có thứ tự
+
+// MindNode:  cardId: string | null        (nhiều node có thể trỏ cùng một card)
+// MindMap:   cards: Record<string, Card>  (cùng khuôn với tags, assets)
+// TableBlock: { headerRow, align[], cells: string[][] }  — luôn hình chữ nhật
+// ImageBlock: { assetId, caption }                        — dữ liệu ảnh ở map.assets
+// ChartBlock: { kind, tableBlockId, labelColumn, seriesColumns[] } — lấy số từ bảng CÙNG card
+```
+
+Vì sao thiết kế vậy:
+- **Giống mẫu đã chạy tốt** của Tag (P2.7e) và Ảnh (P2.10): dữ liệu nặng nằm ở cấp map, node chỉ giữ id → copy/xoá/gộp map (MergeMapCommand) xử lý thống nhất.
+- **Biểu đồ không chứa số riêng** mà trỏ tới bảng → sửa bảng, biểu đồ tự cập nhật; tránh dữ liệu trùng.
+- Thêm loại khối mới sau này (code, sơ đồ nhỏ, file đính kèm…) không phải đổi schema.
+
+## 2. Các giai đoạn
+
+Mỗi giai đoạn = 1 milestone GitHub, chia thành các issue nhỏ, mỗi issue 1 PR. Mọi thay đổi dữ liệu đi qua Command (undo/redo) và có test.
+
+### M1 — Nền móng Card & Block ✅ (hoàn thành 17/10/2026, còn các mục ghi chú bên dưới)
+- [x] Kiểu dữ liệu `Card`/`Block`, `node.cardId`, `map.cards`; **migrate schema 16 → 17** (có guard cho dữ liệu cũ). *(Khối nằm trong `card.blocks`, không có `node.blockIds`/`map.blocks`.)*
+- [ ] Chuyển `imageAssetId` cũ và `notes` thành khối của card — **hoãn** sang bước riêng sau khi card ổn định (xem mục 0.3); hiện giữ nguyên cả hai.
+- [x] Command (`core/cardCommands.ts`): Create/Attach/Detach/DeleteCard, RenameCard, AddBlock, ReplaceBlock, RemoveBlock, MoveBlock (+ test undo/redo trả về đúng trạng thái).
+- [x] `validate.ts`: kiểm tra `cardId`, ảnh, biểu đồ→bảng, bảng hình chữ nhật, id khối trùng.
+- [x] JSON phẳng và `.t17m` round-trip đầy đủ card; MergeMap mang theo card (đổi id card, remap ảnh). *Chưa làm:* copy/paste/nhân bản node mang theo card (hiện cũng chưa mang ảnh/tag — cùng hạn chế sẵn có), JSON lồng nhau chưa có card.
+- [x] SidePanel: mục **Card** (`CardSection.svelte`): tạo/gắn/gỡ/xoá card, đổi tên, thêm Văn bản/Bảng, sắp xếp, xoá khối, sửa chữ.
+
+### M2 — Bảng biểu
+- [ ] Trình sửa bảng (hộp thoại Svelte): thêm/xoá hàng/cột, hàng tiêu đề, căn lề, Tab/Enter di chuyển ô.
+- [ ] **Dán từ Excel/Google Sheets** (TSV) và nhập CSV; xuất bảng ra CSV.
+- [ ] Hiển thị trên canvas: node hiện **thẻ thu nhỏ** (tối đa ~5×4 ô, phần còn lại "…"); bấm mở trình xem/sửa đầy đủ (giống bấm icon ảnh).
+- [ ] Đo chiều cao node có tính khối (`layout` + `getMeasurer`) — chú ý cache, vì layout chạy lại thường xuyên.
+
+### M3 — Hình ảnh (nâng cấp)
+- [ ] Nhiều ảnh mỗi node, chú thích (caption), đổi kích thước hiển thị.
+- [ ] Dán ảnh từ clipboard, kéo-thả file vào node; tự nén/đổi cỡ khi quá lớn (giới hạn dung lượng `.t17m`).
+- [ ] Cache bitmap thu nhỏ để vẽ canvas mượt (đừng decode lại mỗi khung hình).
+
+### M4 — Biểu đồ
+- [ ] Bộ vẽ biểu đồ **tự viết nhỏ gọn** (cột / đường / tròn) sinh ra **chuỗi SVG** — một đường code dùng chung cho canvas, xuất ảnh và docx. Không kéo thêm thư viện biểu đồ nặng.
+- [ ] Trình sửa: chọn bảng nguồn, cột nhãn, cột số liệu, loại biểu đồ, bảng màu theo theme.
+- [ ] Hiển thị thẻ thu nhỏ trên node; bấm để xem lớn.
+
+### M5 — Kết xuất tài liệu (.md và .docx)
+Mô hình chung (một lần, dùng cho cả hai định dạng): **cây map → "tài liệu"** gồm tiêu đề / đoạn / danh sách / bảng / ảnh.
+- [ ] Hộp thoại tuỳ chọn: xuất cả map hay chỉ nhánh đang chọn; độ sâu → cấp tiêu đề (H1…H6, sâu hơn thì thành danh sách); có kèm ghi chú / bảng / ảnh / biểu đồ hay không; có mục lục.
+- [ ] **Markdown**: bảng → bảng GFM; ảnh & biểu đồ → thư mục `assets/` đóng zip (hoặc tuỳ chọn nhúng base64 vào một file).
+- [ ] **DOCX**: thư viện `docx` (tải lười như `xlsx` để không phình bundle chính); bảng Word thật, ảnh/biểu đồ (SVG → PNG), mục lục, kiểu tiêu đề chuẩn Word.
+- [ ] Test "tự kiểm chứng": xuất rồi giải nén/đọc lại, so khớp số hàng/cột/ảnh với map gốc.
+- [ ] Sau cùng (tuỳ chọn): **nhập Markdown** → map (tiêu đề/danh sách thành node) để đi hai chiều.
+
+### M6 — Hoàn thiện
+- [ ] Hiệu năng với map lớn có nhiều khối (culling cũng áp dụng cho thẻ khối).
+- [ ] Bản desktop: xem mục rủi ro #1.
+- [ ] Cập nhật README, ví dụ map mẫu, ảnh chụp màn hình.
+
+## 3. Rủi ro / quyết định cần chốt sớm
+
+1. **Lưu file trên bản .exe (Neutralino/WebView2)**: tải file kiểu trình duyệt (blob + `<a download>`) có thể không hoạt động ổn trong cửa sổ Neutralino. Xuất `.docx/.md/.zip` là tính năng cốt lõi, nên cần **kiểm tra trên Windows ngay ở M1**; nếu lỗi sẽ dùng hộp thoại lưu của Neutralino (`os.showSaveDialog` + `filesystem.writeBinaryFile`) và mở thêm đúng các quyền đó trong `nativeAllowList`.
+2. **Bảng có công thức?** Đề xuất v1: chỉ chữ/số thô; tính toán chỉ ở biểu đồ. Công thức để sau.
+3. **Cỡ file `.t17m`**: ảnh lớn làm nặng — cần nén và cảnh báo.
+4. **Layout**: node có khối cao hơn bình thường; nên vẽ khối dạng thẻ có kích thước tối đa cố định để bố cục không "nổ".
+5. **Tầng module** (giữ quy tắc `ui → render → layout → core`): bộ vẽ biểu đồ và mô hình tài liệu là hàm thuần chỉ phụ thuộc `core`; `io/docx.ts`, `io/markdownDoc.ts` dùng chúng, không import `ui`.
+
+## 4. Quy trình làm việc trên GitHub
+
+- Nhánh `main` luôn xanh (CI: check + test + build). Mỗi tính năng: nhánh `feat/<tên>` → Pull Request → merge.
+- Mỗi gạch đầu dòng ở trên = 1 Issue, gắn Milestone M1…M6.
+- Commit message không dấu (quy ước dự án). Gắn tag `vX.Y.Z` để workflow tự build bản Windows.
+- Tính năng nào có thay đổi dữ liệu: luôn kèm migration + test.
+
+---
+
+## 0. Quyết định đã chốt (17/10/2026)
+
+1. **Card ở trong map, id toàn cục (phương án A).** `map.cards`, `node.cardId`; map vẫn là file độc lập.
+2. **T17Mind vẫn là phần mềm mindmap, có thêm card.** KHÔNG làm canvas whiteboard tự do (H4 bị loại). Section/mũi tên kiểu Heptabase đã có phần tương đương qua nhánh trôi + đường liên kết.
+3. `notes` hiện tại **giữ nguyên** ở M1 (không migrate ngay, tránh vỡ tìm kiếm/xuất file/icon ghi chú); sẽ gộp vào card ở một bước riêng sau khi card ổn định.
+
+## 5. Định hướng kế thừa Heptabase
+
+Nguồn tham khảo: video *Heptabase Fundamentals 101: Sense-making with whiteboards* (kênh Heptabase) và wiki công khai của Heptabase (Fundamental Elements, User Interface Logic, Mindmap, Heptabase 1.0, Public Roadmap). Lưu ý: không lấy được phụ đề video; nội dung video được hiểu qua các chương (tạo card trên whiteboard, thư viện card, trích ghi chú từ sách, trích từ PDF, **tổng hợp kiến thức từ nhiều nguồn bằng mindmap**, "giá trị cốt lõi") và đối chiếu với wiki. Cần xem lại video để bổ sung chi tiết thao tác.
+
+### 5.1 Tư tưởng cốt lõi của Heptabase
+
+1. **Card là đơn vị tri thức, sống trong Thư viện (Card Library)**, không thuộc về bảng nào. *Một card xuất hiện được trên nhiều whiteboard mà không nhân bản.*
+2. **Whiteboard chỉ là nơi sắp xếp không gian** (không sở hữu card): đặt card, nhóm vào **Section**, nối bằng **mũi tên**, lồng **whiteboard con**.
+3. **Mindmap là một đối tượng trên whiteboard**; node có thể là chữ hoặc card; "Turn into new card" biến node thành card, kéo card vào node để thành nhánh.
+4. **Liên kết hai chiều** (`@card`, backlinks, hover preview) → mạng tri thức thay cho cây thư mục.
+5. **Đọc → trích → tổng hợp**: highlight từ PDF/sách thành card, rồi sắp xếp các card đó lại bằng whiteboard/mindmap (đây là "sense-making" mà video nhấn mạnh).
+6. **Bảng dữ liệu (Tag Database)**: tag + thuộc tính → xem dạng Table / Kanban.
+7. Thêm: Journal (nhật ký ngày), Inbox (thu thập nhanh), tìm kiếm toàn cục + Command Palette, chế độ Focus, tab/sidebar, xuất Markdown/PDF/ảnh.
+
+### 5.2 Đối chiếu với T17Mind
+
+| Heptabase | T17Mind hiện có | Đề xuất |
+|---|---|---|
+| Card (note dạng block: bảng, ảnh, code, to-do…) | Node + ghi chú + 1 ảnh | **Card = tập khối nội dung** (chính là Block ở phần 1, nâng lên thành tài liệu có tiêu đề) |
+| Card Library | Chưa có | Thư viện card (H1) |
+| Whiteboard + Section + mũi tên | Nhánh trôi, đường liên kết, đa map | **Canvas tự do** (H4) |
+| Mindmap trên whiteboard | **Là thế mạnh của T17Mind** | Giữ nguyên, thêm "node ↔ card" |
+| Backlinks / `@` | Chưa có | Liên kết node/card hai chiều (H2) |
+| Highlight PDF → card | Chưa có | Đọc PDF & trích (H5) |
+| Tag Database (Table/Kanban) | Tag, tiến độ, ưu tiên, Explorer | Chế độ xem Bảng/Kanban (H3) |
+| Global Search / Command Palette | Tìm kiếm cơ bản | Command Palette (rẻ, làm sớm) |
+| Journal, Inbox | Chưa có | Tuỳ chọn, sau cùng |
+| AI (Chat/Actions) | Không | **Ngoài phạm vi** (xem 5.4) |
+
+### 5.3 Quyết định kiến trúc cần chốt trước M1 — "Card ở đâu?"
+
+Phần 1 đặt Block ở cấp **map** (an toàn, dễ nhập/xuất `.t17m`). Heptabase đặt Card ở cấp **thư viện dùng chung nhiều bảng**. Hai hướng:
+
+- **(A) Card trong map, id toàn cục (khuyến nghị).** Mỗi Card có `id` duy nhất toàn cục (UUID), nằm trong `map.cards`; node trỏ `cardId`. Map vẫn là file độc lập, xuất/nhập dễ. Khi làm Thư viện (H1) thì "nâng" card lên cấp workspace mà không phải đổi id; trong lúc chờ, dùng "Sao chép kèm liên kết nguồn".
+- **(B) Thư viện workspace ngay từ đầu.** Đúng tinh thần Heptabase nhất, nhưng mọi thứ phức tạp hơn: xuất `.t17m` phải gói cả card được tham chiếu, xoá card phải kiểm tra mọi map, migrate dữ liệu đa map hiện có.
+
+→ **ĐÃ CHỌN (A)**: đổi M1 thành "Card & Block": `Card { id, title, blockIds }`, `node.cardId`, ghi chú hiện tại (`notes`) migrate thành khối văn bản đầu tiên của card. Làm vậy mọi việc ở M2–M5 (bảng, ảnh, biểu đồ, xuất .md/.docx) vẫn đúng, chỉ đổi "khối thuộc node" thành "khối thuộc card của node".
+
+### 5.4 Các milestone bổ sung (đặt sau M5, hoặc xen kẽ theo ý bạn)
+
+**H0 — Rẻ, thấy giá trị ngay (làm cùng lúc với M1–M2)**
+- [ ] **Command Palette** (Ctrl+K): gõ tìm hành động; **tìm kiếm toàn cục** (Ctrl+O) trên node/card/tag.
+- [ ] **"Biến node thành card"** / **"Biến nhánh thành card"** (xuất cả nhánh thành văn bản trong một card) / **"Sao chép nhánh dạng Markdown"** — đều có trong roadmap Heptabase.
+- [ ] Xoá node **không xoá nhánh con** (con được nâng lên cha) — Heptabase vừa thêm.
+
+**H1 — Thư viện Card**
+- [ ] Khung "Thư viện" ở thanh bên phải: danh sách/tìm/lọc theo tag, kéo card vào map thành node.
+- [ ] Một card hiện ở nhiều node/map; thông tin "card này đang xuất hiện ở đâu" (giống panel *Whiteboard Location*).
+- [ ] Hộp thư **Inbox**: card mới tạo nhanh chưa xếp vào đâu.
+
+**H2 — Liên kết hai chiều**
+- [ ] Gõ `@` hoặc `[[` trong khối văn bản để liên kết tới card/node; **Backlinks** hiển thị ở thanh bên; di chuột xem trước.
+- [ ] Đường liên kết giữa node (đã có) có thể sinh từ liên kết `@`.
+- [ ] Đồ thị liên kết (tuỳ chọn).
+
+**H3 — Dữ liệu có cấu trúc: Bảng & Kanban**
+- [ ] Thuộc tính cho node/card (chữ, số, ngày, chọn một/nhiều, trạng thái) — mở rộng Tag/tiến độ/ưu tiên hiện có.
+- [ ] Chế độ xem **Bảng** (sắp xếp, lọc, nhóm) và **Kanban** (kéo thẻ đổi trạng thái); xuất bảng ra CSV/Excel (đã có xlsx).
+- [ ] Biểu đồ (M4) có thể lấy nguồn từ bảng thuộc tính này.
+
+**H4 — Canvas tự do (Whiteboard) — ĐÃ LOẠI khỏi phạm vi (xem mục 0), giữ lại để tham khảo**
+- [ ] Một tầng "Bảng trắng" chứa các **đối tượng**: map (mindmap), card, ảnh, ghi chú dán, **Section** (nhóm có tự co giãn), **mũi tên**; lồng bảng trắng con.
+- [ ] Tận dụng nhánh trôi + đa map + đường liên kết hiện có; map hiện tại trở thành một loại đối tượng. Chế độ **Focus** (chỉ hiện đối tượng liên quan), **Tidy up** cho Section, **Minimap** (đã có), **xuất ảnh whiteboard** (đã có xuất PNG).
+- [ ] **Đây là bước lớn nhất, thay đổi cách nhìn của cả app** — chỉ nên làm sau khi H1–H2 ổn định. Cân nhắc kỹ: T17Mind có nên vẫn là "phần mềm mindmap" hay thành "bảng trắng tri thức"?
+
+**H5 — Đọc & trích (Reading → Cards)**
+- [ ] Mở **PDF** (pdf.js, tải lười): chọn chữ/vùng → highlight → **tạo card/node kèm nguồn (trang, file)**; bấm card nhảy về đúng chỗ trong PDF.
+- [ ] Nhập highlight từ file/định dạng khác (Markdown, Readwise-CSV…) — sau.
+- [ ] Quy trình mẫu theo video: *trích ghi chú từ sách/PDF → mỗi ý một card → kéo các card vào mindmap để tổng hợp*.
+
+**H6 — Tuỳ chọn:** Journal (nhật ký ngày + công việc), tab/đa cửa sổ, đồng bộ (không bắt buộc, offline-first là ưu điểm).
+
+### 5.5 Gợi ý thứ tự thực hiện
+
+```
+M1 (Card & Block) + H0  →  M2 Bảng  →  M3 Ảnh  →  H1 Thư viện  →  H2 Backlinks
+   →  M5 Xuất .md/.docx  →  M4 Biểu đồ  →  H3 Bảng/Kanban  →  H5 PDF  →  H4 Canvas
+```
+
+Lý do: M1+H0 tạo nền Card dùng chung; H1–H2 biến app thành mạng tri thức (giá trị cốt lõi Heptabase) trước khi đầu tư canvas lớn; **xuất .md/.docx (M5) nên có sớm** vì là mục tiêu thực dụng bạn nêu; H4 để cuối vì rủi ro và công sức lớn nhất.
+
+### 5.6 Những thứ KHÔNG nên sao chép
+- **AI Chat/Actions** của Heptabase (đòi hỏi máy chủ/API trả phí; trái hướng offline, file nhỏ).
+- **Đồng bộ thời gian thực/ứng dụng di động**: ngoài phạm vi; PWA đã đủ dùng trên điện thoại.
+- Giữ nguyên các lợi thế riêng của T17Mind: một file/portable nhỏ, offline, bố cục mindmap nhiều kiểu, tự vẽ canvas hiệu năng cao.
