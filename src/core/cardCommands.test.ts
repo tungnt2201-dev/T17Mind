@@ -12,7 +12,9 @@ import {
   ReplaceBlockCommand,
   RemoveBlockCommand,
   MoveBlockCommand,
+  UpdateTableCommand,
 } from "./cardCommands";
+import { createDraft, setCell, insertRow, insertColumn, deleteColumn, pasteGrid, tableFromGrid, parseDelimited } from "./table";
 import { createCard, createTextBlock, createTableBlock, createImageBlock, createChartBlock, validateCard } from "./cards";
 import { validateMindMap } from "./validate";
 import { migrateToLatest } from "./migrate";
@@ -267,5 +269,81 @@ describe("Card & Block — MergeMapCommand (M1)", () => {
       for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) if (JSON.stringify(a[k]) !== JSON.stringify(b[k])) out.push(k + ": " + JSON.stringify(a[k])?.slice(0, 300) + " ||| " + JSON.stringify(b[k])?.slice(0, 300));
       expect(out.join("\n")).toBe("");
     }
+  });
+});
+
+describe("UpdateTableCommand — lưu trình sửa bảng (M2)", () => {
+  function setupTable() {
+    const { store, childId } = setup();
+    const card = createCard("Số liệu");
+    const t = createTableBlock(3, 3, "Doanh thu");
+    t.cells = [
+      ["Tháng", "A", "B"],
+      ["1", "10", "20"],
+      ["2", "30", "40"],
+    ];
+    const chart = { ...createChartBlock(t.id, "bar"), labelColumn: 0, seriesColumns: [1, 2] };
+    store.dispatch(new CreateCardForNodeCommand(childId, card));
+    store.dispatch(new AddBlockCommand(card.id, t));
+    store.dispatch(new AddBlockCommand(card.id, chart));
+    return { store, cardId: card.id, t, chart };
+  }
+
+  it("một phiên sửa = một bước hoàn tác, undo/redo chính xác", () => {
+    const { store, cardId, t } = setupTable();
+    const s0 = snap(store.getMap());
+    let d = createDraft(t);
+    d = setCell(d, 1, 1, "99");
+    d = insertRow(d, 3);
+    d = pasteGrid(d, 3, 0, [["3", "50", "60"]]).draft;
+    store.dispatch(new UpdateTableCommand(cardId, d.table, null));
+    const s1 = snap(store.getMap());
+    const saved = store.getMap().cards[cardId]!.blocks[0] as TableBlock;
+    expect(saved.cells).toHaveLength(4);
+    expect(saved.cells[1]![1]).toBe("99");
+    expect(validateMindMap(store.getMap())).toEqual([]);
+
+    store.undo();
+    expect(snap(store.getMap())).toBe(s0);
+    store.redo();
+    expect(snap(store.getMap())).toBe(s1);
+  });
+
+  it("xoá/chèn cột: biểu đồ cùng card được đưa cột về đúng chỗ, map vẫn hợp lệ", () => {
+    const { store, cardId, t, chart } = setupTable();
+    const s0 = snap(store.getMap());
+    let d = createDraft(t);
+    d = deleteColumn(d, 1); // bỏ cột "A"
+    d = insertColumn(d, 0); // chèn cột mới bên trái
+    store.dispatch(new UpdateTableCommand(cardId, d.table, d.colOrigin));
+    const m = store.getMap();
+    const c = m.cards[cardId]!.blocks.find((b) => b.id === chart.id);
+    expect(c).toMatchObject({ labelColumn: 1, seriesColumns: [2] }); // "Tháng" giờ ở cột 1, "B" ở cột 2
+    expect(validateMindMap(m)).toEqual([]);
+    store.undo();
+    expect(snap(store.getMap())).toBe(s0);
+  });
+
+  it("báo lỗi khi id không phải bảng có trong card", () => {
+    const { store, cardId, chart } = setupTable();
+    const fake = createTableBlock(1, 1);
+    expect(() => store.dispatch(new UpdateTableCommand(cardId, fake))).toThrow();
+    expect(() => store.dispatch(new UpdateTableCommand(cardId, { ...fake, id: chart.id }))).toThrow();
+  });
+
+  it("thêm bảng nhập từ CSV qua AddBlockCommand rồi hoàn tác", () => {
+    const { store, childId } = setup();
+    const card = createCard("CSV");
+    store.dispatch(new CreateCardForNodeCommand(childId, card));
+    const s0 = snap(store.getMap());
+    const block = tableFromGrid("blk_csv", parseDelimited("a;b\n1;2\n"), "nhap");
+    store.dispatch(new AddBlockCommand(card.id, block));
+    expect((store.getMap().cards[card.id]!.blocks[0] as TableBlock).cells).toEqual([
+      ["a", "b"],
+      ["1", "2"],
+    ]);
+    expect(validateMindMap(store.getMap())).toEqual([]);
+    store.undo();
+    expect(snap(store.getMap())).toBe(s0);
   });
 });

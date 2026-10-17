@@ -8,9 +8,10 @@
  * ---------------------------------------------------------------------
  */
 import type { Command } from "./commands";
-import type { Block, Card, ImageAsset, MindMap } from "./types";
+import type { Block, Card, ImageAsset, MindMap, TableBlock } from "./types";
 import { deepClone, requireNode } from "./tree";
 import { cardAssetIds, isAssetReferenced } from "./cards";
+import { remapChartColumns } from "./table";
 
 function requireCard(map: MindMap, cardId: string): Card {
   const card = map.cards[cardId];
@@ -169,6 +170,39 @@ export class ReplaceBlockCommand implements Command {
     const card = requireCard(map, this.cardId);
     const i = card.blocks.findIndex((b) => b.id === this.block.id);
     if (i >= 0) card.blocks[i] = this.old;
+  }
+}
+
+/**
+ * M2 — lưu kết quả trình sửa bảng (một bước hoàn tác cho cả phiên sửa).
+ * Khác ReplaceBlockCommand ở chỗ: các biểu đồ CÙNG card lấy số từ bảng
+ * này được đưa cột về đúng chỗ theo `colOrigin` (xem core/table.ts), để
+ * chèn/xoá cột không làm biểu đồ trỏ sai cột hoặc ra ngoài phạm vi.
+ * `colOrigin = null` nghĩa là cột không đổi vị trí (chỉ sửa ô).
+ */
+export class UpdateTableCommand implements Command {
+  readonly label = "Sửa bảng";
+  private oldBlocks: Block[] | null = null;
+  constructor(
+    private readonly cardId: string,
+    private readonly table: TableBlock,
+    private readonly colOrigin: (number | null)[] | null = null
+  ) {}
+  apply(map: MindMap): void {
+    const card = requireCard(map, this.cardId);
+    const i = card.blocks.findIndex((b) => b.id === this.table.id);
+    if (i < 0 || card.blocks[i]!.type !== "table") throw new Error(`Bảng không tồn tại: ${this.table.id}`);
+    this.oldBlocks = card.blocks;
+    const colOrigin = this.colOrigin;
+    card.blocks = card.blocks.map((b) => {
+      if (b.id === this.table.id) return deepClone(this.table);
+      if (colOrigin && b.type === "chart" && b.tableBlockId === this.table.id) return remapChartColumns(b, colOrigin);
+      return b;
+    });
+  }
+  revert(map: MindMap): void {
+    if (!this.oldBlocks) return;
+    requireCard(map, this.cardId).blocks = this.oldBlocks;
   }
 }
 
