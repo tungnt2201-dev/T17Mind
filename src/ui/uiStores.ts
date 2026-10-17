@@ -139,3 +139,11 @@ export const explorerStore = writable<ExplorerState>({
   tagFilterMode: "or",
   tagSectionOpen: false,
 });
+
+/** M2 — bảng đang mở trong trình sửa bảng (TableEditorModal), null =
+ *  đóng. Mở từ SidePanel (mục Card) hoặc bấm thẻ thu nhỏ trên canvas. */
+export interface TableEditorTarget {
+  cardId: string;
+  blockId: string;
+}
+export const tableEditorStore = writable<TableEditorTarget | null>(null);

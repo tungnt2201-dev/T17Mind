@@ -649,3 +649,8 @@ input[type="file"] {
 .card-add { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .card-add > .btn, .card-block-actions > .btn { width: auto; flex: 0 0 auto; }
 .card-table-preview td, .card-table-preview th { height: 16px; min-width: 24px; }
+.card-table-preview { cursor: pointer; border-radius: 4px; }
+.card-table-preview:hover, .card-table-preview:focus-visible { outline: 2px solid #7ea6ff; outline-offset: 1px; }
+/* M2 — `#side-panel .small-btn { width: 100% }` thắng `.card-add > .btn`
+ * về độ ưu tiên CSS, làm hàng nút của khối bị tràn ra ngoài panel. */
+#side-panel .card-add > .btn, #side-panel .card-block-actions > .btn { width: auto; margin-top: 0; }

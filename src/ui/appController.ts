@@ -78,7 +78,7 @@ import { showErrors } from "./errorBox";
 import { showConfirm, showAlert, showImagePreview } from "./dialog";
 import { toSafeUrl } from "../core/safeUrl";
 import { toggleShortcutsModal } from "./shortcutsModal";
-import { searchOpenStore, formatPainterModeStore, hasLinkedFileStore } from "./uiStores";
+import { searchOpenStore, formatPainterModeStore, hasLinkedFileStore, tableEditorStore } from "./uiStores";
 import { parseJsonFile, exportFlatJson } from "../io/json";
 import { loadMap as loadMapFromStorage } from "../io/storage";
 // P1.16 (tối ưu bundle) — xlsx/xmind KHÔNG import tĩnh ở đây nữa, xem
@@ -1250,9 +1250,17 @@ export class AppController {
       // P2.7f — bấm trúng checkbox hoàn thành thì đảo trạng thái, KHÔNG
       // chọn/kéo node (giống cách icon link ở trên xử lý — bấm icon là
       // một hành động riêng, không lẫn với việc chọn node).
-      if (this.renderer.hitTestCheckbox(hitNode, x, y, this.view)) {
+      if (this.renderer.hitTestCheckbox(map, hitNode, x, y, this.view)) {
         this.selection.selectSingleNode(hitId);
         this.store.dispatch(new UpdateNodeStyleCommand(hitId, { checked: !hitNode.checked }));
+        return;
+      }
+      // M2 — bấm thẻ thu nhỏ của bảng: chọn node và mở trình sửa bảng
+      // (giống bấm icon 🖼 mở ảnh cỡ lớn — một hành động riêng, không kéo).
+      const thumbTableId = this.renderer.hitTestTableThumb(map, hitNode, x, y, this.view);
+      if (thumbTableId && hitNode.cardId) {
+        this.selection.selectSingleNode(hitId);
+        tableEditorStore.set({ cardId: hitNode.cardId, blockId: thumbTableId });
         return;
       }
       if (e.ctrlKey || e.metaKey || e.shiftKey) {
@@ -1869,7 +1877,9 @@ export class AppController {
         this.canvas.style.cursor = "pointer";
       } else if (this.renderer.hitTestImageIcon(map, node, screenX, screenY, this.view)) {
         this.canvas.style.cursor = "pointer";
-      } else if (this.renderer.hitTestCheckbox(node, screenX, screenY, this.view)) {
+      } else if (this.renderer.hitTestCheckbox(map, node, screenX, screenY, this.view)) {
+        this.canvas.style.cursor = "pointer";
+      } else if (this.renderer.hitTestTableThumb(map, node, screenX, screenY, this.view)) {
         this.canvas.style.cursor = "pointer";
       } else if (
         this.selection.ids.size === 1 &&

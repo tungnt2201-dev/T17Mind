@@ -39,6 +39,18 @@ import { lightenHex } from "../core/theme";
 import { isVerticalLayout } from "../core/types";
 import { getRootIds } from "../core/tree";
 import type { NodeMeasurer } from "../layout";
+import {
+  getThumbLayout,
+  thumbReservedHeight,
+  thumbRect,
+  THUMB_PAD,
+  THUMB_CELL_W,
+  THUMB_ROW_H,
+  THUMB_MORE_W,
+  THUMB_FONT,
+  type ThumbLayout,
+} from "./tableThumb";
+import type { TableBlock } from "../core/types";
 
 export interface ViewTransform {
   offsetX: number;
@@ -224,6 +236,14 @@ export class CanvasRenderer {
           LABEL_PILL_GAP * (node.tagIds.length - 1);
         width = Math.max(width, Math.min(320, pillsWidth + 20));
         height += LABEL_ROW_HEIGHT;
+      }
+
+      // M2 — thẻ thu nhỏ của bảng (xem render/tableThumb.ts): node cao
+      // thêm đúng phần thẻ chiếm, và rộng ra nếu thẻ rộng hơn phần chữ.
+      const thumb = getThumbLayout(map, node);
+      if (thumb) {
+        width = Math.max(width, thumb.width + THUMB_PAD * 2);
+        height += thumbReservedHeight(thumb);
       }
 
       return { width, height };
@@ -1074,7 +1094,10 @@ export class CanvasRenderer {
 
     // P2.2 — có nhãn thì chữ chính chỉ căn giữa trong PHẦN TRÊN của
     // node (bỏ chừa hàng nhãn ở đáy), không phải giữa toàn bộ chiều cao.
-    const textAreaHeight = node.height - (node.tagIds.length > 0 ? LABEL_ROW_HEIGHT : 0);
+    // M2 — thẻ bảng (nếu có) nằm ngay trên hàng Tag, cũng bị trừ ra.
+    const tagRowHeight = node.tagIds.length > 0 ? LABEL_ROW_HEIGHT : 0;
+    const thumb = getThumbLayout(map, node);
+    const textAreaHeight = node.height - tagRowHeight - thumbReservedHeight(thumb);
     // P2.3 — chừa chỗ cho CẢ HAI icon góc (ghi chú bên trái, link bên
     // phải) nếu có, để chữ chính không đè lên chúng khi node hẹp.
     // P2.7f — chừa thêm chỗ cho checkbox hoàn thành (nếu có) — checkbox
@@ -1241,6 +1264,93 @@ export class CanvasRenderer {
     this.drawProgressRing(node, isLeftLayout);
     this.drawMarkers(node);
     this.drawLabelPills(map, node);
+    if (thumb) this.drawTableThumb(node, thumb, tagRowHeight, isRoot);
+  }
+
+  /** M2 — chữ đã cắt cho vừa ô của từng bảng, cache theo object bảng
+   *  (xem ghi chú hiệu năng đầu file render/tableThumb.ts). */
+  private thumbTextCache = new WeakMap<TableBlock, string[][]>();
+
+  private fitThumbText(text: string, maxWidth: number): string {
+    const ctx = this.ctx;
+    const oneLine = text.replace(/\s+/g, " ").trim();
+    if (ctx.measureText(oneLine).width <= maxWidth) return oneLine;
+    let lo = 0;
+    let hi = oneLine.length;
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      if (ctx.measureText(oneLine.slice(0, mid) + "…").width <= maxWidth) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo === 0 ? "" : oneLine.slice(0, lo) + "…";
+  }
+
+  /** M2 — vẽ thẻ thu nhỏ của bảng (tối đa 5×4 ô, phần ẩn hiện "…").
+   *  Bấm vào thẻ mở trình sửa bảng — xem hitTestTableThumb. */
+  private drawTableThumb(node: MindNode, layout: ThumbLayout, tagRowHeight: number, isRoot: boolean): void {
+    const ctx = this.ctx;
+    const rect = thumbRect(node, layout, tagRowHeight);
+    const { thumb } = layout;
+    const cols = thumb.align.length;
+    const rows = thumb.cells.length;
+    const lineColor = isRoot ? "rgba(255,255,255,0.55)" : "rgba(31,41,51,0.22)";
+    const textColor = node.color || (isRoot ? "#ffffff" : "#1f2933");
+    const gridW = cols * THUMB_CELL_W;
+    const gridH = rows * THUMB_ROW_H;
+
+    ctx.save();
+    ctx.font = THUMB_FONT;
+    let fitted = this.thumbTextCache.get(layout.table);
+    if (!fitted) {
+      fitted = thumb.cells.map((row, r) => {
+        ctx.font = r === 0 && thumb.headerRow ? `600 ${THUMB_FONT}` : THUMB_FONT;
+        return row.map((v) => this.fitThumbText(v, THUMB_CELL_W - 6));
+      });
+      this.thumbTextCache.set(layout.table, fitted);
+    }
+
+    ctx.fillStyle = isRoot ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.75)";
+    ctx.fillRect(rect.x, rect.y, gridW, gridH);
+    if (thumb.headerRow) {
+      ctx.fillStyle = isRoot ? "rgba(255,255,255,0.22)" : "rgba(47,111,237,0.10)";
+      ctx.fillRect(rect.x, rect.y, gridW, THUMB_ROW_H);
+    }
+
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let r = 0; r <= rows; r++) {
+      const y = Math.round(rect.y + r * THUMB_ROW_H) + 0.5;
+      ctx.moveTo(rect.x, y);
+      ctx.lineTo(rect.x + gridW, y);
+    }
+    for (let c = 0; c <= cols; c++) {
+      const x = Math.round(rect.x + c * THUMB_CELL_W) + 0.5;
+      ctx.moveTo(x, rect.y);
+      ctx.lineTo(x, rect.y + gridH);
+    }
+    ctx.stroke();
+
+    ctx.fillStyle = textColor;
+    ctx.textBaseline = "middle";
+    fitted.forEach((row, r) => {
+      ctx.font = r === 0 && thumb.headerRow ? `600 ${THUMB_FONT}` : THUMB_FONT;
+      row.forEach((text, c) => {
+        if (!text) return;
+        const align = thumb.align[c] ?? "left";
+        const cellX = rect.x + c * THUMB_CELL_W;
+        ctx.textAlign = align;
+        const tx = align === "left" ? cellX + 3 : align === "right" ? cellX + THUMB_CELL_W - 3 : cellX + THUMB_CELL_W / 2;
+        ctx.fillText(text, tx, rect.y + r * THUMB_ROW_H + THUMB_ROW_H / 2);
+      });
+    });
+
+    ctx.font = THUMB_FONT;
+    ctx.textAlign = "center";
+    ctx.fillStyle = lineColor;
+    if (thumb.moreCols) ctx.fillText("…", rect.x + gridW + THUMB_MORE_W / 2, rect.y + gridH / 2);
+    if (thumb.moreRows) ctx.fillText("…", rect.x + gridW / 2, rect.y + gridH + 4);
+    ctx.restore();
   }
 
   /**
@@ -1487,6 +1597,18 @@ export class CanvasRenderer {
     return wx >= node.x + node.width - 22 && wx <= node.x + node.width && wy >= node.y - 2 && wy <= node.y + 20;
   }
 
+  /** M2 — bấm trúng thẻ thu nhỏ của bảng thì trả về id bảng (để mở
+   *  trình sửa), không thì null. Dùng đúng thumbRect như lúc vẽ. */
+  hitTestTableThumb(map: MindMap, node: MindNode, screenX: number, screenY: number, view: ViewTransform): string | null {
+    const layout = getThumbLayout(map, node);
+    if (!layout) return null;
+    const { x: wx, y: wy } = this.toWorld(screenX, screenY, view);
+    const r = thumbRect(node, layout, node.tagIds.length > 0 ? LABEL_ROW_HEIGHT : 0);
+    const slack = 2;
+    const inside = wx >= r.x - slack && wx <= r.x + r.width + slack && wy >= r.y - slack && wy <= r.y + r.height + slack;
+    return inside ? layout.table.id : null;
+  }
+
   /**
    * P2.10 — vùng bấm icon 🖼 (ảnh nhúng). Khớp ĐÚNG vị trí đã vẽ ở
    * drawNode(): cùng phía với 🔗 nhưng lùi thêm 14px nếu link cũng có
@@ -1514,10 +1636,11 @@ export class CanvasRenderer {
    *  lại hằng số ở đây thay vì chia sẻ hàm chung, vì vị trí checkbox
    *  chỉ phụ thuộc 2 con số đơn giản (không phức tạp như viên Tag cần
    *  đo bề rộng chữ), tách hàm riêng cho trường hợp này không đáng. */
-  hitTestCheckbox(node: MindNode, screenX: number, screenY: number, view: ViewTransform): boolean {
+  hitTestCheckbox(map: MindMap, node: MindNode, screenX: number, screenY: number, view: ViewTransform): boolean {
     if (node.checked === null) return false;
     const { x: wx, y: wy } = this.toWorld(screenX, screenY, view);
-    const textAreaHeight = node.height - (node.tagIds.length > 0 ? LABEL_ROW_HEIGHT : 0);
+    const textAreaHeight =
+      node.height - (node.tagIds.length > 0 ? LABEL_ROW_HEIGHT : 0) - thumbReservedHeight(getThumbLayout(map, node));
     const CHECKBOX_SIZE = 14;
     const TEXT_PADDING_X = 10;
     const cbX = node.x + TEXT_PADDING_X;

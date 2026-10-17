@@ -40,6 +40,7 @@ import SidePanelComponent from "./ui/components/SidePanel.svelte";
 import HelpModalComponent from "./ui/components/HelpModal.svelte";
 import ExplorerPanelComponent from "./ui/components/ExplorerPanel.svelte";
 import MinimapPanelComponent from "./ui/components/MinimapPanel.svelte";
+import TableEditorModalComponent from "./ui/components/TableEditorModal.svelte";
 
 async function bootstrap(): Promise<void> {
   const canvas = byId<HTMLCanvasElement>("map-canvas");
@@ -82,6 +83,7 @@ async function bootstrap(): Promise<void> {
   mount(HelpModalComponent, { target: byId("help-modal-root"), props: {} });
   mount(ExplorerPanelComponent, { target: byId("explorer-panel-root"), props: { store, selection, controller } });
   mount(MinimapPanelComponent, { target: byId("minimap-panel-root"), props: { store, controller } });
+  mount(TableEditorModalComponent, { target: byId("table-editor-root"), props: { store } });
 
   // FIX: canvas đã được đo kích thước một lần trong constructor của
   // CanvasRenderer ở TRÊN — lúc đó Toolbar chưa kịp gắn vào DOM nên đo

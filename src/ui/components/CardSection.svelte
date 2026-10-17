@@ -3,16 +3,20 @@
    * ui/components/CardSection.svelte
    * -------------------------------------------------------------------
    * M1 (Card & Block) — mục "Card" trong SidePanel cho node đang chọn:
-   * tạo/gắn/gỡ card, liệt kê và sắp xếp các khối nội dung. Trình sửa bảng
-   * đầy đủ (M2), ảnh nhiều khối (M3), biểu đồ (M4) sẽ bổ sung sau; ở M1
-   * có thể thêm khối Văn bản và Bảng (kích thước mặc định) và sửa chữ.
+   * tạo/gắn/gỡ card, liệt kê và sắp xếp các khối nội dung. Ảnh nhiều
+   * khối (M3), biểu đồ (M4) sẽ bổ sung sau.
+   * M2 — bảng: bấm bản xem trước hoặc "Sửa bảng…" mở TableEditorModal
+   * (qua tableEditorStore); "Nhập CSV…" thêm một khối bảng từ file.
    * Quy tắc cũ vẫn giữ: mọi thay đổi chỉ qua Command (store.dispatch),
    * input dùng value + on:change một chiều, không dùng bind:value.
    * -------------------------------------------------------------------
    */
   import type { Store } from "../../core/store";
   import { mapStore } from "../svelteBridge";
-  import { showConfirm } from "../dialog";
+  import { showAlert, showConfirm } from "../dialog";
+  import { tableEditorStore } from "../uiStores";
+  import { parseDelimited, tableFromGrid } from "../../core/table";
+  import { generateBlockId } from "../../core/tree";
   import {
     CreateCardForNodeCommand,
     AttachCardToNodeCommand,
@@ -64,6 +68,23 @@
   function addTable(cardId: string): void {
     store.dispatch(new AddBlockCommand(cardId, createTableBlock(3, 3)));
   }
+  function openTable(cardId: string, blockId: string): void {
+    tableEditorStore.set({ cardId, blockId });
+  }
+  let csvInput: HTMLInputElement | undefined;
+  async function importCsv(cardId: string, e: Event): Promise<void> {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    const grid = parseDelimited((await file.text()).replace(/^\uFEFF/, ""));
+    if (grid.length === 0) {
+      void showAlert("File CSV trống.");
+      return;
+    }
+    const block = tableFromGrid(generateBlockId(), grid, file.name.replace(/\.[^.]+$/, ""));
+    store.dispatch(new AddBlockCommand(cardId, block));
+  }
   function move(cardId: string, blockId: string, toIndex: number): void {
     store.dispatch(new MoveBlockCommand(cardId, blockId, toIndex));
   }
@@ -104,6 +125,10 @@
           <div class="card-block-head">
             <span class="card-block-type">{TYPE_LABEL[b.type]}</span>
             <span class="card-block-actions">
+              {#if b.type === "table"}
+                <button type="button" class="btn small-btn" title="Mở trình sửa bảng"
+                  on:click={() => openTable(card.id, b.id)}>Sửa…</button>
+              {/if}
               <button type="button" class="btn small-btn" title="Lên" disabled={i === 0}
                 on:click={() => move(card.id, b.id, i - 1)}>↑</button>
               <button type="button" class="btn small-btn" title="Xuống" disabled={i === card.blocks.length - 1}
@@ -116,7 +141,9 @@
             <textarea class="card-text" rows="3" placeholder="Nhập văn bản…" value={b.text}
               on:change={(e) => { if (e.currentTarget.value !== b.text) store.dispatch(new ReplaceBlockCommand(card.id, { ...b, text: e.currentTarget.value })); }}></textarea>
           {:else if b.type === "table"}
-            <div class="card-table-preview" title={summarizeBlock(b)}>
+            <div class="card-table-preview" role="button" tabindex="0" title="Bấm để sửa bảng"
+              on:click={() => openTable(card.id, b.id)}
+              on:keydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openTable(card.id, b.id); } }}>
               <table><tbody>
                 {#each b.cells.slice(0, 4) as row, r}
                   <tr>
@@ -126,7 +153,7 @@
                   </tr>
                 {/each}
               </tbody></table>
-              <span class="muted">{summarizeBlock(b)} — trình sửa bảng sẽ có ở bước sau.</span>
+              <span class="muted">{summarizeBlock(b)} — bấm để sửa</span>
             </div>
           {:else}
             <div class="muted">{summarizeBlock(b)}</div>
@@ -138,6 +165,10 @@
     <div class="card-add">
       <button type="button" class="btn small-btn" on:click={() => addText(card.id)}>+ Văn bản</button>
       <button type="button" class="btn small-btn" on:click={() => addTable(card.id)}>+ Bảng 3×3</button>
+      <button type="button" class="btn small-btn" title="Thêm bảng từ file CSV/TSV (xuất từ Excel, Google Sheets)"
+        on:click={() => csvInput?.click()}>Nhập CSV…</button>
+      <input bind:this={csvInput} type="file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values" hidden
+        on:change={(e) => importCsv(card.id, e)} />
     </div>
     <div class="card-add">
       <button type="button" class="btn small-btn" on:click={detach}>Gỡ khỏi node</button>
