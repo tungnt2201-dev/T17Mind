@@ -91,6 +91,8 @@ Mô hình chung (một lần, dùng cho cả hai định dạng): **cây map →
 
 ## 5. Định hướng kế thừa Heptabase
 
+> **Cập nhật 20/10/2026:** đánh giá khả thi bộ prompt "Knowledge Workspace" (G1–G8) và lộ trình KW0–KW10 nằm ở [`KNOWLEDGE_WORKSPACE_PLAN.md`](KNOWLEDGE_WORKSPACE_PLAN.md).
+
 Nguồn tham khảo: video *Heptabase Fundamentals 101: Sense-making with whiteboards* (kênh Heptabase) và wiki công khai của Heptabase (Fundamental Elements, User Interface Logic, Mindmap, Heptabase 1.0, Public Roadmap). Lưu ý: không lấy được phụ đề video; nội dung video được hiểu qua các chương (tạo card trên whiteboard, thư viện card, trích ghi chú từ sách, trích từ PDF, **tổng hợp kiến thức từ nhiều nguồn bằng mindmap**, "giá trị cốt lõi") và đối chiếu với wiki. Cần xem lại video để bổ sung chi tiết thao tác.
 
 ### 5.1 Tư tưởng cốt lõi của Heptabase
