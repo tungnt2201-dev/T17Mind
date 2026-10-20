@@ -7,10 +7,10 @@
  * khi Command tự dọn ảnh/biểu đồ phụ thuộc.
  * ---------------------------------------------------------------------
  */
-import type { Command } from "./commands";
+import { CompositeCommand, type Command } from "./commands";
 import type { Block, Card, ImageAsset, MindMap, TableBlock } from "./types";
 import { deepClone, requireNode } from "./tree";
-import { cardAssetIds, isAssetReferenced } from "./cards";
+import { cardAssetIds, createCard, createImageBlock, isAssetReferenced } from "./cards";
 import { remapChartColumns } from "./table";
 
 function requireCard(map: MindMap, cardId: string): Card {
@@ -255,4 +255,30 @@ export class MoveBlockCommand implements Command {
     const [b] = card.blocks.splice(cur, 1);
     card.blocks.splice(this.oldIndex, 0, b as Block);
   }
+}
+
+/**
+ * M3 — thêm một hoặc nhiều ảnh vào card của node (dán Ctrl+V, kéo-thả
+ * file, chọn file). Node chưa có card thì tạo card mới (tên = chữ của
+ * node). Tất cả gộp thành MỘT bước hoàn tác.
+ */
+export function buildAddImagesToNodeCommand(
+  map: MindMap,
+  nodeId: string,
+  images: { assetId: string; asset: ImageAsset; caption?: string }[]
+): Command {
+  const node = requireNode(map, nodeId);
+  const commands: Command[] = [];
+  let cardId = node.cardId && map.cards[node.cardId] ? node.cardId : null;
+  if (!cardId) {
+    const card = createCard(node.text);
+    commands.push(new CreateCardForNodeCommand(nodeId, card));
+    cardId = card.id;
+  }
+  for (const img of images) {
+    commands.push(
+      new AddBlockCommand(cardId, createImageBlock(img.assetId, img.caption ?? ""), null, { assetId: img.assetId, asset: img.asset })
+    );
+  }
+  return new CompositeCommand(commands, images.length > 1 ? `Thêm ${images.length} ảnh` : "Thêm ảnh");
 }

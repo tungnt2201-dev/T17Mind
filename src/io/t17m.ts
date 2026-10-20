@@ -59,7 +59,8 @@ export async function exportT17mFile(map: MindMap): Promise<Blob> {
   for (const [assetId, asset] of Object.entries(map.assets)) {
     const ext = extForMime(asset.mimeType);
     assetsFolder?.file(`${assetId}.${ext}`, asset.dataBase64, { base64: true });
-    contentAssets[assetId] = { mimeType: asset.mimeType, dataBase64: "" };
+    // M3 — giữ cả kích thước gốc (width/height) nếu có, chỉ bỏ dữ liệu ảnh.
+    contentAssets[assetId] = { ...asset, dataBase64: "" };
   }
 
   const content: MindMap = { ...map, assets: contentAssets };
@@ -118,7 +119,7 @@ export async function parseT17mFile(buffer: ArrayBuffer): Promise<T17mImportOutc
     const file = zip.file(`assets/${assetId}.${ext}`);
     if (!file) continue; // thiếu file nhị phân tương ứng -> bỏ qua an toàn, không crash cả map
     const dataBase64 = await file.async("base64");
-    assets[assetId] = { mimeType, dataBase64 };
+    assets[assetId] = { ...migrated.assets[assetId], mimeType, dataBase64 };
   }
   migrated.assets = assets;
 

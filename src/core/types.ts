@@ -12,7 +12,7 @@
 
 /** Phiên bản cấu trúc dữ liệu hiện tại. Tăng số này mỗi khi đổi hình
  *  dạng MindNode/MindMap, và viết hàm di trú tương ứng trong migrate.ts */
-export const CURRENT_SCHEMA_VERSION = 17;
+export const CURRENT_SCHEMA_VERSION = 18;
 
 export type BorderStyle = "solid" | "dashed" | "dotted" | "none";
 export type EdgeShape = "curve" | "straight";
@@ -221,6 +221,11 @@ export interface ImageAsset {
    *  — tiền tố đó được ghép lại mỗi lần cần hiển thị, xem
    *  ui/dialog.ts#showImagePreview và render/CanvasRenderer.ts). */
   dataBase64: string;
+  /** M3 — kích thước gốc (px), ghi lúc chèn ảnh để đo layout ngay mà
+   *  không phải chờ giải mã. Tuỳ chọn: ảnh cũ không có thì renderer tự
+   *  biết sau khi giải mã xong (rồi tính lại layout). */
+  width?: number;
+  height?: number;
 }
 
 /**
@@ -252,11 +257,17 @@ export interface TableBlock extends BlockBase {
   cells: string[][];
 }
 
+/** M3 — cỡ hiển thị của ảnh trên node (chiều cao thẻ ảnh, xem
+ *  render/imageThumb.ts). */
+export type ImageDisplaySize = "small" | "medium" | "large";
+
 /** Ảnh: dữ liệu nằm ở map.assets (dùng chung cơ chế P2.10). */
 export interface ImageBlock extends BlockBase {
   type: "image";
   assetId: string;
   caption: string;
+  /** M3 (schema 18). */
+  size: ImageDisplaySize;
 }
 
 export type ChartKind = "bar" | "line" | "pie";
