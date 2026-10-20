@@ -22,6 +22,16 @@ import { deepClone } from "./tree";
 export const TABLE_MAX_ROWS = 1000;
 export const TABLE_MAX_COLS = 100;
 
+/** Kích thước ô mặc định / giới hạn khi kéo đổi cỡ (px trong trình sửa). */
+export const TABLE_DEFAULT_COL_W = 130;
+export const TABLE_DEFAULT_ROW_H = 28;
+export const TABLE_MIN_COL_W = 40;
+export const TABLE_MAX_COL_W = 600;
+export const TABLE_MIN_ROW_H = 24;
+export const TABLE_MAX_ROW_H = 300;
+
+const clampSize = (v: number, min: number, max: number): number => Math.round(Math.max(min, Math.min(max, v)));
+
 export interface TableDraft {
   table: TableBlock;
   colOrigin: (number | null)[];
@@ -57,18 +67,52 @@ export function setTitle(d: TableDraft, title: string): TableDraft {
   return withTable(d, { title });
 }
 
+/** Đổi độ rộng cột `c` (kẹp vào TABLE_MIN/MAX_COL_W). */
+export function setColWidth(d: TableDraft, c: number, width: number): TableDraft {
+  if (c < 0 || c >= colCount(d.table) || !Number.isFinite(width)) return d;
+  const w = clampSize(width, TABLE_MIN_COL_W, TABLE_MAX_COL_W);
+  if (d.table.colWidths[c] === w) return d;
+  return withTable(d, { colWidths: d.table.colWidths.map((x, i) => (i === c ? w : x)) });
+}
+
+/** Độ rộng vừa khít chữ dài nhất của cột `c` (giống bấm đúp mép cột
+ *  trong Excel). `measure` đo bề rộng một dòng chữ (px). */
+export function autoFitColWidth(t: TableBlock, c: number, measure: (text: string) => number): number {
+  let widest = 0;
+  for (const row of t.cells) for (const line of (row[c] ?? "").split("\n")) widest = Math.max(widest, measure(line));
+  return clampSize(widest + 18, TABLE_MIN_COL_W, TABLE_MAX_COL_W);
+}
+
+/** Chiều cao vừa đủ cho ô nhiều dòng nhất của hàng `r`. */
+export function autoFitRowHeight(t: TableBlock, r: number, lineHeight = 18): number {
+  const lines = Math.max(1, ...(t.cells[r] ?? []).map((v) => v.split("\n").length));
+  return clampSize(lines * lineHeight + 10, TABLE_MIN_ROW_H, TABLE_MAX_ROW_H);
+}
+
+/** Đổi chiều cao hàng `r` (kẹp vào TABLE_MIN/MAX_ROW_H). */
+export function setRowHeight(d: TableDraft, r: number, height: number): TableDraft {
+  if (r < 0 || r >= d.table.cells.length || !Number.isFinite(height)) return d;
+  const h = clampSize(height, TABLE_MIN_ROW_H, TABLE_MAX_ROW_H);
+  if (d.table.rowHeights[r] === h) return d;
+  return withTable(d, { rowHeights: d.table.rowHeights.map((x, i) => (i === r ? h : x)) });
+}
+
 /** Chèn một hàng trống tại vị trí `at` (0 = trên cùng, rows = cuối). */
 export function insertRow(d: TableDraft, at: number): TableDraft {
   if (d.table.cells.length >= TABLE_MAX_ROWS) return d;
   const cells = d.table.cells.slice();
-  cells.splice(clampIndex(at, cells.length), 0, Array.from({ length: colCount(d.table) }, () => ""));
-  return withTable(d, { cells });
+  const rowHeights = d.table.rowHeights.slice();
+  const i = clampIndex(at, cells.length);
+  cells.splice(i, 0, Array.from({ length: colCount(d.table) }, () => ""));
+  rowHeights.splice(i, 0, TABLE_DEFAULT_ROW_H);
+  return withTable(d, { cells, rowHeights });
 }
 
 /** Xoá hàng `at` — luôn giữ lại ít nhất 1 hàng. */
 export function deleteRow(d: TableDraft, at: number): TableDraft {
   if (d.table.cells.length <= 1 || at < 0 || at >= d.table.cells.length) return d;
-  return withTable(d, { cells: d.table.cells.filter((_, i) => i !== at) });
+  const keep = (_: unknown, i: number): boolean => i !== at;
+  return withTable(d, { cells: d.table.cells.filter(keep), rowHeights: d.table.rowHeights.filter(keep) });
 }
 
 /** Chèn một cột trống tại vị trí `at` (0 = trái cùng, cols = cuối). */
@@ -79,7 +123,11 @@ export function insertColumn(d: TableDraft, at: number): TableDraft {
   const ins = <T>(arr: T[], v: T): T[] => [...arr.slice(0, i), v, ...arr.slice(i)];
   return withTable(
     d,
-    { align: ins<TableAlign>(d.table.align, "left"), cells: d.table.cells.map((row) => ins(row, "")) },
+    {
+      align: ins<TableAlign>(d.table.align, "left"),
+      cells: d.table.cells.map((row) => ins(row, "")),
+      colWidths: ins(d.table.colWidths, TABLE_DEFAULT_COL_W),
+    },
     ins<number | null>(d.colOrigin, null)
   );
 }
@@ -89,7 +137,11 @@ export function deleteColumn(d: TableDraft, at: number): TableDraft {
   const cols = colCount(d.table);
   if (cols <= 1 || at < 0 || at >= cols) return d;
   const del = <T>(arr: T[]): T[] => arr.filter((_, j) => j !== at);
-  return withTable(d, { align: del(d.table.align), cells: d.table.cells.map(del) }, del(d.colOrigin));
+  return withTable(
+    d,
+    { align: del(d.table.align), cells: d.table.cells.map(del), colWidths: del(d.table.colWidths) },
+    del(d.colOrigin)
+  );
 }
 
 /**
@@ -132,6 +184,8 @@ export function tableFromGrid(id: string, grid: string[][], title = ""): TableBl
     headerRow: true,
     align: Array.from({ length: cols }, (): TableAlign => "left"),
     cells: source.map((r) => Array.from({ length: cols }, (_, j) => r[j] ?? "")),
+    colWidths: Array.from({ length: cols }, () => TABLE_DEFAULT_COL_W),
+    rowHeights: source.map(() => TABLE_DEFAULT_ROW_H),
   };
 }
 
@@ -141,8 +195,9 @@ export function tableFromGrid(id: string, grid: string[][], title = ""): TableBl
 export function replaceWithGrid(d: TableDraft, grid: string[][]): TableDraft {
   const fresh = tableFromGrid(d.table.id, grid, d.table.title);
   const align = fresh.align.map((a, i) => d.table.align[i] ?? a);
+  const colWidths = fresh.colWidths.map((w, i) => d.table.colWidths[i] ?? w);
   const colOrigin = fresh.align.map((_, i) => d.colOrigin[i] ?? null);
-  return { table: { ...fresh, headerRow: d.table.headerRow, align }, colOrigin };
+  return { table: { ...fresh, headerRow: d.table.headerRow, align, colWidths }, colOrigin };
 }
 
 // ---------------------------------------------------------------------
@@ -280,6 +335,7 @@ export interface TableThumbnail {
   cells: string[][];
   headerRow: boolean;
   align: TableAlign[];
+  colWidths: number[];
   moreRows: boolean;
   moreCols: boolean;
 }
@@ -291,6 +347,7 @@ export function tableThumbnail(t: TableBlock, maxRows = 4, maxCols = 5): TableTh
     cells: t.cells.slice(0, maxRows).map((row) => row.slice(0, maxCols)),
     headerRow: t.headerRow,
     align: t.align.slice(0, maxCols),
+    colWidths: t.colWidths.slice(0, maxCols),
     moreRows: t.cells.length > maxRows,
     moreCols: t.align.length > maxCols,
   };

@@ -1447,23 +1447,26 @@ export class CanvasRenderer {
     const rows = thumb.cells.length;
     const lineColor = isRoot ? "rgba(255,255,255,0.55)" : "rgba(31,41,51,0.22)";
     const textColor = node.color || (isRoot ? "#ffffff" : "#1f2933");
-    const gridW = cols * layout.cellW;
+    const colW = layout.colW;
+    // colX[c] = mép trái cột c (colX[cols] = mép phải lưới).
+    const colX = [0];
+    for (const w of colW) colX.push(colX[colX.length - 1]! + w);
+    const gridW = colX[cols] ?? 0;
     const gridH = rows * THUMB_ROW_H;
 
     ctx.save();
     ctx.font = THUMB_FONT;
-    const cellW = layout.cellW;
     let byShape = this.thumbTextCache.get(layout.table);
     if (!byShape) {
       byShape = new Map();
       this.thumbTextCache.set(layout.table, byShape);
     }
-    const shapeKey = `${rows}x${cols}@${cellW}/${thumb.headerRow ? 1 : 0}`;
+    const shapeKey = `${rows}x${colW.join(",")}/${thumb.headerRow ? 1 : 0}`;
     let fitted = byShape.get(shapeKey);
     if (!fitted) {
       fitted = thumb.cells.map((row, r) => {
         ctx.font = r === 0 && thumb.headerRow ? `600 ${THUMB_FONT}` : THUMB_FONT;
-        return row.map((v) => this.fitThumbText(v, cellW - 6));
+        return row.map((v, c) => this.fitThumbText(v, (colW[c] ?? 0) - 6));
       });
       byShape.set(shapeKey, fitted);
     }
@@ -1484,7 +1487,7 @@ export class CanvasRenderer {
       ctx.lineTo(rect.x + gridW, y);
     }
     for (let c = 0; c <= cols; c++) {
-      const x = Math.round(rect.x + c * cellW) + 0.5;
+      const x = Math.round(rect.x + (colX[c] ?? 0)) + 0.5;
       ctx.moveTo(x, rect.y);
       ctx.lineTo(x, rect.y + gridH);
     }
@@ -1497,7 +1500,8 @@ export class CanvasRenderer {
       row.forEach((text, c) => {
         if (!text) return;
         const align = thumb.align[c] ?? "left";
-        const cellX = rect.x + c * cellW;
+        const cellX = rect.x + (colX[c] ?? 0);
+        const cellW = colW[c] ?? 0;
         ctx.textAlign = align;
         const tx = align === "left" ? cellX + 3 : align === "right" ? cellX + cellW - 3 : cellX + cellW / 2;
         ctx.fillText(text, tx, rect.y + r * THUMB_ROW_H + THUMB_ROW_H / 2);

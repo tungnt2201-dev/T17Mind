@@ -18,7 +18,7 @@
  * ---------------------------------------------------------------------
  */
 import type { MindMap, MindNode, TableBlock } from "../core/types";
-import { tableThumbnail, type TableThumbnail } from "../core/table";
+import { tableThumbnail, TABLE_DEFAULT_COL_W, type TableThumbnail } from "../core/table";
 
 export const THUMB_MAX_ROWS = 4;
 export const THUMB_MAX_COLS = 5;
@@ -43,34 +43,51 @@ export function getNodeThumbTable(map: MindMap, node: MindNode): TableBlock | nu
 export interface ThumbLayout {
   table: TableBlock;
   thumb: TableThumbnail;
-  /** Bề rộng mỗi ô — mặc định THUMB_CELL_W, giãn ra (tới THUMB_CELL_W_MAX)
-   *  khi node rộng hơn cần thiết. */
-  cellW: number;
+  /** Bề rộng từng cột đang hiện — theo tỉ lệ `table.colWidths` (cột mặc
+   *  định 130px trong trình sửa = THUMB_CELL_W trên thẻ), giãn thêm khi
+   *  node rộng hơn cần thiết. */
+  colW: number[];
   /** Kích thước phần lưới (không kể THUMB_PAD). */
   width: number;
   height: number;
 }
 
-/** Ô thẻ giãn ra tối đa bằng này khi node rộng (đủ cho chữ dài hơn). */
+/** Hệ số giãn tối đa của cột khi node rộng (cột mặc định tới ~140px). */
 export const THUMB_CELL_W_MAX = 140;
+const MAX_GROW = THUMB_CELL_W_MAX / THUMB_CELL_W;
+/** Cột hẹp nhất trên thẻ (cột rất hẹp trong trình sửa vẫn bấm/đọc được). */
+const THUMB_MIN_COL_W = 18;
 
-/** Số mục (hàng/cột) vừa với `space` px, mỗi mục `unit` px; chừa chỗ
- *  cho dấu "…" (`more` px) nếu không hiện hết. Luôn ít nhất 1. */
-function fitCount(total: number, space: number, unit: number, more: number, cap: number): number {
-  const limit = Math.min(total, cap);
-  const all = Math.floor(space / unit);
-  if (all >= total && total <= cap) return Math.max(1, total);
-  return Math.max(1, Math.min(limit, Math.floor((space - more) / unit)));
+const baseColW = (editorWidth: number): number =>
+  Math.max(THUMB_MIN_COL_W, Math.round((editorWidth * THUMB_CELL_W) / TABLE_DEFAULT_COL_W));
+
+/** Số hàng vừa với `space` px; chừa chỗ cho "…" nếu không hiện hết. */
+function fitRows(total: number, space: number, cap: number): number {
+  if (total <= cap && Math.floor(space / THUMB_ROW_H) >= total) return Math.max(1, total);
+  return Math.max(1, Math.min(total, cap, Math.floor((space - THUMB_MORE_H) / THUMB_ROW_H)));
+}
+
+/** Số cột (theo bề rộng gốc từng cột) vừa với `space` px. */
+function fitCols(base: number[], space: number, cap: number): number {
+  const total = base.length;
+  const sumAll = base.reduce((a, b) => a + b, 0);
+  if (total <= cap && sumAll <= space) return Math.max(1, total);
+  let n = 0;
+  let used = 0;
+  while (n < Math.min(total, cap) && used + base[n]! + THUMB_MORE_W <= space) used += base[n++]!;
+  return Math.max(1, n);
 }
 
 /**
  * Bố cục thẻ của một bảng.
- * - Không truyền `box`: kích thước mặc định (tối đa 5×4 ô bề rộng cố
- *   định) — dùng khi ĐO node tự động.
+ * - Không truyền `box`: kích thước mặc định (tối đa 5×4 ô) — dùng khi ĐO
+ *   node tự động.
  * - Có `box` (khoảng trống thật trong node lúc vẽ/dò bấm): hiện nhiều
- *   hàng/cột nhất vừa khung, ô giãn rộng cho kín bề ngang. `capped` =
- *   true giữ trần 5×4 (node tự động — khung chỉ rộng vì chữ tiêu đề dài);
+ *   hàng/cột nhất vừa khung, cột giãn cho kín bề ngang. `capped` = true
+ *   giữ trần 5×4 (node tự động — khung chỉ rộng vì chữ tiêu đề dài);
  *   false khi người dùng đã tự kéo node to ra (manualWidth/Height).
+ * Cột luôn giữ ĐÚNG TỈ LỆ độ rộng đã chỉnh trong trình sửa bảng; hàng
+ * trên thẻ cao đều nhau (thẻ chỉ để nhìn lướt).
  */
 export function thumbLayoutForTable(
   table: TableBlock,
@@ -78,21 +95,22 @@ export function thumbLayoutForTable(
   capped = true
 ): ThumbLayout {
   const totalRows = table.cells.length;
-  const totalCols = table.align.length;
   const maxRows = capped ? THUMB_MAX_ROWS : Number.POSITIVE_INFINITY;
   const maxCols = capped ? THUMB_MAX_COLS : Number.POSITIVE_INFINITY;
-  const rows = box ? fitCount(totalRows, box.height, THUMB_ROW_H, THUMB_MORE_H, maxRows) : Math.min(totalRows, THUMB_MAX_ROWS);
-  const cols = box ? fitCount(totalCols, box.width, THUMB_CELL_W, THUMB_MORE_W, maxCols) : Math.min(totalCols, THUMB_MAX_COLS);
+  const base = table.align.map((_, i) => baseColW(table.colWidths[i] ?? TABLE_DEFAULT_COL_W));
+  const rows = box ? fitRows(totalRows, box.height, maxRows) : Math.min(totalRows, THUMB_MAX_ROWS);
+  const cols = box ? fitCols(base, box.width, maxCols) : Math.min(base.length, THUMB_MAX_COLS);
   const thumb = tableThumbnail(table, rows, cols);
   const moreW = thumb.moreCols ? THUMB_MORE_W : 0;
-  const cellW = box
-    ? Math.max(THUMB_CELL_W, Math.min(THUMB_CELL_W_MAX, Math.floor((box.width - moreW) / cols)))
-    : THUMB_CELL_W;
+  const shown = base.slice(0, cols);
+  const sum = shown.reduce((a, b) => a + b, 0);
+  const grow = box ? Math.max(1, Math.min(MAX_GROW, (box.width - moreW) / sum)) : 1;
+  const colW = shown.map((w) => Math.floor(w * grow));
   return {
     table,
     thumb,
-    cellW,
-    width: cols * cellW + moreW,
+    colW,
+    width: colW.reduce((a, b) => a + b, 0) + moreW,
     height: rows * THUMB_ROW_H + (thumb.moreRows ? THUMB_MORE_H : 0),
   };
 }

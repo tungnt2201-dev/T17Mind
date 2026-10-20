@@ -12,7 +12,7 @@
 
 /** Phiên bản cấu trúc dữ liệu hiện tại. Tăng số này mỗi khi đổi hình
  *  dạng MindNode/MindMap, và viết hàm di trú tương ứng trong migrate.ts */
-export const CURRENT_SCHEMA_VERSION = 18;
+export const CURRENT_SCHEMA_VERSION = 19;
 
 export type BorderStyle = "solid" | "dashed" | "dotted" | "none";
 export type EdgeShape = "curve" | "straight";
@@ -255,6 +255,11 @@ export interface TableBlock extends BlockBase {
   headerRow: boolean;
   align: TableAlign[];
   cells: string[][];
+  /** Độ rộng từng cột (px trong trình sửa), cùng độ dài với `align`
+   *  (schema 19). Thẻ thu nhỏ trên node vẽ cột theo đúng tỉ lệ này. */
+  colWidths: number[];
+  /** Chiều cao từng hàng (px trong trình sửa), cùng độ dài với `cells`. */
+  rowHeights: number[];
 }
 
 /** M3 — cỡ hiển thị của ảnh trên node (chiều cao thẻ ảnh, xem

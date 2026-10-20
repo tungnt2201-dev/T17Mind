@@ -8,6 +8,7 @@
  */
 import type { Block, Card, ChartBlock, ImageBlock, ImageDisplaySize, MindMap, TableAlign, TableBlock, TextBlock } from "./types";
 import { generateBlockId, generateCardId } from "./tree";
+import { TABLE_DEFAULT_COL_W, TABLE_DEFAULT_ROW_H } from "./table";
 
 export function createCard(title = ""): Card {
   return { id: generateCardId(), title, blocks: [] };
@@ -28,6 +29,8 @@ export function createTableBlock(rows = 3, cols = 3, title = ""): TableBlock {
     headerRow: true,
     align: Array.from({ length: c }, (): TableAlign => "left"),
     cells: Array.from({ length: r }, () => Array.from({ length: c }, () => "")),
+    colWidths: Array.from({ length: c }, () => TABLE_DEFAULT_COL_W),
+    rowHeights: Array.from({ length: r }, () => TABLE_DEFAULT_ROW_H),
   };
 }
 
@@ -123,6 +126,10 @@ export function validateCard(card: Card, assets: MindMap["assets"]): string[] {
             errors.push(`${bw}: hàng ${r} có ô không phải chữ.`);
           }
         });
+        const sizesOk = (arr: unknown, len: number): boolean =>
+          Array.isArray(arr) && arr.length === len && arr.every((v) => typeof v === "number" && Number.isFinite(v) && v > 0);
+        if (!sizesOk(b.colWidths, cols)) errors.push(`${bw}: colWidths phải có ${cols} số dương.`);
+        if (!sizesOk(b.rowHeights, b.cells.length)) errors.push(`${bw}: rowHeights phải có ${b.cells.length} số dương.`);
         break;
       }
       case "image":

@@ -65,15 +65,16 @@ describe("Thẻ thu nhỏ của bảng trên node (M2)", () => {
     const t = createTableBlock(10, 8);
     const def = thumbLayoutForTable(t);
     const same = thumbLayoutForTable(t, { width: def.width, height: def.height }, true);
-    expect(same).toMatchObject({ width: def.width, height: def.height, cellW: THUMB_CELL_W });
+    expect(same).toMatchObject({ width: def.width, height: def.height, colW: def.colW });
+    expect(def.colW).toEqual([THUMB_CELL_W, THUMB_CELL_W, THUMB_CELL_W, THUMB_CELL_W, THUMB_CELL_W]);
   });
 
   it("node tự động nhưng rộng (tiêu đề dài): ô giãn rộng, vẫn giữ trần 5×4", () => {
     const l = thumbLayoutForTable(createTableBlock(10, 8), { width: 600, height: 400 }, true);
     expect(l.thumb.cells).toHaveLength(4);
     expect(l.thumb.align).toHaveLength(5);
-    expect(l.cellW).toBeGreaterThan(THUMB_CELL_W);
-    expect(l.cellW).toBeLessThanOrEqual(THUMB_CELL_W_MAX);
+    expect(l.colW[0]).toBeGreaterThan(THUMB_CELL_W);
+    expect(l.colW[0]).toBeLessThanOrEqual(THUMB_CELL_W_MAX);
     expect(l.width).toBeLessThanOrEqual(600);
   });
 
@@ -88,12 +89,27 @@ describe("Thẻ thu nhỏ của bảng trên node (M2)", () => {
     const small = thumbLayoutForTable(createTableBlock(7, 4), { width: 500, height: 200 }, false);
     expect(small.thumb.cells).toHaveLength(7);
     expect(small.thumb).toMatchObject({ moreRows: false, moreCols: false });
-    expect(small.cellW).toBe(Math.min(THUMB_CELL_W_MAX, Math.floor(500 / 4)));
+    expect(small.colW).toEqual([125, 125, 125, 125]);
   });
 
   it("khung quá nhỏ vẫn hiện ít nhất 1×1", () => {
     const l = thumbLayoutForTable(createTableBlock(5, 5), { width: 10, height: 5 }, false);
     expect(l.thumb.cells).toHaveLength(1);
     expect(l.thumb.align).toHaveLength(1);
+  });
+
+  it("cột trên thẻ theo đúng tỉ lệ độ rộng chỉnh trong trình sửa (schema 19)", () => {
+    const t = createTableBlock(2, 3);
+    t.colWidths = [260, 130, 65];
+    const def = thumbLayoutForTable(t);
+    expect(def.colW).toEqual([THUMB_CELL_W * 2, THUMB_CELL_W, Math.round(THUMB_CELL_W / 2)]);
+    expect(def.width).toBe(def.colW.reduce((a, b) => a + b, 0));
+    // node rộng hơn: cả 3 cột cùng giãn một hệ số, tỉ lệ giữ nguyên
+    const wide = thumbLayoutForTable(t, { width: 400, height: 100 }, true);
+    expect(wide.colW[0]! / wide.colW[1]!).toBeCloseTo(2, 1);
+    expect(wide.width).toBeLessThanOrEqual(400);
+    // cột rất hẹp vẫn có bề rộng tối thiểu
+    t.colWidths = [40, 40, 40];
+    expect(Math.min(...thumbLayoutForTable(t).colW)).toBeGreaterThanOrEqual(14);
   });
 });
