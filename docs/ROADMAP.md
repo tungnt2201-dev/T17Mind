@@ -135,10 +135,10 @@ Phần 1 đặt Block ở cấp **map** (an toàn, dễ nhập/xuất `.t17m`). 
 - [ ] **"Biến node thành card"** / **"Biến nhánh thành card"** (xuất cả nhánh thành văn bản trong một card) / **"Sao chép nhánh dạng Markdown"** — đều có trong roadmap Heptabase.
 - [ ] Xoá node **không xoá nhánh con** (con được nâng lên cha) — Heptabase vừa thêm.
 
-**H1 — Thư viện Card**
-- [ ] Khung "Thư viện" ở thanh bên phải: danh sách/tìm/lọc theo tag, kéo card vào map thành node.
-- [ ] Một card hiện ở nhiều node/map; thông tin "card này đang xuất hiện ở đâu" (giống panel *Whiteboard Location*).
-- [ ] Hộp thư **Inbox**: card mới tạo nhanh chưa xếp vào đâu.
+**H1 — Thư viện Card** ✅ phần trong một map (20/10/2026)
+- [x] Khung "Thư viện" bên phải (nút 📖 trên thanh công cụ): danh sách, tìm theo nội dung (không phân biệt dấu — tên, văn bản, ô bảng, chú thích ảnh), lọc Tất cả / Inbox / Đang dùng và theo Tag của các node đang gắn card; **kéo card thả vào map** thành node (thả lên node → nhánh con, vùng trống → nhánh trôi tại chỗ thả); nút "Gắn vào node đang chọn", "Thêm làm nhánh con".
+- [x] "Card này đang xuất hiện ở đâu": danh sách node đang gắn card (trong Thư viện và mục Card của node), bấm để nhảy tới. *Chưa làm:* card dùng chung **giữa nhiều map** — cần chốt cách "nâng" card lên cấp workspace (mục 5.3): đồng bộ thật hay "sao chép kèm liên kết nguồn".
+- [x] Hộp thư **Inbox**: "+ Card nhanh" tạo card chưa gắn node nào, sửa ngay trong Thư viện (kể cả thêm ảnh/bảng).
 
 **H2 — Liên kết hai chiều**
 - [ ] Gõ `@` hoặc `[[` trong khối văn bản để liên kết tới card/node; **Backlinks** hiển thị ở thanh bên; di chuột xem trước.

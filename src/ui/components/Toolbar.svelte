@@ -39,7 +39,7 @@
   import type { SelectionModel } from "../selection";
   import type { AppController } from "../appController";
   import { mapStore, selectionStore } from "../svelteBridge";
-  import { linkingModeStore, helpModalOpenStore, searchOpenStore, formatPainterModeStore, mapsModalOpenStore, explorerStore, minimapStore, hasLinkedFileStore } from "../uiStores";
+  import { linkingModeStore, helpModalOpenStore, searchOpenStore, formatPainterModeStore, mapsModalOpenStore, explorerStore, minimapStore, hasLinkedFileStore, libraryStore } from "../uiStores";
   import { THEMES } from "../../core/theme";
   import { toggleShortcutsModal } from "../shortcutsModal";
   import Icon from "./Icon.svelte";
@@ -280,6 +280,8 @@
 
     <button class="tbar-icon-btn chip" class:active={$explorerStore.open} title="Bật/tắt khung duyệt cây Explorer bên trái"
       on:click={() => explorerStore.update((s) => ({ ...s, open: !s.open }))}><Icon name="sidebar" /></button>
+    <button class="tbar-icon-btn chip" class:active={$libraryStore.open} title="Bật/tắt Thư viện card — tìm, lọc card, kéo card thả vào map; Inbox cho card chưa gắn node"
+      on:click={() => libraryStore.update((s) => ({ ...s, open: !s.open }))}><Icon name="book" /></button>
     <button class="tbar-icon-btn chip" class:active={$minimapStore.open} title="Bật/tắt Minimap — khung nhỏ hiện toàn bộ bản đồ, kéo thả vị trí và kích thước tự do"
       on:click={() => minimapStore.update((s) => ({ ...s, open: !s.open }))}><Icon name="map" /></button>
     <button class="tbar-icon-btn chip" title="Xem đầy đủ phím tắt" on:click={() => toggleShortcutsModal()}><Icon name="help-circle" /></button>

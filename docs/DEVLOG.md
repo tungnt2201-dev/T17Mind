@@ -3611,3 +3611,28 @@ Chèn thêm theo yêu cầu (trước đó chuột phải trên canvas bản exe
 - [ ] Esc, bấm ra ngoài, cuộn chuột — menu đóng; mọi thao tác qua menu đều Ctrl+Z được
 - [ ] Bản exe: chuột phải lên toolbar/panel không còn hiện Back/Reload/Print; trong ô nhập chữ vẫn có menu Copy/Paste
 
+---
+
+## H1 — Thư viện Card (20/10/2026)
+
+Bước kế tiếp theo mục 5.5 ROADMAP (sau M3). Không đổi schema. Phạm vi: card trong MỘT map; card dùng chung giữa nhiều map để lại vì cần quyết định kiến trúc (mục 5.3).
+
+- Lõi: `core/library.ts` (`listLibrary` tìm/lọc/sắp xếp, `cardUsages`, `cardSearchText`…; `normalizeForSearch` trong `core/search.ts` giờ được export để dùng chung). Command mới trong `core/cardCommands.ts`: `AddCardCommand` (card Inbox), `CreateNodeWithCardCommand` (kéo card vào map — bọc `AddChildCommand`/`CreateFloatingBranchCommand` nên redo giữ đúng id node), `buildAddImagesToCardCommand`.
+- UI: `components/LibraryPanel.svelte` (trạng thái giao diện ở `libraryStore`, không lưu vào map), nút 📖 trên Toolbar. `components/CardEditor.svelte` tách từ `CardSection.svelte` — sửa nội dung card theo id, dùng chung cho mục Card của node và Thư viện; `CardSection` thêm "Card này còn xuất hiện ở". `AppController`: `placeCardAt` / `addCardAsChildOfSelection` (kiểu kéo-thả `CARD_DRAG_TYPE`), `addImagesToCard`, `openCardImages`.
+- Lỗi bắt được khi chạy thử: lúc tách `CardEditor`, hàng nút "+ Văn bản / + Bảng / Nhập CSV / + Ảnh" bị chép trùng hai lần (ảnh chụp màn hình cho thấy ngay).
+- Test: `core/library.test.ts` (216 test). Chạy thử trên Chromium: Card nhanh → đặt tên/thêm văn bản trong Thư viện; lọc Inbox; tìm "doi thiet ke" ra card có "đội thiết kế"; kéo card Inbox thả ra vùng trống → nhánh trôi mang card, card hết ở Inbox; "Thêm làm nhánh con"; "còn xuất hiện ở" trong SidePanel; 2 lần Ctrl+Z về đúng trạng thái. Chạy lại bài thử M3 (ảnh) và đổi cỡ bảng — vẫn đúng sau khi tách CardEditor.
+
+### Checklist kiểm thử tay — H1 Thư viện Card
+
+- [ ] Bấm nút 📖 (góc phải thanh công cụ) — khung Thư viện mở bên trái panel định dạng; bấm lại hoặc × — đóng
+- [ ] Map có vài card — danh sách theo tên, mỗi dòng ghi số khối ("2 văn bản · 1 bảng") và "N node" hoặc "Inbox"
+- [ ] Gõ tìm không dấu một chữ nằm trong văn bản / ô bảng / chú thích ảnh — ra đúng card
+- [ ] Lọc Inbox / Đang dùng; chọn Tag — chỉ còn card có node mang Tag đó
+- [ ] "+ Card nhanh" — card mới hiện ở Inbox, mở sẵn để đặt tên, thêm văn bản/bảng/ảnh
+- [ ] Kéo một card (giữ chuột ở dòng card) thả lên một node — thành nhánh con mang card; thả ra vùng trống — thành nhánh trôi đúng chỗ thả
+- [ ] Mở rộng một card → "Gắn vào node đang chọn" (khi đã chọn node) và "Thêm làm nhánh con"
+- [ ] "Đang xuất hiện ở" / "Card này còn xuất hiện ở" (mục Card của node) — bấm tên node → map nhảy tới node đó, nhánh thu gọn tự bung
+- [ ] Sửa card trong Thư viện — mọi node đang gắn card thấy ngay thay đổi (thẻ bảng/ảnh trên node cập nhật)
+- [ ] Xoá card trong Thư viện (có hỏi xác nhận) — Ctrl+Z trả lại
+- [ ] Mọi thao tác trên (kéo thả, gắn, tạo, xoá) đều Ctrl+Z / Ctrl+Shift+Z được
+
