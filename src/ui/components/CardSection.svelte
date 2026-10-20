@@ -25,6 +25,9 @@
   import { createCard } from "../../core/cards";
   import { cardUsages } from "../../core/library";
   import CardEditor from "./CardEditor.svelte";
+  import BacklinksList from "./BacklinksList.svelte";
+  import { nodeBacklinks, relationshipTargetsFromLinks } from "../../core/links";
+  import { AddRelationshipCommand, CompositeCommand } from "../../core/commands";
 
   export let store: Store;
   export let nodeId: string;
@@ -38,6 +41,20 @@
     .filter((c) => c.id !== node?.cardId)
     .sort((a, b) => a.title.localeCompare(b.title));
   $: elsewhere = card ? cardUsages($map, card.id).filter((id) => id !== nodeId) : [];
+  // H2 — liên kết ngược tới node này (hoặc tới card của nó), trừ chính card của node.
+  $: backlinks = nodeBacklinks($map, nodeId).filter((b) => b.cardId !== node?.cardId);
+  $: linkTargets = relationshipTargetsFromLinks($map, nodeId);
+
+  /** Vẽ đường liên kết (nét đứt) từ node này tới mọi node mà card của nó nhắc tới. */
+  function drawLinkRelationships(): void {
+    if (linkTargets.length === 0) return;
+    store.dispatch(
+      new CompositeCommand(
+        linkTargets.map((t) => new AddRelationshipCommand(nodeId, t, "")),
+        `Vẽ ${linkTargets.length} đường liên kết từ nhắc tới`
+      )
+    );
+  }
 
   function createForNode(): void {
     const c = createCard(node?.text ?? "");
@@ -61,6 +78,7 @@
 
 <div class="card-section">
   <div class="card-section-title">Card</div>
+  <BacklinksList map={$map} {backlinks} {controller} title="Node này được nhắc tới ở" />
   {#if !card}
     <div class="card-empty">
       <button type="button" class="btn small-btn" on:click={createForNode}>+ Tạo card cho node</button>
@@ -85,6 +103,10 @@
           <button type="button" class="card-usage-link" on:click={() => controller.revealNode(id)}>{$map.nodes[id]?.text || "(node trống)"}</button>
         {/each}
       </div>
+    {/if}
+    {#if linkTargets.length > 0}
+      <button type="button" class="btn small-btn card-open-page" title="Tạo đường liên kết nét đứt trên map tới các node mà văn bản của card nhắc tới (@)"
+        on:click={drawLinkRelationships}>↗ Vẽ đường liên kết cho {linkTargets.length} nhắc tới</button>
     {/if}
     <div class="card-add">
       <button type="button" class="btn small-btn" on:click={detach}>Gỡ khỏi node</button>

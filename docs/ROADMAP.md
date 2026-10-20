@@ -141,9 +141,9 @@ Phần 1 đặt Block ở cấp **map** (an toàn, dễ nhập/xuất `.t17m`). 
 - [x] Hộp thư **Inbox**: "+ Card nhanh" tạo card chưa gắn node nào, sửa ngay trong Thư viện (kể cả thêm ảnh/bảng).
 - [x] *(bổ sung theo phản hồi)* Node hiện trích văn bản của card; node kéo quá nhỏ → hàng biểu tượng đính kèm (bấm mở card); **trang card** (văn bản/ảnh/bảng xen kẽ, sửa trên trang); thẻ card nổi (giả 3D) trong Thư viện.
 
-**H2 — Liên kết hai chiều**
-- [ ] Gõ `@` hoặc `[[` trong khối văn bản để liên kết tới card/node; **Backlinks** hiển thị ở thanh bên; di chuột xem trước.
-- [ ] Đường liên kết giữa node (đã có) có thể sinh từ liên kết `@`.
+**H2 — Liên kết hai chiều** ✅ (20/10/2026, trừ mục tuỳ chọn)
+- [x] Gõ `@` hoặc `[[` trong khối văn bản để liên kết tới card/node (gợi ý không phân biệt dấu, ↑↓ Enter); liên kết lưu ngay trong chữ dạng `[[card:id|Tên]]` / `[[node:id|Tên]]` (không đổi schema), hiển thị bằng tên hiện tại của đích; **Backlinks** ("Được nhắc tới ở") trong mục Card của node, trang card và Thư viện; rê chuột lên liên kết (trang card) xem trước đích. *Hạn chế:* ô văn bản ở thanh bên vẫn hiện token thô — xem dạng chữ đẹp trong trang card.
+- [x] Đường liên kết giữa node sinh từ liên kết `@`: nút "↗ Vẽ đường liên kết cho N nhắc tới" ở mục Card.
 - [ ] Đồ thị liên kết (tuỳ chọn).
 
 **H3 — Dữ liệu có cấu trúc: Bảng & Kanban**

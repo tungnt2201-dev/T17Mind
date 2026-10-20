@@ -27,6 +27,7 @@
   } from "../../core/cardCommands";
   import { createTextBlock, createTableBlock, summarizeBlock } from "../../core/cards";
   import type { Block, ImageDisplaySize } from "../../core/types";
+  import MentionTextarea from "./MentionTextarea.svelte";
 
   export let store: Store;
   export let controller: AppController;
@@ -113,8 +114,9 @@
             </span>
           </div>
           {#if b.type === "text"}
-            <textarea class="card-text" rows="3" placeholder="Nhập văn bản…" value={b.text}
-              on:change={(e) => { if (e.currentTarget.value !== b.text) store.dispatch(new ReplaceBlockCommand(card.id, { ...b, text: e.currentTarget.value })); }}></textarea>
+            <MentionTextarea map={$map} cls="card-text" rows={3} placeholder="Nhập văn bản… (gõ @ hoặc [[ để liên kết card/node)"
+              value={b.text} excludeCardId={card.id}
+              on:commit={(e) => card && store.dispatch(new ReplaceBlockCommand(card.id, { ...b, text: e.detail }))} />
           {:else if b.type === "table"}
             <div class="card-table-preview" role="button" tabindex="0" title="Bấm để sửa bảng"
               on:click={() => openTable(card.id, b.id)}

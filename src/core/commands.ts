@@ -56,6 +56,7 @@ import {
 } from "./tree";
 import type { ClipboardNode } from "./clipboard";
 import { clipboardNodeToTree } from "./clipboard";
+import { remapLinks } from "./links";
 import {
   THEMES,
   BRANCH_PALETTE,
@@ -781,6 +782,8 @@ export class MergeMapCommand implements Command {
       card.id = newCardId;
       for (const b of card.blocks) {
         if (b.type === "image") b.assetId = assetIdRemap.get(b.assetId) ?? b.assetId;
+        // H2 — liên kết [[card:…]] / [[node:…]] trong văn bản trỏ theo id mới.
+        if (b.type === "text") b.text = remapLinks(b.text, cardIdRemap, nodeIdRemap);
       }
       map.cards[newCardId] = card;
     }
