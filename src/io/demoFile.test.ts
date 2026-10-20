@@ -18,7 +18,7 @@ describe("File demo docs/demo/T17Mind-demo.t17m", () => {
     const blocks = cards.flatMap((c) => c.blocks);
     const used = new Set(Object.values(map.nodes).map((n) => n.cardId).filter(Boolean));
     expect(Object.keys(map.nodes).length).toBeGreaterThan(30);
-    expect(getRootIds(map).length).toBe(2); // gốc chính + 1 nhánh trôi
+    expect(getRootIds(map).length).toBe(3); // gốc chính + nhánh "Ý tưởng" + nhánh "Tham quan"
     expect(["text", "table", "image", "chart"].every((t) => blocks.some((b) => b.type === t))).toBe(true);
     expect(cards.some((c) => !used.has(c.id))).toBe(true); // có card Inbox
     expect(blocks.some((b) => b.type === "text" && b.text.includes("[[card:"))).toBe(true);
