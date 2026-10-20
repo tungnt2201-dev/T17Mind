@@ -3750,3 +3750,7 @@ Phản hồi sau khi thử: file Word mọi tiêu đề/đoạn đều sát lề
 - [ ] Xuất Word cây 3–4 tầng — mỗi tầng thụt ≈ 1 cm, nội dung card nằm thụt dưới node của nó, bảng thụt theo
 - [ ] Xuất Word cây rất sâu (7–8 tầng) — vẫn thấy rõ tầng nhưng tầng sâu nhất không lùi quá 1/3 trang
 - [ ] Bỏ tick "Thụt lề theo tầng" — trở lại kiểu cũ (sát lề)
+
+### File demo trình diễn (20/10/2026)
+
+`docs/demo/T17Mind-demo.t17m` — map "Dự án GPON Đông Anh 2026" (dữ liệu giả định) gom các tính năng tới M5: 41 node + 1 nhánh trôi, layout hai bên, theme Branch Colors, tag, biểu tượng, ưu tiên, tiến độ, checkbox, nhãn đường nối, liên kết URL, quan hệ, tóm tắt, khoanh vùng, ghi chú dán, ảnh trên node; 14 card (văn bản có liên kết `[[card:…]]`/`[[node:…]]`, bảng có độ rộng cột riêng, ảnh 3 cỡ, biểu đồ chờ M4), 1 card dùng chung 2 node, 3 card Inbox; node thu nhỏ hết cỡ (biểu tượng đính kèm) và node phóng to (thẻ bảng/ảnh lớn). Test `io/demoFile.test.ts` bảo đảm file luôn mở được và xuất Word được.
