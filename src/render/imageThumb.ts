@@ -76,3 +76,24 @@ export function imageThumbRect(
     height: layout.height,
   };
 }
+
+/** Ảnh không nhỏ hơn cỡ này khi co theo node (vẫn nhìn ra, bấm được). */
+export const IMAGE_THUMB_MIN_HEIGHT = 16;
+
+/**
+ * Co (và nếu `allowGrow` thì giãn) thẻ ảnh cho vừa khung `box`, giữ đúng
+ * tỉ lệ — dùng khi người dùng đã tự kéo cỡ node (manualWidth/Height):
+ * kéo node nhỏ lại thì ảnh co theo, kéo to ra thì ảnh to theo. Không
+ * giãn khi node còn có thẻ bảng (để phần trống cho bảng).
+ */
+export function fitImageLayout(
+  layout: ImageThumbLayout,
+  box: { width: number; height: number },
+  allowGrow: boolean
+): ImageThumbLayout {
+  const fit = Math.min(box.width / layout.width, box.height / layout.height);
+  const minScale = IMAGE_THUMB_MIN_HEIGHT / layout.height;
+  const scale = Math.max(minScale, allowGrow ? fit : Math.min(1, fit));
+  if (!Number.isFinite(scale) || scale === 1) return layout;
+  return { ...layout, width: Math.max(1, Math.floor(layout.width * scale)), height: Math.max(1, Math.floor(layout.height * scale)) };
+}

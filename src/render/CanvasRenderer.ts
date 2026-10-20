@@ -58,6 +58,7 @@ import {
   imageThumbLayout,
   imageReservedHeight,
   imageThumbRect,
+  fitImageLayout,
   IMAGE_THUMB_HEIGHT,
   type ImageDims,
   type ImageThumbLayout,
@@ -255,7 +256,9 @@ export class CanvasRenderer {
     const hadDims = assetDims(asset) !== null;
     const img = new Image();
     img.onload = () => {
-      const maxH = IMAGE_THUMB_HEIGHT.large * 2; // đủ nét cho cỡ Lớn trên màn hình mật độ điểm ảnh cao
+      // Đủ nét cho cỡ Lớn trên màn hình mật độ điểm ảnh cao, và cho ảnh
+      // được giãn theo node kéo to (fitImageLayout).
+      const maxH = IMAGE_THUMB_HEIGHT.large * 4;
       const scale = Math.min(1, maxH / img.naturalHeight, (maxH * 3) / img.naturalWidth);
       const c = document.createElement("canvas");
       c.width = Math.max(1, Math.round(img.naturalWidth * scale));
@@ -273,11 +276,27 @@ export class CanvasRenderer {
     for (const id of this.imageCache.keys()) if (!map.assets[id]) this.imageCache.delete(id);
   }
 
-  private imageLayoutForNode(map: MindMap, node: MindNode): ImageThumbLayout | null {
+  /** Bố cục thẻ ảnh của node. Node đã được kéo cỡ tay thì ảnh co/giãn
+   *  cho vừa chỗ còn lại (sau chữ, thẻ bảng cỡ mặc định, hàng Tag); node
+   *  chỉ đặt rộng tay thì ảnh co theo bề ngang. Node tự động: cỡ gốc. */
+  private imageLayoutForNode(map: MindMap, node: MindNode, forMeasure = false): ImageThumbLayout | null {
     const images = getNodeImageBlocks(map, node);
     const first = images[0];
     if (!first) return null;
-    return imageThumbLayout(images, this.imageDims(first.assetId, map.assets[first.assetId]));
+    const base = imageThumbLayout(images, this.imageDims(first.assetId, map.assets[first.assetId]));
+    if (!base) return null;
+    const innerW = (node.manualWidth ?? Number.POSITIVE_INFINITY) - THUMB_PAD * 2;
+    if (forMeasure || node.manualHeight == null) {
+      return node.manualWidth != null ? fitImageLayout(base, { width: innerW, height: Number.POSITIVE_INFINITY }, false) : base;
+    }
+    const table = getThumbLayout(map, node);
+    const textHeight = this.measureTextBox(node, node.parentId === null).height;
+    const tagRow = node.tagIds.length > 0 ? LABEL_ROW_HEIGHT : 0;
+    const box = {
+      width: node.width - THUMB_PAD * 2,
+      height: node.height - textHeight - tagRow - thumbReservedHeight(table) - THUMB_PAD,
+    };
+    return fitImageLayout(base, box, !table);
   }
 
   /** M2 — bố cục thẻ bảng theo khoảng trống THẬT của node lúc vẽ/dò bấm
@@ -328,7 +347,7 @@ export class CanvasRenderer {
         height += thumbReservedHeight(thumb);
       }
       // M3 — thẻ ảnh (render/imageThumb.ts), nằm trên thẻ bảng.
-      const image = this.imageLayoutForNode(map, node);
+      const image = this.imageLayoutForNode(map, node, true);
       if (image) {
         width = Math.max(width, image.width + THUMB_PAD * 2);
         height += imageReservedHeight(image);

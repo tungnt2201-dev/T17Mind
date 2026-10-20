@@ -8,6 +8,8 @@ import {
   imageReservedHeight,
   imageThumbRect,
   IMAGE_THUMB_HEIGHT,
+  IMAGE_THUMB_MIN_HEIGHT,
+  fitImageLayout,
 } from "./imageThumb";
 import { THUMB_PAD } from "./tableThumb";
 
@@ -54,5 +56,21 @@ describe("Thẻ ảnh trên node (M3)", () => {
     const r = imageThumbRect(node, l, 50);
     expect(r.x).toBe((200 - l.width) / 2);
     expect(r.y + r.height).toBe(300 - 50 - THUMB_PAD);
+  });
+
+  it("fitImageLayout: node kéo nhỏ thì ảnh co theo, giữ tỉ lệ", () => {
+    const l = imageThumbLayout([createImageBlock("a")], { width: 4, height: 3 })!; // 112×84
+    const small = fitImageLayout(l, { width: 56, height: 200 }, true);
+    expect(small.width).toBe(56);
+    expect(small.height).toBe(42);
+    const short = fitImageLayout(l, { width: 500, height: 42 }, false);
+    expect(short).toMatchObject({ width: 56, height: 42 });
+  });
+
+  it("fitImageLayout: kéo to thì giãn (chỉ khi được phép), không nhỏ hơn mức tối thiểu", () => {
+    const l = imageThumbLayout([createImageBlock("a")], { width: 4, height: 3 })!;
+    expect(fitImageLayout(l, { width: 400, height: 168 }, true)).toMatchObject({ width: 224, height: 168 });
+    expect(fitImageLayout(l, { width: 400, height: 168 }, false)).toBe(l); // có bảng bên dưới: không giãn
+    expect(fitImageLayout(l, { width: 5, height: -20 }, true).height).toBe(IMAGE_THUMB_MIN_HEIGHT);
   });
 });

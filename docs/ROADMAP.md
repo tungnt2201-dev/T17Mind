@@ -43,7 +43,7 @@ Mỗi giai đoạn = 1 milestone GitHub, chia thành các issue nhỏ, mỗi iss
 - [x] Đo chiều cao node có tính khối (`render/tableThumb.ts` dùng chung cho đo/vẽ/dò bấm): ô thẻ có bề rộng cố định nên bước đo không phải đo chữ; chữ đã cắt cho vừa ô được cache theo object bảng (WeakMap, tự hết hạn khi Command thay bảng mới).
 
 ### M3 — Hình ảnh (nâng cấp) ✅ (hoàn thành 20/10/2026, còn các mục ghi chú bên dưới)
-- [x] Nhiều ảnh mỗi node (khối ảnh trong card), chú thích, đổi cỡ hiển thị Nhỏ/Vừa/Lớn (`ImageBlock.size`, **schema 17 → 18**). Xem lớn có ‹ › / phím ←/→ giữa các ảnh của card.
+- [x] Nhiều ảnh mỗi node (khối ảnh trong card), chú thích, đổi cỡ hiển thị Nhỏ/Vừa/Lớn (node kéo cỡ tay thì ảnh co/giãn theo node) (`ImageBlock.size`, **schema 17 → 18**). Xem lớn có ‹ › / phím ←/→ giữa các ảnh của card.
 - [x] Dán ảnh từ clipboard (Ctrl+V khi clipboard chỉ có ảnh — copy ô Excel kèm ảnh PNG vẫn dán chữ như cũ), kéo-thả file ảnh vào node, chọn nhiều file ở mục Card; node chưa có card thì tự tạo; cả loạt là một bước hoàn tác. Tự thu nhỏ về cạnh dài 1920px và nén (JPEG 0.85, giữ PNG nếu có nền trong suốt; GIF/SVG giữ nguyên); cảnh báo khi tổng ảnh của map vượt 25 MB. Ảnh nhúng kiểu cũ (`imageAssetId`) cũng được thu nhỏ khi chọn.
 - [x] Cache bitmap thu nhỏ (`CanvasRenderer.imageCache`, theo assetId) để vẽ canvas mượt; kích thước gốc lưu trong `ImageAsset.width/height` (tuỳ chọn, `.t17m` giữ lại) nên đo layout không phải chờ giải mã. *Chưa làm:* xuất SVG chưa có ảnh/bảng; xuất PNG chỉ có ảnh của node đã từng hiện trên màn hình (ảnh chưa giải mã ra ô giữ chỗ).
 
