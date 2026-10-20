@@ -130,6 +130,7 @@ Phần 1 đặt Block ở cấp **map** (an toàn, dễ nhập/xuất `.t17m`). 
 ### 5.4 Các milestone bổ sung (đặt sau M5, hoặc xen kẽ theo ý bạn)
 
 **H0 — Rẻ, thấy giá trị ngay (làm cùng lúc với M1–M2)**
+- [x] **Menu chuột phải** (chèn thêm theo yêu cầu, 20/10/2026): đổi theo chỗ bấm — node / nhiều node / đường liên kết / tóm tắt / khoanh vùng / ghi chú dán / vùng trống; mỗi mục ghi kèm phím tắt. Bản exe chặn menu mặc định của WebView2 (trừ ô nhập chữ).
 - [ ] **Command Palette** (Ctrl+K): gõ tìm hành động; **tìm kiếm toàn cục** (Ctrl+O) trên node/card/tag.
 - [ ] **"Biến node thành card"** / **"Biến nhánh thành card"** (xuất cả nhánh thành văn bản trong một card) / **"Sao chép nhánh dạng Markdown"** — đều có trong roadmap Heptabase.
 - [ ] Xoá node **không xoá nhánh con** (con được nâng lên cha) — Heptabase vừa thêm.

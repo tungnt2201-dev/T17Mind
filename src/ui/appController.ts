@@ -77,11 +77,15 @@ import { downloadText, downloadBlob, byId } from "./dom";
 import { showErrors } from "./errorBox";
 import { showConfirm, showAlert, showImagePreview, showImageGallery } from "./dialog";
 import { imageFilesFrom, prepareImageFile } from "./imageImport";
-import { buildAddImagesToNodeCommand } from "../core/cardCommands";
+import { buildAddImagesToNodeCommand, CreateCardForNodeCommand } from "../core/cardCommands";
+import { createCard } from "../core/cards";
+import { buildMenu, type MenuAction, type MenuTarget } from "./contextMenuModel";
+import { getNodeImageBlocks } from "../render/imageThumb";
+import { getNodeThumbTable } from "../render/tableThumb";
 import { cardImageBlocks, formatBytes, MAP_ASSETS_WARN_BYTES, totalAssetBytes } from "../core/image";
 import { toSafeUrl } from "../core/safeUrl";
 import { toggleShortcutsModal } from "./shortcutsModal";
-import { searchOpenStore, formatPainterModeStore, hasLinkedFileStore, tableEditorStore } from "./uiStores";
+import { searchOpenStore, formatPainterModeStore, hasLinkedFileStore, tableEditorStore, contextMenuStore } from "./uiStores";
 import { parseJsonFile, exportFlatJson } from "../io/json";
 import { loadMap as loadMapFromStorage } from "../io/storage";
 // P1.16 (tối ưu bundle) — xlsx/xmind KHÔNG import tĩnh ở đây nữa, xem
@@ -902,10 +906,13 @@ export class AppController {
   /** P2.5b — tạo ghi chú dán mới ở GIỮA KHUNG NHÌN HIỆN TẠI (toạ độ
    *  world, không phải một vị trí tuyệt đối cố định có thể đang nằm
    *  ngoài màn hình nếu người dùng đã pan/zoom đi xa). */
-  createStickyNote(): void {
+  createStickyNote(at: { x: number; y: number } | null = null): void {
     const rect = this.canvas.getBoundingClientRect();
     const worldCenter = this.renderer.toWorld(rect.width / 2, rect.height / 2, this.view);
-    const cmd = new AddStickyNoteCommand(worldCenter.x - 90, worldCenter.y - 40, "");
+    // Menu chuột phải truyền `at` = điểm vừa bấm (góc trên-trái ghi chú).
+    const cmd = at
+      ? new AddStickyNoteCommand(at.x, at.y, "")
+      : new AddStickyNoteCommand(worldCenter.x - 90, worldCenter.y - 40, "");
     this.store.dispatch(cmd);
     this.selection.selectStickyNote(cmd.newNoteId);
     requestAnimationFrame(() => this.startEditStickyNoteText(cmd.newNoteId));
@@ -1182,6 +1189,177 @@ export class AppController {
       e.dataTransfer.dropEffect = "copy";
     });
     this.canvas.addEventListener("drop", (e) => this.onFileDrop(e));
+    this.canvas.addEventListener("contextmenu", (e) => this.onContextMenu(e));
+    // Bản exe (Neutralino/WebView2): chuột phải ở chỗ khác ngoài canvas sẽ
+    // hiện menu mặc định của WebView2 (Back/Reload/Print… — vô nghĩa, dễ
+    // bấm nhầm Reload). Chặn đi, trừ ô nhập chữ (vẫn cần Copy/Paste).
+    if (typeof (window as { NL_OS?: string }).NL_OS === "string") {
+      document.addEventListener("contextmenu", (e) => {
+        if (!isTypingTarget(e.target)) e.preventDefault();
+      });
+    }
+  }
+
+  // ===================================================================
+  // Menu chuột phải (ui/contextMenuModel.ts + components/ContextMenu.svelte)
+  // ===================================================================
+
+  private onContextMenu(e: MouseEvent): void {
+    e.preventDefault();
+    if (isEditing()) return;
+    const { x, y } = this.screenPos(e);
+    const map = this.store.getMap();
+    let target: MenuTarget;
+
+    const stickyHit = this.renderer.hitTestStickyNote(map, x, y, this.view);
+    const nodeHit = stickyHit ? null : this.renderer.hitTestNode(map, x, y, this.view);
+    if (stickyHit) {
+      this.selection.selectStickyNote(stickyHit);
+      target = { kind: "sticky", id: stickyHit };
+    } else if (nodeHit) {
+      if (this.selection.ids.has(nodeHit) && this.selection.ids.size > 1) {
+        target = { kind: "multi", count: this.selection.ids.size };
+      } else {
+        this.selection.selectSingleNode(nodeHit);
+        const node = map.nodes[nodeHit] as MindNode;
+        target = {
+          kind: "node",
+          nodeId: nodeHit,
+          isRoot: nodeHit === map.rootId,
+          hasChildren: node.children.length > 0,
+          hasCard: !!(node.cardId && map.cards[node.cardId]),
+          tableBlockId: getNodeThumbTable(map, node)?.id ?? null,
+          imageCount: getNodeImageBlocks(map, node).length,
+          canPaste: !!this.internalClipboard,
+        };
+      }
+    } else {
+      const relHit = this.renderer.hitTestRelationship(x, y, this.view);
+      const summaryHit = relHit ? null : this.renderer.hitTestSummary(x, y, this.view);
+      const boundaryHit = relHit || summaryHit ? null : this.renderer.hitTestBoundary(x, y, this.view);
+      if (relHit) {
+        this.selection.selectRelationship(relHit);
+        target = { kind: "relationship", id: relHit, bent: !!map.relationships.find((r) => r.id === relHit)?.bend };
+      } else if (summaryHit) {
+        this.selection.selectSummary(summaryHit);
+        target = { kind: "summary", id: summaryHit };
+      } else if (boundaryHit) {
+        this.selection.selectBoundary(boundaryHit);
+        target = { kind: "boundary", id: boundaryHit };
+      } else {
+        const w = this.renderer.toWorld(x, y, this.view);
+        target = { kind: "canvas", worldX: w.x, worldY: w.y };
+      }
+    }
+    contextMenuStore.set({
+      x: e.clientX,
+      y: e.clientY,
+      entries: buildMenu(target),
+      onPick: (action) => this.runMenuAction(action, target),
+    });
+  }
+
+  /** Chạy một mục menu chuột phải — chỉ gọi lại các thao tác đã có. */
+  runMenuAction(action: MenuAction, target: MenuTarget): void {
+    const nodeId = target.kind === "node" ? target.nodeId : null;
+    switch (action) {
+      case "addChild":
+        this.addChildToSelection();
+        break;
+      case "addSibling":
+        this.addSiblingToSelection();
+        break;
+      case "editText":
+        if (nodeId) this.startEditNodeText(nodeId);
+        break;
+      case "copy":
+        this.copySelection();
+        break;
+      case "cut":
+        this.cutSelection();
+        break;
+      case "paste":
+        if (this.internalClipboard) this.performPaste(this.internalClipboard);
+        break;
+      case "duplicate":
+        this.duplicateSelection();
+        break;
+      case "toggleCollapse":
+      case "expandAll":
+        this.toggleCollapsePrimary(action === "expandAll");
+        break;
+      case "createCard": {
+        const node = nodeId ? this.store.getMap().nodes[nodeId] : null;
+        if (node) this.store.dispatch(new CreateCardForNodeCommand(node.id, createCard(node.text)));
+        break;
+      }
+      case "openTable": {
+        const node = nodeId ? this.store.getMap().nodes[nodeId] : null;
+        if (node?.cardId && target.kind === "node" && target.tableBlockId) {
+          tableEditorStore.set({ cardId: node.cardId, blockId: target.tableBlockId });
+        }
+        break;
+      }
+      case "viewImages":
+        if (nodeId) this.openNodeImages(nodeId);
+        break;
+      case "addImages":
+        if (nodeId) this.pickImagesFor(nodeId);
+        break;
+      case "startLink":
+        if (!nodeId) break;
+        if (!this.linkingMode) this.toggleLinkingMode();
+        this.linkSourceId = nodeId;
+        this.updateLinkingHintText();
+        this.draw();
+        break;
+      case "detachFloating":
+        this.detachSelectionToFloating();
+        break;
+      case "summary":
+        this.createSummaryFromSelection();
+        break;
+      case "boundary":
+        this.createBoundaryFromSelection();
+        break;
+      case "editLabel":
+        if (target.kind === "relationship") this.startEditRelationshipLabel(target.id);
+        else if (target.kind === "summary") this.startEditSummaryLabel(target.id);
+        else if (target.kind === "boundary") this.startEditBoundaryLabel(target.id);
+        else if (target.kind === "sticky") this.startEditStickyNoteText(target.id);
+        break;
+      case "straighten":
+        if (target.kind === "relationship") this.store.dispatch(new UpdateRelationshipCommand(target.id, { bend: null }));
+        break;
+      case "addFloating":
+        this.createFloatingBranch();
+        break;
+      case "addSticky":
+        if (target.kind === "canvas") this.createStickyNote({ x: target.worldX, y: target.worldY });
+        break;
+      case "fitView":
+        this.fitToView();
+        break;
+      case "home":
+        this.navigateHome();
+        break;
+      case "delete":
+        this.deleteSelection();
+        break;
+    }
+  }
+
+  /** Mở hộp chọn file (nhiều ảnh) rồi thêm vào card của node. */
+  private pickImagesFor(nodeId: string): void {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.multiple = true;
+    input.addEventListener("change", () => {
+      const files = Array.from(input.files ?? []);
+      if (files.length > 0) void this.addImagesToNode(nodeId, files);
+    });
+    input.click();
   }
 
   private onFileDrop(e: DragEvent): void {
@@ -1207,6 +1385,9 @@ export class AppController {
   }
 
   private onMouseDown(e: MouseEvent): void {
+    // Chuột phải: để onContextMenu lo (chọn đúng đối tượng rồi mở menu) —
+    // không bắt đầu kéo/chọn vùng.
+    if (e.button === 2) return;
     const { x, y } = this.screenPos(e);
     this.dragStartScreen = { x, y };
     this.dragMoved = false;

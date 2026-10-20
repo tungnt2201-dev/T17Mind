@@ -3583,3 +3583,29 @@ Theo yêu cầu sau khi thử M2 trên exe. **Schema 18 → 19.**
 - [ ] Chèn/xoá cột, dán từ Excel — cột đã chỉnh vẫn giữ cỡ, cột mới cỡ mặc định
 - [ ] Mở map cũ có bảng (trước bản này) — không lỗi, cột/hàng cỡ mặc định
 
+---
+
+## Menu chuột phải (20/10/2026)
+
+Chèn thêm theo yêu cầu (trước đó chuột phải trên canvas bản exe hiện menu mặc định của WebView2: Back/Reload/Print…). Không đổi dữ liệu.
+
+- `ui/contextMenuModel.ts` (thuần): `buildMenu(target)` chọn mục theo chỗ bấm — node, nhiều node, liên kết, tóm tắt, khoanh vùng, ghi chú dán, vùng trống; mục không dùng được thì mờ (ví dụ gốc không xoá/cắt được); `placeMenu` lật menu vào trong khi gần mép.
+- `components/ContextMenu.svelte`: hiển thị qua `contextMenuStore`; đóng khi chọn mục / bấm ra ngoài / Esc / cuộn / đổi cỡ cửa sổ; ↑/↓ + Enter chọn bằng bàn phím; chặn phím ở pha capture để Delete… của canvas không chạy khi menu mở.
+- `AppController.onContextMenu` dò trúng đối tượng theo đúng thứ tự như bấm đúp, chọn nó (bấm vào node đang nằm trong vùng chọn nhiều thì giữ vùng chọn), rồi mở menu; `runMenuAction` chỉ gọi lại các thao tác có sẵn (vẫn qua Command → hoàn tác được). Chuột phải không còn bắt đầu kéo/chọn vùng (`onMouseDown` bỏ qua nút phải). `createStickyNote` nhận thêm vị trí (ghi chú dán đặt đúng chỗ bấm).
+- "Dán vào đây" chỉ bật khi đã sao chép node trong app (đọc clipboard hệ thống từ menu cần quyền riêng — xem mục "Về Simple Browser" ở trên); dán từ ngoài vẫn dùng Ctrl+V.
+- Bản exe (`window.NL_OS` có mặt): chặn menu mặc định của WebView2 ở mọi chỗ trừ ô nhập chữ.
+- Test: `ui/contextMenuModel.test.ts` (207 test). Chạy thử trên Chromium: thêm nhánh con từ menu, menu vùng trống, ↓↓Enter thêm ghi chú dán đúng chỗ bấm, Esc đóng, lật menu ở góc dưới-phải, Delete khi menu mở không xoá node.
+
+### Checklist kiểm thử tay — menu chuột phải
+
+- [ ] Chuột phải lên node — menu hiện đúng chỗ con trỏ, node được chọn; các mục chạy đúng như phím tắt ghi bên cạnh
+- [ ] Chuột phải lên node gốc — Xoá/Cắt/Tách nhánh trôi/Thêm cùng cấp bị mờ
+- [ ] Chọn nhiều node rồi chuột phải lên một trong số đó — menu Tóm tắt/Khoanh vùng/Xoá N node
+- [ ] Chuột phải lên đường liên kết, tóm tắt, khoanh vùng, ghi chú dán — Sửa nhãn / Xoá đúng đối tượng
+- [ ] Chuột phải vùng trống → "Thêm ghi chú dán ở đây" — ghi chú nằm đúng chỗ bấm
+- [ ] Node có bảng/ảnh — có "Mở bảng", "Xem ảnh"; node có card — "Thêm ảnh vào card…"
+- [ ] Sao chép một node (Ctrl+C) rồi chuột phải node khác → "Dán vào đây"
+- [ ] Chuột phải gần mép phải/dưới cửa sổ — menu không bị tràn ra ngoài
+- [ ] Esc, bấm ra ngoài, cuộn chuột — menu đóng; mọi thao tác qua menu đều Ctrl+Z được
+- [ ] Bản exe: chuột phải lên toolbar/panel không còn hiện Back/Reload/Print; trong ô nhập chữ vẫn có menu Copy/Paste
+

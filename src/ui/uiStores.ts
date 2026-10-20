@@ -147,3 +147,13 @@ export interface TableEditorTarget {
   blockId: string;
 }
 export const tableEditorStore = writable<TableEditorTarget | null>(null);
+
+/** Menu chuột phải đang mở (null = đóng) — AppController mở, component
+ *  ContextMenu.svelte hiển thị và gọi `onPick` khi chọn một mục. */
+export interface ContextMenuState {
+  x: number;
+  y: number;
+  entries: import("./contextMenuModel").MenuEntry[];
+  onPick: (action: import("./contextMenuModel").MenuAction) => void;
+}
+export const contextMenuStore = writable<ContextMenuState | null>(null);
