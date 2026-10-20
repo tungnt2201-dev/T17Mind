@@ -136,6 +136,7 @@ Tổng ước lượng: khoảng **30–40 phiên làm việc**. Nặng nhất l
   workspace.json        danh mục: id, tên, danh sách map (id, tên, updatedAt), map mở gần nhất
   maps/<mapId>.t17m     mỗi map một file .t17m (mở thẳng bằng Tệp → Mở… được)
   .trash/               map bị xoá được chuyển vào đây
+  themes/<id>.json      theme riêng của người dùng (+ workspace.json#pinnedMarkers: hàng biểu tượng ghim)
   (KW1) cards/…         Card Registry      (KW3) sources/…   PDF và nguồn khác
 ```
 

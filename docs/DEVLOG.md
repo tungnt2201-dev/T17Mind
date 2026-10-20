@@ -3779,3 +3779,27 @@ Nhánh `feat/kw0-foundation` (tách từ `main` sau khi merge PR #1–#9). Lộ 
 - [ ] Mở trực tiếp `maps/<id>.t17m` bằng Tệp → Mở…: đọc được
 - [ ] Chrome/Edge (bản web/PWA): "Chọn thư mục Workspace…" → chọn thư mục → map được ghi thành file; đóng trình duyệt mở lại → nút "Cấp quyền" → bấm là dùng tiếp
 - [ ] Firefox: hiện ghi chú "không cho chọn thư mục", app vẫn lưu như cũ
+
+---
+
+## Biểu tượng & Theme riêng (20/10/2026)
+
+Nhánh `feat/icons-themes` (xếp chồng trên KW0 vì lưu vào thư mục Workspace). Theo phản hồi: demo có nhiều biểu tượng mà giao diện chỉ cho chọn 10 cái cố định; theme cũng chỉ chọn được bộ có sẵn.
+
+- **Kho biểu tượng** `core/emojiCatalog.ts`: 14 nhóm, hơn 200 emoji, từ khoá tiếng Việt tìm không dấu ("tien" → 💰💵💳…); dán/gõ emoji bất kỳ (lấy đúng một grapheme — 👨‍💻, 🇻🇳, 1️⃣ vẫn là một); "Dùng gần đây" (theo máy, localStorage).
+- **Khung chọn** `components/MarkerPicker.svelte` thay hàng 10 nút trong khung Định dạng: biểu tượng đang gắn (bấm × gỡ), hàng ghim, nút ＋ mở kho (tìm, gần đây, các nhóm), chế độ "Sửa hàng ghim" + "Khôi phục mặc định". Hàng ghim lưu trong `workspace.json#pinnedMarkers` (chưa có thư mục: IndexedDB). Thay đổi trên node vẫn qua `UpdateNodeStyleCommand` (hoàn tác được).
+- **Theme riêng** `components/ThemeEditorModal.svelte` (nút 🎨 "Theme riêng" cạnh ô chọn theme): tạo từ theme có sẵn, kiểu theo cấp (màu nền từng cấp, màu chữ tự động hoặc chọn tay, đổi sắc ở cấp sâu) hoặc mỗi nhánh một màu (màu gốc + bảng màu nhánh 1–16 màu); xem trước; Lưu / Lưu & áp dụng / Xoá; Xuất – Nhập file `.t17theme` (JSON). Lưu ở `themes/<id>.json` trong Workspace (chưa có thư mục: IndexedDB). Ô chọn theme có nhóm "Theme của tôi" và "Lưu trong map này"; tự hiện theme map đang dùng.
+- **Schema 21:** `MindMap.customTheme` — áp theme riêng thì nhúng bản sao vào map (ApplyThemeCommand, hoàn tác trả lại), nên mở map ở máy không có theme đó vẫn đúng màu và node mới vẫn tô đúng. `findTheme`: có sẵn → nhúng trong map → thư viện. `sanitizeTheme` làm sạch theme đọc từ file/map.
+- **Sửa lỗi:** hàng biểu tượng vẽ trên mép node đè lên node anh em phía trên — bố cục logic phải/trái/hai bên chừa thêm 14 px cho node có biểu tượng (`layout/spacing.ts`).
+- Test: `core/iconsThemes.test.ts` (tìm emoji, dán emoji, theme riêng áp/hoàn tác/nhúng/máy khác, migrate 20→21, bố cục), thêm vào `io/workspace.test.ts` (ghim + theme trong thư mục), `ui/userLibrary.test.ts` (file .t17theme). 280 test. Chạy thử Chromium (exe giả lập và web thường): gắn biểu tượng qua tìm kiếm và dán, ghim, tạo theme theo nhánh, áp dụng, tải lại vẫn còn.
+
+### Checklist kiểm thử tay — Biểu tượng & Theme
+
+- [ ] Chọn node → Định dạng → Biểu tượng: bấm ＋ → gõ "tien" → bấm 💰 → node có 💰; bấm 💰× ở hàng trên để gỡ; Ctrl+Z trả lại
+- [ ] Gõ Win + . chọn một emoji bất kỳ vào ô tìm → hiện "Emoji vừa dán" → bấm để gắn
+- [ ] Tick "Sửa hàng ghim" → bấm vài biểu tượng → hàng ghim đổi; đóng mở lại app vẫn còn; "Khôi phục mặc định" trả về 10 cái cũ
+- [ ] Node có biểu tượng không còn bị biểu tượng đè lên node phía trên
+- [ ] 🎨 Theme riêng → chọn "Rainbow" → + Tạo mới → đổi tên, đổi màu nhánh → xem trước đổi theo → "Lưu & áp dụng cho map" → map đổi màu; Ctrl+Z trả lại
+- [ ] Ô chọn theme có nhóm "Theme của tôi"; mở lại app vẫn còn; trong thư mục Workspace có `themes/…json`
+- [ ] Xuất file… → được file `.t17theme`; xoá theme → Nhập file .t17theme… → Lưu → theme trở lại
+- [ ] Gửi file `.t17m` của map dùng theme riêng sang máy khác (không có theme đó) → mở ra đúng màu; thêm nhánh mới vẫn tô đúng màu theme; ô chọn có nhóm "Lưu trong map này"

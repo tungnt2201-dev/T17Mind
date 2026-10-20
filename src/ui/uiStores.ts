@@ -205,3 +205,6 @@ export const workspaceStore = writable<WorkspaceUiState>({
   pending: false,
   error: null,
 });
+
+/** Trình quản lý theme riêng (ThemeEditorModal) — null = đóng. */
+export const themeEditorStore = writable<{ baseThemeId: string | null } | null>(null);

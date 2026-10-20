@@ -64,6 +64,13 @@ export interface Theme {
   /** P2.11 — cho phép hue trôi dần theo cấp từ cấp 3 trở đi (chỉ theme
    *  một-tông-màu mới bật — xem ghi chú đầu file). Mặc định false. */
   hueDrift?: boolean;
+  /** Theme riêng (người dùng tạo) — chỉ dùng khi perBranch: màu từng
+   *  nhánh cấp 1 thay cho BRANCH_PALETTE, và màu của chính node gốc. */
+  palette?: string[];
+  rootStyle?: ThemeLevelStyle;
+  /** true = theme do người dùng tạo (lưu trong Workspace và nhúng vào map
+   *  đang dùng nó — MindMap.customTheme), không nằm trong THEMES. */
+  custom?: boolean;
 }
 
 export const THEMES: Theme[] = [
@@ -496,13 +503,98 @@ export function computeThemedStyleForNode(map: MindMap, nodeId: string, theme: T
   const depth = chain.length - 1; // 0 = chính nó là một gốc
 
   if (!theme.perBranch) return colorForDepth(theme, depth);
-  if (depth === 0) return RAINBOW_ROOT_STYLE;
+  if (depth === 0) return themeRootStyle(theme);
 
   const rootId = chain[0] as string;
   const branchTopId = chain[1] as string;
   const root = map.nodes[rootId];
   const branchIndex = root ? Math.max(0, root.children.indexOf(branchTopId)) : 0;
-  const hue = BRANCH_PALETTE[branchIndex % BRANCH_PALETTE.length] as string;
+  const hue = branchHue(theme, branchIndex);
   const depthInBranch = depth - 1; // branchTopId (chain[1]) tương ứng depthInBranch = 0
   return colorForBranchDepth(hue, depthInBranch);
+}
+
+// ---------------------------------------------------------------------
+// Theme riêng của người dùng (tạo từ một theme có sẵn, lưu trong
+// Workspace — xem ui/userLibrary.ts — và NHÚNG vào map đang dùng nó qua
+// MindMap.customTheme để mở map ở máy khác vẫn đúng màu).
+// ---------------------------------------------------------------------
+
+/** Màu nhánh thứ `index` của theme theo-nhánh (palette riêng hoặc mặc định). */
+export function branchHue(theme: Theme, index: number): string {
+  const pal = theme.palette && theme.palette.length > 0 ? theme.palette : BRANCH_PALETTE;
+  return pal[index % pal.length] as string;
+}
+
+/** Màu của chính node gốc dưới theme theo-nhánh. */
+export function themeRootStyle(theme: Theme): ThemeLevelStyle {
+  return theme.rootStyle ?? RAINBOW_ROOT_STYLE;
+}
+
+const HEX = /^#[0-9a-fA-F]{6}$/;
+export const isHexColor = (v: unknown): v is string => typeof v === "string" && HEX.test(v);
+
+/**
+ * Kiểm tra & làm sạch một theme đọc từ file/map (dữ liệu ngoài, có thể
+ * hỏng hoặc bị sửa tay). null nếu không dùng được. Chỉ giữ đúng các
+ * trường đã biết; màu sai định dạng bị bỏ.
+ */
+export function sanitizeTheme(raw: unknown): Theme | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.id !== "string" || !r.id.trim() || typeof r.name !== "string") return null;
+  const style = (v: unknown): ThemeLevelStyle | null => {
+    if (typeof v !== "object" || v === null) return null;
+    const o = v as Record<string, unknown>;
+    if (!isHexColor(o.fill)) return null;
+    return { fill: o.fill.toLowerCase(), color: isHexColor(o.color) ? o.color.toLowerCase() : pickTextColor(o.fill) };
+  };
+  const levels = (Array.isArray(r.levels) ? r.levels : []).map(style).filter((x): x is ThemeLevelStyle => x !== null).slice(0, 8);
+  const perBranch = r.perBranch === true;
+  const palette = (Array.isArray(r.palette) ? r.palette : []).filter(isHexColor).map((c) => c.toLowerCase()).slice(0, 16);
+  if (!perBranch && levels.length === 0) return null;
+  const out: Theme = { id: r.id.trim(), name: r.name.trim() || "Theme riêng", levels, custom: true };
+  if (perBranch) out.perBranch = true;
+  if (r.hueDrift === true) out.hueDrift = true;
+  if (palette.length > 0) out.palette = palette;
+  const root = style(r.rootStyle);
+  if (root) out.rootStyle = root;
+  return out;
+}
+
+let customThemes: Theme[] = [];
+
+/** Thay danh sách theme riêng đang dùng được (nạp từ Workspace). */
+export function registerCustomThemes(list: Theme[]): void {
+  customThemes = list.map((t) => ({ ...t, custom: true }));
+}
+
+export function getCustomThemes(): Theme[] {
+  return customThemes;
+}
+
+/**
+ * Tìm theme theo id: theme có sẵn → theme riêng nhúng trong map (nếu đúng
+ * id) → theme riêng trong Workspace. Map ưu tiên bản nhúng của chính nó để
+ * hai máy có thư viện theme khác nhau vẫn tô cùng một màu.
+ */
+export function findTheme(id: string | null | undefined, map?: Pick<MindMap, "customTheme"> | null): Theme | null {
+  if (!id) return null;
+  const builtin = THEMES.find((t) => t.id === id);
+  if (builtin) return builtin;
+  if (map?.customTheme && map.customTheme.id === id) return map.customTheme;
+  return customThemes.find((t) => t.id === id) ?? null;
+}
+
+/** Bản sao có thể sửa của một theme (làm điểm xuất phát cho theme riêng). */
+export function cloneThemeAsCustom(base: Theme, id: string, name: string): Theme {
+  const levels = base.levels.length > 0 ? base.levels.map((l) => ({ ...l })) : THEMES[0]!.levels.map((l) => ({ ...l }));
+  const t: Theme = { id, name, levels, custom: true };
+  if (base.perBranch) {
+    t.perBranch = true;
+    t.palette = [...(base.palette ?? BRANCH_PALETTE)];
+    t.rootStyle = { ...themeRootStyle(base) };
+  }
+  if (base.hueDrift) t.hueDrift = true;
+  return t;
 }

@@ -105,6 +105,7 @@ import { loadMap as loadMapFromStorage } from "../io/storage";
 // P1.16 (tối ưu bundle) — xlsx/xmind KHÔNG import tĩnh ở đây nữa, xem
 // ghi chú ngay trước từng phương thức dùng chúng bên dưới.
 import { renderMarkdown } from "../io/markdownDoc";
+import type { Theme } from "../core/theme";
 import { buildDocModel, DEFAULT_DOC_OPTIONS, type DocOptions } from "../core/docModel";
 import { exportSvg } from "../io/svg";
 import { exportOpml, parseOpmlFile } from "../io/opml";
@@ -1139,8 +1140,8 @@ export class AppController {
 
   /** Áp một bộ theme cho toàn map (mọi cây độc lập, kể cả nhánh trôi —
    *  xem ApplyThemeCommand). Gộp thành đúng 1 bước hoàn tác. */
-  applyTheme(themeId: string): void {
-    this.store.dispatch(new ApplyThemeCommand(themeId));
+  applyTheme(themeId: string, theme: Theme | null = null): void {
+    this.store.dispatch(new ApplyThemeCommand(themeId, theme));
   }
 
   /** P2.6b-2 — bật/tắt 1 trong 3 công tắc hiển thị mức tài liệu

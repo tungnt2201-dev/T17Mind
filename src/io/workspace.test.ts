@@ -174,3 +174,32 @@ describe("KW0 — WorkspaceRepo trên thư mục (bộ nhớ)", () => {
     expect((await repo.readMap(a.mapId))!.nodes[a.rootId]!.text).toBe("Trước");
   });
 });
+
+describe("Biểu tượng ghim & theme riêng trong Workspace", () => {
+  const theme = { id: "theme_a", name: "Ấm áp", levels: [{ fill: "#aa5500", color: "#ffffff" }], custom: true };
+
+  it("hàng ghim lưu trong workspace.json, mở lại vẫn còn; null = mặc định", async () => {
+    const fs = createMemoryFs();
+    const r1 = await WorkspaceRepo.open(fs, opts());
+    expect(r1.pinnedMarkers).toBeNull();
+    await r1.setPinnedMarkers(["☕", "💰", "☕", ""]);
+    const r2 = await WorkspaceRepo.open(fs, opts());
+    expect(r2.pinnedMarkers).toEqual(["☕", "💰"]);
+    await r2.setPinnedMarkers(null);
+    expect((await WorkspaceRepo.open(fs, opts())).pinnedMarkers).toBeNull();
+  });
+
+  it("theme: ghi themes/<id>.json, đọc lại, xoá vào .trash; file hỏng / id lạ bị bỏ qua", async () => {
+    const fs = createMemoryFs();
+    const repo = await WorkspaceRepo.open(fs, opts());
+    await repo.writeTheme(theme);
+    expect(fs.files.has("themes/theme_a.json")).toBe(true);
+    fs.files.set("themes/hong.json", textBytes("{"));
+    fs.files.set("themes/khac.json", textBytes(JSON.stringify({ ...theme, id: "theme_b" })));
+    expect((await repo.listThemes()).map((t) => t.id)).toEqual(["theme_a"]);
+    await expect(repo.writeTheme({ ...theme, id: "../xau" })).rejects.toThrow();
+    await repo.deleteTheme("theme_a");
+    expect(await repo.listThemes()).toEqual([]);
+    expect([...fs.files.keys()].some((k) => k.startsWith(".trash/theme-theme_a-"))).toBe(true);
+  });
+});

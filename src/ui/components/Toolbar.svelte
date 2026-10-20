@@ -41,6 +41,8 @@
   import { mapStore, selectionStore } from "../svelteBridge";
   import { linkingModeStore, helpModalOpenStore, searchOpenStore, formatPainterModeStore, mapsModalOpenStore, explorerStore, minimapStore, hasLinkedFileStore, libraryStore, exportDocStore } from "../uiStores";
   import { THEMES } from "../../core/theme";
+  import { customThemesStore } from "../userLibrary";
+  import { themeEditorStore } from "../uiStores";
   import { toggleShortcutsModal } from "../shortcutsModal";
   import Icon from "./Icon.svelte";
   import type { FileFormat } from "../../io/fileFormats";
@@ -69,6 +71,12 @@
   $: canAutoArrange = $map && $sel ? controller.canAutoArrange() : false;
 
   let selectedThemeId = THEMES[0]!.id;
+  // Ô chọn theme theo theme map đang dùng (mở map khác, áp theme riêng từ trình sửa…).
+  let lastActiveThemeId: string | null | undefined = undefined;
+  $: if ($map.activeThemeId !== lastActiveThemeId) {
+    lastActiveThemeId = $map.activeThemeId;
+    if (lastActiveThemeId) selectedThemeId = lastActiveThemeId;
+  }
 
   let jsonInput: HTMLInputElement;
   let jsonMergeInput: HTMLInputElement;
@@ -329,12 +337,28 @@
     <span class="tbar-sep"></span>
 
     <select id="theme-select" bind:value={selectedThemeId} title="Chọn bộ theme rồi bấm Áp dụng" class="tbar-select">
-      {#each THEMES as theme (theme.id)}
-        <option value={theme.id}>{theme.name}</option>
-      {/each}
+      <optgroup label="Có sẵn">
+        {#each THEMES as theme (theme.id)}
+          <option value={theme.id}>{theme.name}</option>
+        {/each}
+      </optgroup>
+      {#if $customThemesStore.length > 0}
+        <optgroup label="Theme của tôi">
+          {#each $customThemesStore as theme (theme.id)}
+            <option value={theme.id}>{theme.name}</option>
+          {/each}
+        </optgroup>
+      {/if}
+      {#if $map.customTheme && !$customThemesStore.some((t) => t.id === $map.customTheme?.id)}
+        <optgroup label="Lưu trong map này">
+          <option value={$map.customTheme.id}>{$map.customTheme.name}</option>
+        </optgroup>
+      {/if}
     </select>
     <button class="tbar-btn" title="Áp bộ theme đã chọn cho toàn bộ map"
       on:click={() => controller.applyTheme(selectedThemeId)}><Icon name="check" /><span class="label">Áp dụng</span></button>
+    <button class="tbar-btn" title="Tạo / sửa theme riêng, nhập/xuất file theme"
+      on:click={() => themeEditorStore.set({ baseThemeId: selectedThemeId })}>🎨<span class="label">Theme riêng</span></button>
 
     <span class="tbar-sep"></span>
 

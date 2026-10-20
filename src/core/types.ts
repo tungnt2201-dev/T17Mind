@@ -9,10 +9,11 @@
  * từ layout/, render/, ui/. Nó là đáy của kim tự tháp.
  * ---------------------------------------------------------------------
  */
+import type { Theme } from "./theme";
 
 /** Phiên bản cấu trúc dữ liệu hiện tại. Tăng số này mỗi khi đổi hình
  *  dạng MindNode/MindMap, và viết hàm di trú tương ứng trong migrate.ts */
-export const CURRENT_SCHEMA_VERSION = 20;
+export const CURRENT_SCHEMA_VERSION = 21;
 
 export type BorderStyle = "solid" | "dashed" | "dotted" | "none";
 export type EdgeShape = "curve" | "straight";
@@ -389,6 +390,12 @@ export interface MindMap {
    * "Áp dụng" (theme khác) hoặc "Bỏ theme".
    */
   activeThemeId: string | null;
+
+  /** Schema 21 — bản sao của theme RIÊNG (người dùng tạo) đang áp dụng
+   *  cho map, để map tự chứa đủ: mở ở máy khác (không có theme đó trong
+   *  thư viện) vẫn đúng màu, node mới vẫn tô đúng. null = đang dùng theme
+   *  có sẵn hoặc không dùng theme. Xem core/theme.ts#findTheme. */
+  customTheme: Theme | null;
 }
 
 export type LayoutType = "logicRight" | "logicLeft" | "logicBoth" | "treeDown" | "orgChart" | "treeUp";

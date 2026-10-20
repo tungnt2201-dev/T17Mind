@@ -46,6 +46,7 @@ import ContextMenuComponent from "./ui/components/ContextMenu.svelte";
 import LibraryPanelComponent from "./ui/components/LibraryPanel.svelte";
 import CardPageModalComponent from "./ui/components/CardPageModal.svelte";
 import ExportDocModalComponent from "./ui/components/ExportDocModal.svelte";
+import ThemeEditorModalComponent from "./ui/components/ThemeEditorModal.svelte";
 
 async function bootstrap(): Promise<void> {
   const canvas = byId<HTMLCanvasElement>("map-canvas");
@@ -95,6 +96,7 @@ async function bootstrap(): Promise<void> {
   mount(LibraryPanelComponent, { target: byId("library-panel-root"), props: { store, selection, controller } });
   mount(CardPageModalComponent, { target: byId("card-page-root"), props: { store, controller } });
   mount(ExportDocModalComponent, { target: byId("export-doc-root"), props: { store, selection, controller } });
+  mount(ThemeEditorModalComponent, { target: byId("theme-editor-root"), props: { store, controller } });
 
   // FIX: canvas đã được đo kích thước một lần trong constructor của
   // CanvasRenderer ở TRÊN — lúc đó Toolbar chưa kịp gắn vào DOM nên đo

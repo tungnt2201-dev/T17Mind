@@ -13,6 +13,7 @@
  */
 import type { MindMap } from "../core/types";
 import { requireNode, getRootIds } from "../core/tree";
+import { markerSpace } from "./spacing";
 
 const H_GAP = 60; // khoảng cách ngang giữa hai tầng cha-con
 const V_GAP = 16; // khoảng cách dọc giữa hai node anh em
@@ -43,10 +44,11 @@ export function layoutLogicRight(map: MindMap): void {
 export function layoutSubtreeRight(map: MindMap, nodeId: string, depthX: number, startY: number): number {
   const node = requireNode(map, nodeId);
 
+  const top = markerSpace(node);
   if (node.children.length === 0 || node.collapsed) {
     node.baseX = depthX;
-    node.baseY = startY;
-    return node.height + V_GAP;
+    node.baseY = startY + top;
+    return top + node.height + V_GAP;
   }
 
   const childX = depthX + node.width + H_GAP;
@@ -64,5 +66,5 @@ export function layoutSubtreeRight(map: MindMap, nodeId: string, depthX: number,
   node.baseX = depthX;
   node.baseY = (firstChild.baseY + lastChild.baseY) / 2;
 
-  return Math.max(totalHeight, node.height + V_GAP);
+  return Math.max(totalHeight, top + node.height + V_GAP);
 }

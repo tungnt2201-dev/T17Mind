@@ -58,8 +58,9 @@ import type { ClipboardNode } from "./clipboard";
 import { clipboardNodeToTree } from "./clipboard";
 import { remapLinks } from "./links";
 import {
-  THEMES,
-  BRANCH_PALETTE,
+  findTheme,
+  branchHue,
+  themeRootStyle,
   colorForDepth,
   colorForBranchDepth,
   computeThemedStyleForNode,
@@ -1476,18 +1477,24 @@ export class ApplyThemeCommand implements Command {
   private oldValues: Record<string, { fill: string | null; color: string | null }> = {};
   private oldActiveThemeId: string | null = null;
 
-  constructor(private readonly themeId: string) {}
+  private oldCustomTheme: Theme | null = null;
+
+  /** `theme` truyền kèm khi áp một theme RIÊNG (để nhúng đúng bản đang
+   *  thấy vào map); theme có sẵn chỉ cần id. */
+  constructor(private readonly themeId: string, private readonly theme: Theme | null = null) {}
 
   apply(map: MindMap): void {
-    const theme = THEMES.find((t) => t.id === this.themeId);
+    const theme = this.theme ?? findTheme(this.themeId, map);
     if (!theme) return;
     this.oldValues = {};
     this.oldActiveThemeId = map.activeThemeId;
+    this.oldCustomTheme = map.customTheme;
     map.activeThemeId = this.themeId;
+    map.customTheme = theme.custom ? deepClone(theme) : null;
 
     for (const rootId of getRootIds(map)) {
       if (theme.perBranch) {
-        this.applyBranchColors(map, rootId);
+        this.applyBranchColors(map, theme, rootId);
       } else {
         this.applyDepthBased(map, theme, rootId);
       }
@@ -1496,6 +1503,7 @@ export class ApplyThemeCommand implements Command {
 
   revert(map: MindMap): void {
     map.activeThemeId = this.oldActiveThemeId;
+    map.customTheme = this.oldCustomTheme;
     for (const id of Object.keys(this.oldValues)) {
       const node = map.nodes[id];
       if (!node) continue;
@@ -1537,15 +1545,16 @@ export class ApplyThemeCommand implements Command {
    * công thức DUY NHẤT, đảm bảo "Áp dụng" và node tự tô khi tạo mới
    * luôn ra ĐÚNG cùng một màu ở cùng một độ sâu-trong-nhánh).
    */
-  private applyBranchColors(map: MindMap, rootId: string): void {
+  private applyBranchColors(map: MindMap, theme: Theme, rootId: string): void {
     const root = map.nodes[rootId];
     if (!root) return;
     this.captureOld(root);
-    root.fill = "#14162b";
-    root.color = "#ffffff";
+    const rootStyle = themeRootStyle(theme);
+    root.fill = rootStyle.fill;
+    root.color = rootStyle.color;
 
     root.children.forEach((childId, branchIndex) => {
-      const hue = BRANCH_PALETTE[branchIndex % BRANCH_PALETTE.length] as string;
+      const hue = branchHue(theme, branchIndex);
       const visit = (id: string, depthInBranch: number): void => {
         const node = map.nodes[id];
         if (!node) return;
@@ -1571,7 +1580,7 @@ export class ApplyThemeCommand implements Command {
  */
 function applyActiveThemeToNewNode(map: MindMap, nodeId: string): void {
   if (!map.activeThemeId) return;
-  const theme = THEMES.find((t) => t.id === map.activeThemeId);
+  const theme = findTheme(map.activeThemeId, map);
   if (!theme) return;
   const node = map.nodes[nodeId];
   if (!node) return;

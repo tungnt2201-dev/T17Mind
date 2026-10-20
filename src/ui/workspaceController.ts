@@ -38,6 +38,7 @@ import {
 } from "../io/workspaceFs";
 import { appDir, isDesktopApp } from "../io/nativeFs";
 import { workspaceStore } from "./uiStores";
+import { loadUserLibrary } from "./userLibrary";
 
 const META_PATH = "workspacePath";
 const META_HANDLE = "workspaceHandle";
@@ -64,6 +65,7 @@ async function attach(fs: WorkspaceFs): Promise<WorkspaceRepo> {
     if (browserOnly.length > 0) await copyBrowserMapsToWorkspace(browserOnly.map((e) => e.mapId));
   }
   workspaceStore.update((s) => ({ ...s, kind: fs.kind === "native" ? "native" : "browser", label: fs.label, needsPermission: null, error: null }));
+  await loadUserLibrary();
   return repo;
 }
 
@@ -91,6 +93,7 @@ export async function initWorkspace(): Promise<void> {
     setWorkspaceRepo(null);
     workspaceStore.update((s) => ({ ...s, kind: "idb", label: "", error: `Không mở được thư mục Workspace: ${(err as Error)?.message ?? err}` }));
   }
+  if (!getWorkspaceRepo()) await loadUserLibrary();
   if (!desktop && typeof document !== "undefined") {
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "hidden") void flushWorkspaceWrites();
@@ -160,6 +163,7 @@ export async function disconnectWorkspaceFolder(): Promise<void> {
   setWorkspaceRepo(null);
   await setMeta(META_HANDLE, undefined);
   workspaceStore.update((s) => ({ ...s, kind: "idb", label: "", needsPermission: null }));
+  await loadUserLibrary();
 }
 
 /** Bản exe: mở thư mục Workspace bằng Explorer. */

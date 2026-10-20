@@ -12,11 +12,16 @@
  * ---------------------------------------------------------------------
  */
 import type { MindMap } from "../core/types";
+import { sanitizeTheme, type Theme } from "../core/theme";
 import {
   MANIFEST_FILE,
   MAPS_DIR,
   TRASH_DIR,
+  THEMES_DIR,
   createManifest,
+  isSafeId,
+  sanitizePinnedMarkers,
+  themeFilePath,
   mapDisplayTitle,
   mapFilePath,
   parseManifest,
@@ -132,6 +137,50 @@ export class WorkspaceRepo {
     return this.enqueue(async () => {
       this.manifest = { ...this.manifest, lastOpenedMapId: mapId };
       await this.writeManifestFile();
+    });
+  }
+
+  get pinnedMarkers(): string[] | null {
+    return this.manifest.pinnedMarkers ? [...this.manifest.pinnedMarkers] : null;
+  }
+
+  /** Lưu hàng biểu tượng ghim (null = quay về bộ mặc định). */
+  setPinnedMarkers(list: string[] | null): Promise<void> {
+    return this.enqueue(async () => {
+      this.manifest = { ...this.manifest, pinnedMarkers: list === null ? null : sanitizePinnedMarkers(list), updatedAt: this.now() };
+      await this.writeManifestFile();
+    });
+  }
+
+  /** Mọi theme riêng trong themes/ (file hỏng bị bỏ qua). */
+  async listThemes(): Promise<Theme[]> {
+    const out: Theme[] = [];
+    for (const f of await this.fs.list(THEMES_DIR)) {
+      if (!f.endsWith(".json")) continue;
+      const bytes = await this.fs.read(`${THEMES_DIR}/${f}`);
+      if (!bytes) continue;
+      try {
+        const t = sanitizeTheme(JSON.parse(bytesText(bytes)));
+        if (t && isSafeId(t.id) && `${t.id}.json` === f) out.push(t);
+      } catch {
+        // file hỏng: bỏ qua
+      }
+    }
+    return out.sort((a, b) => a.name.localeCompare(b.name, "vi"));
+  }
+
+  writeTheme(theme: Theme): Promise<void> {
+    const clean = sanitizeTheme(theme);
+    if (!clean || !isSafeId(clean.id)) return Promise.reject(new Error("Theme không hợp lệ."));
+    return this.enqueue(() => this.fs.write(themeFilePath(clean.id), textBytes(JSON.stringify(clean, null, 2))));
+  }
+
+  /** Xoá theme: chuyển file vào .trash/. */
+  deleteTheme(themeId: string): Promise<void> {
+    if (!isSafeId(themeId)) return Promise.resolve();
+    return this.enqueue(async () => {
+      const from = themeFilePath(themeId);
+      if (await this.fs.read(from)) await this.fs.move(from, `${TRASH_DIR}/theme-${themeId}-${this.now()}.json`);
     });
   }
 

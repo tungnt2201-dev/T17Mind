@@ -7,6 +7,7 @@
  *   <Workspace>/
  *     workspace.json        danh mục (manifest) — file này
  *     maps/<mapId>.t17m     mỗi map một file (định dạng .t17m sẵn có)
+ *     themes/<id>.json      theme riêng của người dùng
  *     .trash/               map bị xoá được chuyển vào đây, không xoá hẳn
  *
  * Module này THUẦN (không đụng ổ đĩa): tạo/đọc/kiểm tra manifest, cập
@@ -22,6 +23,7 @@ export const WORKSPACE_FORMAT_VERSION = 1;
 export const MANIFEST_FILE = "workspace.json";
 export const MAPS_DIR = "maps";
 export const TRASH_DIR = ".trash";
+export const THEMES_DIR = "themes";
 /** Tên thư mục Workspace mặc định cạnh file exe. */
 export const DEFAULT_WORKSPACE_DIR_NAME = "T17Mind-Workspace";
 
@@ -44,7 +46,16 @@ export interface WorkspaceManifest {
    *  vẫn mở đúng map đang làm dở. */
   lastOpenedMapId: string | null;
   maps: WorkspaceMapEntry[];
+  /** Hàng biểu tượng ghim trong khung chọn biểu tượng; null = bộ mặc định. */
+  pinnedMarkers: string[] | null;
 }
+
+export function themeFilePath(themeId: string): string {
+  return `${THEMES_DIR}/${themeId}.json`;
+}
+
+/** id an toàn để làm tên file (chỉ chữ, số, _ và -). */
+export const isSafeId = (id: string): boolean => /^[A-Za-z0-9_-]{1,80}$/.test(id);
 
 export function mapFilePath(mapId: string): string {
   return `${MAPS_DIR}/${mapId}.t17m`;
@@ -74,7 +85,16 @@ export function createManifest(workspaceId: string, name: string, now: number = 
     updatedAt: now,
     lastOpenedMapId: null,
     maps: [],
+    pinnedMarkers: null,
   };
+}
+
+/** Làm sạch danh sách biểu tượng ghim (chuỗi ngắn, không trùng, tối đa 40). */
+export function sanitizePinnedMarkers(v: unknown): string[] | null {
+  if (!Array.isArray(v)) return null;
+  const out: string[] = [];
+  for (const x of v) if (typeof x === "string" && x.trim() && x.length <= 16 && !out.includes(x)) out.push(x);
+  return out.slice(0, 40);
 }
 
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
@@ -125,6 +145,7 @@ export function parseManifest(text: string): WorkspaceManifest | null {
     updatedAt: isNum(r.updatedAt) ? r.updatedAt : now,
     lastOpenedMapId: typeof r.lastOpenedMapId === "string" && seen.has(r.lastOpenedMapId) ? r.lastOpenedMapId : null,
     maps,
+    pinnedMarkers: sanitizePinnedMarkers(r.pinnedMarkers),
   };
 }
 

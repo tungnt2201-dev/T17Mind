@@ -20,6 +20,7 @@ import { createCard, createTextBlock, createTableBlock, createImageBlock, create
 import { validateMindMap } from "./validate";
 import { migrateToLatest } from "./migrate";
 import type { MindMap, TableBlock } from "./types";
+import { CURRENT_SCHEMA_VERSION } from "./types";
 
 const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 
@@ -385,7 +386,7 @@ describe("KW0 — dấu thời gian và rev của card (schema 20)", () => {
     m.schemaVersion = 19;
     m.cards = { c1: { id: "c1", title: "t", blocks: [] }, c2: { id: "c2", title: "t", blocks: [], rev: -3, updatedAt: "x", createdAt: 5 } };
     const out = migrateToLatest(m);
-    expect(out.schemaVersion).toBe(20);
+    expect(out.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(out.cards.c1).toMatchObject({ createdAt: 0, updatedAt: 0, rev: 0 });
     expect(out.cards.c2).toMatchObject({ createdAt: 5, updatedAt: 0, rev: 0 });
     expect(validateMindMap(out)).toEqual([]);

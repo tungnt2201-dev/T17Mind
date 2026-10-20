@@ -16,6 +16,7 @@
 import { CURRENT_SCHEMA_VERSION } from "./types";
 import type { MindMap } from "./types";
 import { generateMapId, generateTagId } from "./tree";
+import { sanitizeTheme } from "./theme";
 
 type UnknownRecord = Record<string, unknown>;
 type MigrationFn = (raw: UnknownRecord) => UnknownRecord;
@@ -510,6 +511,11 @@ function normalizeCardMeta(rawCards: unknown): UnknownRecord {
   return cards;
 }
 
+/** Phiên bản 20 -> 21: map có thêm `customTheme` (theme riêng nhúng kèm), mặc định null. */
+function migrateV20toV21(raw: UnknownRecord): UnknownRecord {
+  return { ...raw, schemaVersion: 21, customTheme: sanitizeTheme(raw.customTheme) };
+}
+
 const MIGRATIONS: Record<number, MigrationFn> = {
   0: migrateV0toV1,
   1: migrateV1toV2,
@@ -531,6 +537,7 @@ const MIGRATIONS: Record<number, MigrationFn> = {
   17: migrateV17toV18,
   18: migrateV18toV19,
   19: migrateV19toV20,
+  20: migrateV20toV21,
 };
 
 /**
@@ -582,6 +589,7 @@ export function migrateToLatest(raw: UnknownRecord): MindMap {
   if (!Array.isArray(safe.tags)) safe.tags = [];
   if (typeof safe.assets !== "object" || safe.assets === null) safe.assets = {};
   if (typeof safe.activeThemeId !== "string") safe.activeThemeId = null;
+  safe.customTheme = sanitizeTheme(safe.customTheme);
   safe.cards = normalizeCardMeta(normalizeTableSizes(normalizeImageBlockSizes(safe.cards)));
 
   // Cùng lý do, cùng cách sửa — nhưng ở CẤP NODE: children/markers/
