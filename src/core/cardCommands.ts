@@ -367,3 +367,35 @@ export function buildAddImagesToNodeCommand(
   }
   return new CompositeCommand(commands, images.length > 1 ? `Thêm ${images.length} ảnh` : "Thêm ảnh");
 }
+
+/**
+ * KW1 — đưa một card từ kho card chung (Workspace) vào map đang mở, giữ
+ * NGUYÊN id (cùng một card ở nhiều map), kèm dữ liệu ảnh nó dùng. Map đã
+ * có card đó thì không làm gì. Thường gộp với CreateNodeWithCardCommand /
+ * AttachCardToNodeCommand trong một CompositeCommand (một bước hoàn tác).
+ */
+export class ImportCardCommand implements Command {
+  readonly label = "Thêm card từ Workspace";
+  private added = false;
+  private addedAssets: string[] = [];
+  constructor(private readonly card: Card, private readonly assets: Record<string, ImageAsset>) {}
+  apply(map: MindMap): void {
+    this.added = false;
+    this.addedAssets = [];
+    if (map.cards[this.card.id]) return;
+    for (const id of cardAssetIds(this.card)) {
+      const a = this.assets[id];
+      if (a && !map.assets[id]) {
+        map.assets[id] = { ...a };
+        this.addedAssets.push(id);
+      }
+    }
+    map.cards[this.card.id] = deepClone(this.card);
+    this.added = true;
+  }
+  revert(map: MindMap): void {
+    if (!this.added) return;
+    delete map.cards[this.card.id];
+    for (const id of this.addedAssets) delete map.assets[id];
+  }
+}

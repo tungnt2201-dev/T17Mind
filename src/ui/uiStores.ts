@@ -170,8 +170,10 @@ export interface LibraryState {
   tagId: string | null;
   /** Card đang mở rộng để xem/sửa trong khung. */
   expandedCardId: string | null;
+  /** KW1 — "map": card của map đang mở; "workspace": kho card chung. */
+  scope: "map" | "workspace";
 }
-export const libraryStore = writable<LibraryState>({ open: false, query: "", filter: "all", tagId: null, expandedCardId: null });
+export const libraryStore = writable<LibraryState>({ open: false, query: "", filter: "all", tagId: null, expandedCardId: null, scope: "map" });
 
 /** Card đang mở dạng trang tài liệu (CardPageModal), null = đóng.
  *  `focusBlockId` = khối cần cuộn tới khi mở (ví dụ bấm biểu tượng bảng). */
@@ -208,3 +210,10 @@ export const workspaceStore = writable<WorkspaceUiState>({
 
 /** Trình quản lý theme riêng (ThemeEditorModal) — null = đóng. */
 export const themeEditorStore = writable<{ baseThemeId: string | null } | null>(null);
+
+/** Thông báo ngắn tự ẩn (components/Toast.svelte). */
+export const noticeStore = writable<{ text: string; id: number } | null>(null);
+let noticeSeq = 0;
+export function showNotice(text: string): void {
+  noticeStore.set({ text, id: ++noticeSeq });
+}

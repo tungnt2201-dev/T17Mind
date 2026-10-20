@@ -8,6 +8,7 @@
  *     workspace.json        danh mục (manifest) — file này
  *     maps/<mapId>.t17m     mỗi map một file (định dạng .t17m sẵn có)
  *     themes/<id>.json      theme riêng của người dùng
+ *     cards/<cardId>.json   bản chuẩn của card dùng chung giữa các map (KW1)
  *     .trash/               map bị xoá được chuyển vào đây, không xoá hẳn
  *
  * Module này THUẦN (không đụng ổ đĩa): tạo/đọc/kiểm tra manifest, cập
@@ -24,6 +25,7 @@ export const MANIFEST_FILE = "workspace.json";
 export const MAPS_DIR = "maps";
 export const TRASH_DIR = ".trash";
 export const THEMES_DIR = "themes";
+export const CARDS_DIR = "cards";
 /** Tên thư mục Workspace mặc định cạnh file exe. */
 export const DEFAULT_WORKSPACE_DIR_NAME = "T17Mind-Workspace";
 
@@ -33,6 +35,16 @@ export interface WorkspaceMapEntry {
   file: string;
   title: string;
   updatedAt: number;
+  /** KW1 — id các card có trong map (để biết card nào đang dùng ở map nào
+   *  mà không phải mở từng file map). */
+  cardIds: string[];
+}
+
+/** KW1 — một card trong kho card chung (bản chuẩn ở cards/<cardId>.json). */
+export interface RegistryCardEntry {
+  title: string;
+  updatedAt: number;
+  rev: number;
 }
 
 export interface WorkspaceManifest {
@@ -48,6 +60,12 @@ export interface WorkspaceManifest {
   maps: WorkspaceMapEntry[];
   /** Hàng biểu tượng ghim trong khung chọn biểu tượng; null = bộ mặc định. */
   pinnedMarkers: string[] | null;
+  /** KW1 — kho card chung: id → phiên bản bản chuẩn. */
+  cards: Record<string, RegistryCardEntry>;
+}
+
+export function cardFilePath(cardId: string): string {
+  return `${CARDS_DIR}/${cardId}.json`;
 }
 
 export function themeFilePath(themeId: string): string {
@@ -86,6 +104,7 @@ export function createManifest(workspaceId: string, name: string, now: number = 
     lastOpenedMapId: null,
     maps: [],
     pinnedMarkers: null,
+    cards: {},
   };
 }
 
@@ -133,6 +152,7 @@ export function parseManifest(text: string): WorkspaceManifest | null {
       file: mapFilePath(m.mapId),
       title: typeof m.title === "string" && m.title.trim() ? m.title : "Chưa đặt tên",
       updatedAt: isNum(m.updatedAt) ? m.updatedAt : 0,
+      cardIds: Array.isArray(m.cardIds) ? m.cardIds.filter((x): x is string => typeof x === "string" && isSafeId(x)) : [],
     });
   }
   const now = Date.now();
@@ -146,6 +166,7 @@ export function parseManifest(text: string): WorkspaceManifest | null {
     lastOpenedMapId: typeof r.lastOpenedMapId === "string" && seen.has(r.lastOpenedMapId) ? r.lastOpenedMapId : null,
     maps,
     pinnedMarkers: sanitizePinnedMarkers(r.pinnedMarkers),
+    cards: parseCardEntries(r.cards),
   };
 }
 
@@ -153,9 +174,30 @@ export function serializeManifest(m: WorkspaceManifest): string {
   return JSON.stringify(m, null, 2);
 }
 
-/** Thêm/cập nhật mục của một map (trả về manifest MỚI, không sửa bản cũ). */
-export function upsertMapEntry(m: WorkspaceManifest, entry: Omit<WorkspaceMapEntry, "file">, now: number = Date.now()): WorkspaceManifest {
-  const full: WorkspaceMapEntry = { ...entry, file: mapFilePath(entry.mapId) };
+function parseCardEntries(v: unknown): Record<string, RegistryCardEntry> {
+  const out: Record<string, RegistryCardEntry> = {};
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return out;
+  for (const [id, e] of Object.entries(v as Record<string, unknown>)) {
+    if (!isSafeId(id) || typeof e !== "object" || e === null) continue;
+    const x = e as Record<string, unknown>;
+    out[id] = {
+      title: typeof x.title === "string" ? x.title : "",
+      updatedAt: isNum(x.updatedAt) ? x.updatedAt : 0,
+      rev: isNum(x.rev) ? x.rev : 0,
+    };
+  }
+  return out;
+}
+
+/** Thêm/cập nhật mục của một map (trả về manifest MỚI, không sửa bản cũ).
+ *  Không truyền `cardIds` thì giữ danh sách card cũ của map. */
+export function upsertMapEntry(
+  m: WorkspaceManifest,
+  entry: Omit<WorkspaceMapEntry, "file" | "cardIds"> & { cardIds?: string[] },
+  now: number = Date.now()
+): WorkspaceManifest {
+  const prev = m.maps.find((e) => e.mapId === entry.mapId);
+  const full: WorkspaceMapEntry = { ...entry, cardIds: entry.cardIds ?? prev?.cardIds ?? [], file: mapFilePath(entry.mapId) };
   const maps = m.maps.some((e) => e.mapId === entry.mapId)
     ? m.maps.map((e) => (e.mapId === entry.mapId ? full : e))
     : [...m.maps, full];
@@ -195,4 +237,9 @@ export function reconcileManifest(
 /** Danh sách map mới cập nhật nhất lên đầu (dùng cho "Map gần đây"). */
 export function sortedMapEntries(m: WorkspaceManifest): WorkspaceMapEntry[] {
   return [...m.maps].sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+/** KW1 — tên các map (trong Workspace) đang dùng card `cardId`. */
+export function mapsUsingCard(m: WorkspaceManifest, cardId: string): WorkspaceMapEntry[] {
+  return m.maps.filter((e) => e.cardIds.includes(cardId));
 }

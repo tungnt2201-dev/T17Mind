@@ -13,12 +13,16 @@
  */
 import type { MindMap } from "../core/types";
 import { sanitizeTheme, type Theme } from "../core/theme";
+import { applyCardFile, buildCardFile, isNewer, parseCardFile, versionOf, type RegistryCardFile } from "../core/cardRegistry";
 import {
   MANIFEST_FILE,
   MAPS_DIR,
   TRASH_DIR,
   THEMES_DIR,
   createManifest,
+  CARDS_DIR,
+  cardFilePath,
+  mapsUsingCard,
   isSafeId,
   sanitizePinnedMarkers,
   themeFilePath,
@@ -70,9 +74,26 @@ export class WorkspaceRepo {
     for (const mapId of rec.unknownMapIds) {
       const map = await readMapFile(fs, mapId);
       if (!map || map.mapId !== mapId) continue;
-      manifest = upsertMapEntry(manifest, { mapId, title: mapDisplayTitle(map), updatedAt: 0 }, now());
+      manifest = upsertMapEntry(manifest, { mapId, title: mapDisplayTitle(map), updatedAt: 0, cardIds: Object.keys(map.cards) }, now());
       dirty = true;
     }
+    // KW1 — đối chiếu kho card: bỏ mục mất file, nhận file card chép tay vào.
+    const cardFiles = new Set((await fs.list(CARDS_DIR)).filter((f) => f.endsWith(".json")).map((f) => f.slice(0, -5)));
+    const cards = { ...manifest.cards };
+    for (const id of Object.keys(cards)) {
+      if (!cardFiles.has(id)) {
+        delete cards[id];
+        dirty = true;
+      }
+    }
+    for (const id of cardFiles) {
+      if (cards[id] || !isSafeId(id)) continue;
+      const file = await readCardFile(fs, id);
+      if (!file || file.card.id !== id) continue;
+      cards[id] = { title: file.card.title, ...versionOf(file.card) };
+      dirty = true;
+    }
+    manifest = { ...manifest, cards };
     const repo = new WorkspaceRepo(fs, manifest, now);
     if (dirty) await repo.saveManifest();
     return repo;
@@ -114,9 +135,72 @@ export class WorkspaceRepo {
       await this.fs.write(mapFilePath(snapshot.mapId), new Uint8Array(await blob.arrayBuffer()));
       this.manifest = upsertMapEntry(
         this.manifest,
-        { mapId: snapshot.mapId, title: mapDisplayTitle(snapshot), updatedAt },
+        { mapId: snapshot.mapId, title: mapDisplayTitle(snapshot), updatedAt, cardIds: Object.keys(snapshot.cards) },
         this.now()
       );
+      await this.publishCards(snapshot);
+      await this.writeManifestFile();
+    });
+  }
+
+  /** KW1 — card trong map mới hơn bản chuẩn (hoặc chưa có) → ghi bản chuẩn. */
+  private async publishCards(map: MindMap): Promise<void> {
+    const cards = { ...this.manifest.cards };
+    let changed = false;
+    for (const card of Object.values(map.cards)) {
+      if (!isSafeId(card.id)) continue;
+      const entry = cards[card.id];
+      if (entry && !isNewer(versionOf(card), entry)) continue;
+      await this.fs.write(cardFilePath(card.id), textBytes(JSON.stringify(buildCardFile(map, card))));
+      cards[card.id] = { title: card.title, ...versionOf(card) };
+      changed = true;
+    }
+    if (changed) this.manifest = { ...this.manifest, cards };
+  }
+
+  /**
+   * KW1 — lúc mở map: card nào có bản chuẩn MỚI HƠN bản sao trong map thì
+   * thay vào (sửa thẳng `map`). Trả về tên các card đã cập nhật.
+   */
+  async pullNewerCards(map: MindMap): Promise<string[]> {
+    const updated: string[] = [];
+    for (const card of Object.values(map.cards)) {
+      const entry = this.manifest.cards[card.id];
+      if (!entry || !isNewer(entry, versionOf(card))) continue;
+      const file = await readCardFile(this.fs, card.id);
+      if (!file || !isNewer(versionOf(file.card), versionOf(card))) continue;
+      applyCardFile(map, file);
+      updated.push(file.card.title || "(chưa đặt tên)");
+    }
+    return updated;
+  }
+
+  /** KW1 — bản chuẩn của một card (null nếu không có / hỏng). */
+  readCard(cardId: string): Promise<RegistryCardFile | null> {
+    if (!this.manifest.cards[cardId]) return Promise.resolve(null);
+    return readCardFile(this.fs, cardId);
+  }
+
+  /** KW1 — toàn bộ kho card chung, kèm danh sách map đang dùng từng card. */
+  async listRegistryCards(): Promise<{ file: RegistryCardFile; usedIn: WorkspaceMapEntry[] }[]> {
+    const out: { file: RegistryCardFile; usedIn: WorkspaceMapEntry[] }[] = [];
+    for (const id of Object.keys(this.manifest.cards)) {
+      const file = await readCardFile(this.fs, id);
+      if (file) out.push({ file, usedIn: mapsUsingCard(this.manifest, id) });
+    }
+    return out.sort((a, b) => b.file.card.updatedAt - a.file.card.updatedAt);
+  }
+
+  /** KW1 — xoá card khỏi kho chung (chuyển vào .trash). Chỉ khi không map nào còn dùng. */
+  deleteRegistryCard(cardId: string): Promise<void> {
+    return this.enqueue(async () => {
+      if (!this.manifest.cards[cardId]) return;
+      if (mapsUsingCard(this.manifest, cardId).length > 0) throw new Error("Card vẫn đang được dùng trong một map.");
+      const from = cardFilePath(cardId);
+      if (await this.fs.read(from)) await this.fs.move(from, `${TRASH_DIR}/card-${cardId}-${this.now()}.json`);
+      const cards = { ...this.manifest.cards };
+      delete cards[cardId];
+      this.manifest = { ...this.manifest, cards, updatedAt: this.now() };
       await this.writeManifestFile();
     });
   }
@@ -213,4 +297,9 @@ async function readMapFile(fs: WorkspaceFs, mapId: string): Promise<MindMap | nu
     return null;
   }
   return res.map;
+}
+
+async function readCardFile(fs: WorkspaceFs, cardId: string): Promise<RegistryCardFile | null> {
+  const bytes = await fs.read(cardFilePath(cardId));
+  return bytes ? parseCardFile(bytesText(bytes)) : null;
 }

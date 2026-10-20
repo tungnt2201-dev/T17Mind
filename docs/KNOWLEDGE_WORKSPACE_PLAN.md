@@ -137,7 +137,8 @@ Tổng ước lượng: khoảng **30–40 phiên làm việc**. Nặng nhất l
   maps/<mapId>.t17m     mỗi map một file .t17m (mở thẳng bằng Tệp → Mở… được)
   .trash/               map bị xoá được chuyển vào đây
   themes/<id>.json      theme riêng của người dùng (+ workspace.json#pinnedMarkers: hàng biểu tượng ghim)
-  (KW1) cards/…         Card Registry      (KW3) sources/…   PDF và nguồn khác
+  cards/<id>.json       (KW1) bản chuẩn của card dùng chung; workspace.json ghi phiên bản card và map nào dùng card nào
+  (KW3) sources/…       PDF và nguồn khác
 ```
 
 - **Exe:** mặc định `<thư mục chứa exe>/T17Mind-Workspace`. Chép cả thư mục exe sang máy khác là mang theo toàn bộ dữ liệu. Đổi được thư mục trong "Map gần đây"; đường dẫn đã chọn được nhớ trên máy.

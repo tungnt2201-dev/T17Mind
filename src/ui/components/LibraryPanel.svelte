@@ -29,6 +29,7 @@
   import { createCard } from "../../core/cards";
   import { AddCardCommand, AttachCardToNodeCommand, DeleteCardCommand } from "../../core/cardCommands";
   import CardEditor from "./CardEditor.svelte";
+  import WorkspaceCards from "./WorkspaceCards.svelte";
 
   export let store: Store;
   export let selection: SelectionModel;
@@ -98,8 +99,18 @@
       <button type="button" class="lib-close" title="Đóng" on:click={() => patch({ open: false })}>×</button>
     </header>
 
+    <div class="lib-scope" role="tablist" aria-label="Phạm vi">
+      <button type="button" role="tab" aria-selected={lib.scope !== "workspace"} class:active={lib.scope !== "workspace"}
+        on:click={() => patch({ scope: "map" })}>Map này</button>
+      <button type="button" role="tab" aria-selected={lib.scope === "workspace"} class:active={lib.scope === "workspace"}
+        title="Card của mọi map trong thư mục Workspace — kéo vào map này để dùng chung"
+        on:click={() => patch({ scope: "workspace" })}>Toàn Workspace</button>
+    </div>
     <input class="lib-search" type="search" placeholder="Tìm trong tên, văn bản, bảng, chú thích ảnh…" value={lib.query}
       on:input={(e) => patch({ query: e.currentTarget.value })} />
+    {#if lib.scope === "workspace"}
+      <WorkspaceCards {store} {selection} {controller} query={lib.query} />
+    {:else}
     <div class="lib-filters" role="group" aria-label="Lọc card">
       {#each FILTERS as f (f.v)}
         <button type="button" class:active={lib.filter === f.v} on:click={() => patch({ filter: f.v })}>
@@ -183,6 +194,7 @@
         </li>
       {/each}
     </ul>
+    {/if}
   </aside>
 {/if}
 
@@ -195,6 +207,9 @@
   .lib-head { display: flex; align-items: center; gap: 6px; font-size: 13.5px; }
   .lib-count { background: #f3f4f6; color: #6b7280; border-radius: 9px; padding: 0 7px; font-size: 11px; }
   .lib-close { margin-left: auto; border: none; background: transparent; font-size: 18px; line-height: 1; cursor: pointer; color: #6b7280; }
+  .lib-scope { display: flex; background: #e5e7eb; border-radius: 8px; padding: 2px; gap: 2px; }
+  .lib-scope button { flex: 1; border: none; background: transparent; border-radius: 6px; padding: 4px 6px; cursor: pointer; font-size: 12px; color: #374151; }
+  .lib-scope button.active { background: #fff; color: #111827; font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12); }
   .lib-search { width: 100%; box-sizing: border-box; padding: 6px 8px; }
   .lib-filters { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
   .lib-filters button { border: 1px solid var(--border, #e5e7eb); background: #fff; border-radius: 12px; padding: 2px 10px; cursor: pointer; font-size: 12px; }

@@ -3803,3 +3803,27 @@ Nhánh `feat/icons-themes` (xếp chồng trên KW0 vì lưu vào thư mục Wor
 - [ ] Ô chọn theme có nhóm "Theme của tôi"; mở lại app vẫn còn; trong thư mục Workspace có `themes/…json`
 - [ ] Xuất file… → được file `.t17theme`; xoá theme → Nhập file .t17theme… → Lưu → theme trở lại
 - [ ] Gửi file `.t17m` của map dùng theme riêng sang máy khác (không có theme đó) → mở ra đúng màu; thêm nhánh mới vẫn tô đúng màu theme; ô chọn có nhóm "Lưu trong map này"
+
+---
+
+## KW1 — Card dùng chung giữa nhiều map (20/10/2026)
+
+Nhánh `feat/kw1-card-registry` (xếp chồng trên `feat/icons-themes` → KW0). Lộ trình: `docs/KNOWLEDGE_WORKSPACE_PLAN.md`.
+
+- **Kho card chung** trong thư mục Workspace: `cards/<cardId>.json` (card + ảnh nó dùng, `core/cardRegistry.ts`). `workspace.json` ghi phiên bản từng card (`cards`) và map nào dùng card nào (`maps[].cardIds`). Mỗi map VẪN giữ bản sao card — file `.t17m` gửi đi vẫn tự chứa đủ.
+- **Đồng bộ "bản mới hơn thắng"** (so `updatedAt` rồi `rev`, cả hai chỉ tăng kể cả khi hoàn tác — KW0): lưu map → card trong map mới hơn bản chuẩn thì ghi đè bản chuẩn; mở map → ghi nốt các thay đổi đang chờ trước, rồi card nào có bản chuẩn mới hơn thì thay vào map (không vào lịch sử hoàn tác, map được lưu lại ngay) và hiện thông báo "Đã cập nhật N card từ map khác".
+- **Thư viện → "Toàn Workspace"** (`components/WorkspaceCards.svelte`): mọi card của mọi map, "Dùng ở: …", lọc Tất cả / Chưa có ở map này / Không map nào dùng, tìm không dấu; kéo thả vào canvas hoặc "＋ Thêm làm nhánh con" / "Gắn vào node đang chọn" (`ImportCardCommand` + node/gắn trong một CompositeCommand — một bước hoàn tác, giữ nguyên id, mang theo ảnh); "Mở map: …"; "Xoá khỏi Workspace" cho card không map nào dùng (vào `.trash/`). Chưa chọn thư mục Workspace: hiện hướng dẫn.
+- Thông báo ngắn tự ẩn (`components/Toast.svelte`, `showNotice`). Sửa câu hỏi "Tạo mới" (map cũ vẫn được lưu, không mất).
+- Test: `io/cardRegistry.test.ts` (so phiên bản, file card, thay card + dọn ảnh, lưu → kho, sửa ở A → mở B thấy mới, bản cũ không ghi đè bản mới, hoàn tác lan sang map khác, xoá khỏi kho, nhận file chép tay, ImportCardCommand + hoàn tác, storage: mở B khi A còn đang chờ ghi). 289 test. Chạy thử Chromium (exe giả lập): tạo card ở map A → map mới B → Thư viện "Toàn Workspace" → thêm vào B → sửa ở B → mở lại A thấy thông báo và nội dung mới.
+- **Giới hạn:** hai máy cùng sửa một card khi chưa đồng bộ thư mục → bản sửa sau (theo giờ máy) thắng, chưa có hộp thoại gộp xung đột. Liên kết "Được nhắc tới ở" xuyên map để KW2.
+
+### Checklist kiểm thử tay — KW1
+
+- [ ] Map A: tạo card có văn bản + ảnh, chờ 1 giây → trong thư mục Workspace có `cards/<id>.json`
+- [ ] "Map gần đây"/Tệp → Mới tạo map B → Thư viện → tab "Toàn Workspace" → thấy card của A ("Dùng ở: …") → "＋ Thêm làm nhánh con" (hoặc kéo thả vào canvas) → node mới mang đúng card, có ảnh; Ctrl+Z gỡ hẳn
+- [ ] Sửa card đó ở B (đổi chữ, thêm khối) → mở lại map A → thông báo "Đã cập nhật 1 card từ map khác" → nội dung mới
+- [ ] Ở A bấm Ctrl+Z một thay đổi của card → mở B → B cũng trở lại
+- [ ] Lọc "Chưa có ở map này" / "Không map nào dùng"; tìm không dấu
+- [ ] Xoá card khỏi mọi map → trong "Toàn Workspace" card hiện "Không map nào dùng" → "Xoá khỏi Workspace" → file vào `.trash/`
+- [ ] "Mở map: …" trong chi tiết card → chuyển sang đúng map
+- [ ] Trình duyệt chưa chọn thư mục: tab "Toàn Workspace" hiện hướng dẫn chọn thư mục

@@ -93,7 +93,7 @@ describe("KW0 — WorkspaceRepo trên thư mục (bộ nhớ)", () => {
     expect(back!.nodes[map.rootId]!.text).toBe("Kế hoạch");
     expect(Object.values(back!.cards)[0]!.blocks[0]).toMatchObject({ type: "text", text: "Nội dung" });
     expect(back!.assets.img!.dataBase64.length).toBeGreaterThan(10);
-    expect(repo.listMaps()).toEqual([{ mapId: map.mapId, file: `maps/${map.mapId}.t17m`, title: "Kế hoạch", updatedAt: 1234 }]);
+    expect(repo.listMaps()).toEqual([{ mapId: map.mapId, file: `maps/${map.mapId}.t17m`, title: "Kế hoạch", updatedAt: 1234, cardIds: Object.keys(map.cards) }]);
   });
 
   it("mở lại Workspace: giữ id, danh mục, map mở gần nhất", async () => {

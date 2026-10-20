@@ -32,7 +32,8 @@ import { wireErrorBox } from "./ui/errorBox";
 import { wireShortcutsModal } from "./ui/shortcutsModal";
 import { linkingModeStore, viewVersionStore } from "./ui/uiStores";
 import { byId } from "./ui/dom";
-import { loadLastActiveMap, saveMap } from "./io/storage";
+import { loadLastActiveMap, saveMap, onCardsPulled } from "./io/storage";
+import { showNotice } from "./ui/uiStores";
 import { initWorkspace } from "./ui/workspaceController";
 import ToolbarComponent from "./ui/components/Toolbar.svelte";
 import SearchBarComponent from "./ui/components/SearchBar.svelte";
@@ -47,6 +48,7 @@ import LibraryPanelComponent from "./ui/components/LibraryPanel.svelte";
 import CardPageModalComponent from "./ui/components/CardPageModal.svelte";
 import ExportDocModalComponent from "./ui/components/ExportDocModal.svelte";
 import ThemeEditorModalComponent from "./ui/components/ThemeEditorModal.svelte";
+import ToastComponent from "./ui/components/Toast.svelte";
 
 async function bootstrap(): Promise<void> {
   const canvas = byId<HTMLCanvasElement>("map-canvas");
@@ -56,6 +58,10 @@ async function bootstrap(): Promise<void> {
   // (khác localStorage đồng bộ trước đây) — bootstrap() phải chờ xong
   // mới khởi tạo Store/CanvasRenderer/AppController, nếu không sẽ lỡ
   // khởi tạo với map RỖNG rồi mới "biết" có map cũ cần khôi phục.
+  // KW1 — mở map có card được cập nhật từ map khác → báo ngắn.
+  onCardsPulled((titles) =>
+    showNotice(`Đã cập nhật ${titles.length} card từ map khác: ${titles.slice(0, 3).join(", ")}${titles.length > 3 ? "…" : ""}`)
+  );
   // KW0 — gắn thư mục Workspace (nếu có) TRƯỚC, để map đầu tiên đọc từ đó.
   await initWorkspace();
   const initialMap = (await loadLastActiveMap()) ?? createEmptyMap("Chủ đề trung tâm");
@@ -97,6 +103,7 @@ async function bootstrap(): Promise<void> {
   mount(CardPageModalComponent, { target: byId("card-page-root"), props: { store, controller } });
   mount(ExportDocModalComponent, { target: byId("export-doc-root"), props: { store, selection, controller } });
   mount(ThemeEditorModalComponent, { target: byId("theme-editor-root"), props: { store, controller } });
+  mount(ToastComponent, { target: byId("toast-root"), props: {} });
 
   // FIX: canvas đã được đo kích thước một lần trong constructor của
   // CanvasRenderer ở TRÊN — lúc đó Toolbar chưa kịp gắn vào DOM nên đo

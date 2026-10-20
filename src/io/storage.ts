@@ -233,8 +233,29 @@ export async function saveMap(map: MindMap): Promise<void> {
  *  thực trước khi trả về — null nếu không tồn tại hoặc dữ liệu hỏng. */
 export async function loadMap(mapId: string): Promise<MindMap | null> {
   if (!repo) return loadIdbMap(mapId);
-  const pending = pendingWrites.get(mapId);
-  if (pending) return structuredClone(pending.map);
+  // KW1 — ghi nốt mọi thay đổi đang chờ trước (card vừa sửa ở map đang mở
+  // phải vào kho card chung trước khi map kia đọc).
+  await flushWorkspaceWrites();
+  const r = repo;
+  if (!r) return loadIdbMap(mapId);
+  const map = await loadFromWorkspace(r, mapId);
+  if (map) {
+    const updated = await r.pullNewerCards(map);
+    if (updated.length > 0) {
+      cardsPulledListener?.(updated);
+      void saveMap(map);
+    }
+  }
+  return map;
+}
+
+let cardsPulledListener: ((titles: string[]) => void) | null = null;
+/** KW1 — báo cho giao diện khi mở map có card được cập nhật từ map khác. */
+export function onCardsPulled(fn: ((titles: string[]) => void) | null): void {
+  cardsPulledListener = fn;
+}
+
+async function loadFromWorkspace(repo: WorkspaceRepo, mapId: string): Promise<MindMap | null> {
   const entry = repo.getEntry(mapId);
   const idbEntry = await idbIndexEntry(mapId);
   // Bản trong IndexedDB mới hơn thư mục: lần trước app tắt trước khi kịp
