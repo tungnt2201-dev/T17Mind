@@ -12,7 +12,7 @@
 
 /** Phiên bản cấu trúc dữ liệu hiện tại. Tăng số này mỗi khi đổi hình
  *  dạng MindNode/MindMap, và viết hàm di trú tương ứng trong migrate.ts */
-export const CURRENT_SCHEMA_VERSION = 19;
+export const CURRENT_SCHEMA_VERSION = 20;
 
 export type BorderStyle = "solid" | "dashed" | "dotted" | "none";
 export type EdgeShape = "curve" | "straight";
@@ -300,6 +300,13 @@ export interface Card {
   id: string;
   title: string;
   blocks: Block[];
+  /** KW0 (schema 20) — thời điểm tạo / sửa nội dung gần nhất (ms, Date.now()).
+   *  0 = không rõ (card có từ trước schema 20). */
+  createdAt: number;
+  updatedAt: number;
+  /** KW0 — bộ đếm thay đổi, chỉ tăng (kể cả khi hoàn tác) — xem
+   *  core/cardCommands.ts#touchCard. Dùng để đồng bộ card giữa nhiều map (KW1). */
+  rev: number;
 }
 
 export interface MindMap {

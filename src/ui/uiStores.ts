@@ -180,3 +180,28 @@ export const cardPageStore = writable<{ cardId: string; focusBlockId: string | n
 /** M5 — hộp thoại "Xuất tài liệu" (.docx / .md / .zip): null = đóng;
  *  `scope` = phạm vi chọn sẵn khi mở (menu chuột phải "Xuất nhánh này"). */
 export const exportDocStore = writable<{ scope: "map" | "branch" } | null>(null);
+
+/** KW0 — nơi lưu hiện tại (thư mục Workspace hay bộ nhớ trình duyệt), cho
+ *  khung "Map gần đây" và dòng trạng thái. Do ui/workspaceController.ts cập nhật. */
+export interface WorkspaceUiState {
+  /** "idb" = chỉ bộ nhớ trình duyệt (chưa gắn thư mục). */
+  kind: "idb" | "native" | "browser";
+  /** Đường dẫn / tên thư mục; "" khi kind = "idb". */
+  label: string;
+  /** Có thể chọn thư mục không (exe, hoặc Chrome/Edge). */
+  folderSupported: boolean;
+  /** Trình duyệt: đã nhớ thư mục nhưng cần bấm để cấp lại quyền. */
+  needsPermission: string | null;
+  lastSavedAt: number;
+  pending: boolean;
+  error: string | null;
+}
+export const workspaceStore = writable<WorkspaceUiState>({
+  kind: "idb",
+  label: "",
+  folderSupported: false,
+  needsPermission: null,
+  lastSavedAt: 0,
+  pending: false,
+  error: null,
+});

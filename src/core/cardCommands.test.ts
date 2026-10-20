@@ -13,6 +13,7 @@ import {
   RemoveBlockCommand,
   MoveBlockCommand,
   UpdateTableCommand,
+  touchCard,
 } from "./cardCommands";
 import { createDraft, setCell, insertRow, insertColumn, deleteColumn, pasteGrid, tableFromGrid, parseDelimited } from "./table";
 import { createCard, createTextBlock, createTableBlock, createImageBlock, createChartBlock, validateCard } from "./cards";
@@ -31,8 +32,8 @@ function setup() {
   return { store, rootId: map.rootId, childId: child.id };
 }
 
-/** So sánh "trạng thái dữ liệu" bằng JSON để chắc chắn undo khôi phục TUYỆT ĐỐI. */
-const snap = (m: MindMap) => JSON.stringify(m);
+/** So khớp nội dung map; bỏ qua updatedAt/rev của card (KW0: hai trường này cố ý tăng cả khi hoàn tác). */
+const snap = (m: MindMap) => JSON.stringify(m, (k, v) => (k === "updatedAt" || k === "rev" ? undefined : v));
 
 describe("Card & Block — Command + undo/redo (M1)", () => {
   it("tạo card cho node, thêm các khối, rồi undo từng bước về đúng trạng thái ban đầu", () => {
@@ -345,5 +346,48 @@ describe("UpdateTableCommand — lưu trình sửa bảng (M2)", () => {
     expect(validateMindMap(store.getMap())).toEqual([]);
     store.undo();
     expect(snap(store.getMap())).toBe(s0);
+  });
+});
+
+describe("KW0 — dấu thời gian và rev của card (schema 20)", () => {
+  it("card mới có createdAt/updatedAt/rev; sửa nội dung tăng rev, hoàn tác cũng tăng (không lùi)", () => {
+    const { store, childId } = setup();
+    store.dispatch(new CreateCardForNodeCommand(childId, createCard("X")));
+    const id = store.getMap().nodes[childId]!.cardId!;
+    const c0 = { ...store.getMap().cards[id]! };
+    expect(c0.rev).toBe(1);
+    expect(c0.createdAt).toBeGreaterThan(0);
+    store.dispatch(new RenameCardCommand(id, "Y"));
+    const r1 = store.getMap().cards[id]!.rev;
+    expect(r1).toBe(2);
+    store.undo();
+    const after = store.getMap().cards[id]!;
+    expect(after.title).toBe("X");
+    expect(after.rev).toBe(3);
+    expect(after.updatedAt).toBeGreaterThan(c0.updatedAt);
+    expect(after.createdAt).toBe(c0.createdAt);
+    store.redo();
+    expect(store.getMap().cards[id]!.rev).toBe(4);
+  });
+
+  it("touchCard: updatedAt luôn tăng kể cả khi đồng hồ lùi; rev hỏng coi như 0", () => {
+    const c = createCard("a", 1000);
+    touchCard(c, 500);
+    expect(c.updatedAt).toBe(1001);
+    c.rev = Number.NaN;
+    touchCard(c, 2000);
+    expect(c.rev).toBe(1);
+    expect(c.updatedAt).toBe(2000);
+  });
+
+  it("migrate 19 -> 20: card cũ được thêm 0/0/0, dữ liệu hỏng được sửa", () => {
+    const m = createEmptyMap("g") as unknown as Record<string, unknown>;
+    m.schemaVersion = 19;
+    m.cards = { c1: { id: "c1", title: "t", blocks: [] }, c2: { id: "c2", title: "t", blocks: [], rev: -3, updatedAt: "x", createdAt: 5 } };
+    const out = migrateToLatest(m);
+    expect(out.schemaVersion).toBe(20);
+    expect(out.cards.c1).toMatchObject({ createdAt: 0, updatedAt: 0, rev: 0 });
+    expect(out.cards.c2).toMatchObject({ createdAt: 5, updatedAt: 0, rev: 0 });
+    expect(validateMindMap(out)).toEqual([]);
   });
 });

@@ -3754,3 +3754,28 @@ Phản hồi sau khi thử: file Word mọi tiêu đề/đoạn đều sát lề
 ### File demo trình diễn (20/10/2026)
 
 `docs/demo/T17Mind-demo.t17m` — map "Gió Sớm Coffee — Kế hoạch mở quán" (dữ liệu giả định, chủ đề thương mại trung tính) gom các tính năng tới M5: 63 node, 2 nhánh trôi ("Ý tưởng mở rộng" và "🧭 Tham quan T17Mind" — 12 bước, mỗi bước một card lời dẫn có liên kết `[[node:…]]`/`[[card:…]]` nhảy tới chỗ minh hoạ), layout hai bên, theme Branch Colors, tag, biểu tượng, ưu tiên, tiến độ, checkbox, nhãn đường nối, liên kết URL, quan hệ, tóm tắt, khoanh vùng, 2 ghi chú dán, ảnh trên node; card văn bản/bảng (độ rộng cột riêng)/ảnh 3 cỡ/biểu đồ (chờ M4), 1 card dùng chung 2 node, 3 card Inbox; node thu nhỏ hết cỡ (biểu tượng đính kèm) và node phóng to. Kịch bản lời dẫn cho người trình bày: `docs/demo/KICH-BAN-DEMO.md`. Test `io/demoFile.test.ts` bảo đảm file luôn mở được và xuất Word được.
+
+---
+
+## KW0 — Nền móng Knowledge Workspace (20/10/2026)
+
+Nhánh `feat/kw0-foundation` (tách từ `main` sau khi merge PR #1–#9). Lộ trình và kiến trúc: `docs/KNOWLEDGE_WORKSPACE_PLAN.md`.
+
+- **Thư mục Workspace là nơi lưu chuẩn** (quyết định 3): `workspace.json` + `maps/<mapId>.t17m` + `.trash/`. Exe mặc định `T17Mind-Workspace` cạnh file exe; Chrome/Edge chọn thư mục; trình duyệt khác giữ IndexedDB. IndexedDB vẫn ghi ngay làm bản dự phòng, thư mục ghi sau 0,8 giây ngừng sửa; bản nào mới hơn thắng khi mở. Exe chặn đóng cửa sổ để ghi nốt (`exitProcessOnClose: false` + sự kiện `windowClose`, tối đa 5 giây).
+- **Schema 20:** `Card.createdAt/updatedAt/rev`; `touchCard` ở apply và revert của mọi Command sửa nội dung card.
+- Neutralino allow-list thêm: `os.showFolderDialog`, `filesystem.readDirectory/createDirectory/getStats/move/remove`, `app.exit`.
+- Giao diện: khung "Map gần đây" có mục **Nơi lưu** (đường dẫn, Mở thư mục, Đổi thư mục…, Về mặc định / Cấp quyền / Thôi dùng thư mục, trạng thái "Đã lưu …", nút "Đưa vào Workspace").
+- Test mới: `io/workspace.test.ts` (danh mục, đối chiếu file, dựng lại khi hỏng, .trash, ghi đồng thời), `io/storage.workspace.test.ts` (dùng `fake-indexeddb`: ghi trễ, tắt đột ngột rồi khôi phục, thư mục mới hơn, mang sang máy khác, xoá), test schema 20 trong `core/cardCommands.test.ts`. Chạy thử trên Chromium với Neutralino giả lập: tạo Workspace, ghi file, xoá IndexedDB rồi tải lại vẫn mở đúng map, bấm đóng thì ghi nốt rồi thoát.
+- **Chưa làm / chưa kiểm:** chưa chạy trên Windows thật; chưa thử hộp chọn thư mục thật của Chrome/Edge (chỉ kiểm qua lớp giả lập); đo hiệu năng cơ sở dời sang KW10; tên file map theo id (chưa theo tên map).
+
+### Checklist kiểm thử tay — KW0
+
+- [ ] Exe lần đầu chạy: cạnh file exe xuất hiện thư mục `T17Mind-Workspace` có `workspace.json` và `maps/…t17m`; các map cũ (đã có trong app trước đây) được chép vào
+- [ ] Sửa map, chờ 1 giây: "Map gần đây" → mục Nơi lưu hiện "Đã lưu hôm nay hh:mm"; file `.t17m` trong `maps/` đổi giờ sửa
+- [ ] Sửa rồi bấm ✕ đóng ngay: mở lại app thấy thay đổi cuối cùng
+- [ ] Chép cả thư mục exe sang máy khác (hoặc đổi tên thư mục người dùng): mở exe thấy đúng các map và đúng map đang làm dở
+- [ ] "Đổi thư mục…" sang một thư mục trống: map hiện tại được chép sang; "Về mặc định" quay lại thư mục cạnh exe
+- [ ] Xoá một map: file chuyển vào `T17Mind-Workspace/.trash/`
+- [ ] Mở trực tiếp `maps/<id>.t17m` bằng Tệp → Mở…: đọc được
+- [ ] Chrome/Edge (bản web/PWA): "Chọn thư mục Workspace…" → chọn thư mục → map được ghi thành file; đóng trình duyệt mở lại → nút "Cấp quyền" → bấm là dùng tiếp
+- [ ] Firefox: hiện ghi chú "không cho chọn thư mục", app vẫn lưu như cũ

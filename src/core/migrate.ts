@@ -489,6 +489,27 @@ function normalizeImageBlockSizes(rawCards: unknown): UnknownRecord {
   return cards;
 }
 
+/**
+ * Phiên bản 19 -> 20 (KW0): card có thêm `createdAt` / `updatedAt` / `rev`
+ * (nền cho đồng bộ card giữa nhiều map — KW1). Card cũ: 0 / 0 / 0 = "không
+ * rõ, cũ hơn mọi lần sửa sau này".
+ */
+function migrateV19toV20(raw: UnknownRecord): UnknownRecord {
+  return { ...raw, schemaVersion: 20, cards: normalizeCardMeta(raw.cards) };
+}
+
+/** Bảo đảm mọi card có createdAt/updatedAt/rev là số hữu hạn không âm. */
+function normalizeCardMeta(rawCards: unknown): UnknownRecord {
+  if (typeof rawCards !== "object" || rawCards === null || Array.isArray(rawCards)) return {};
+  const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0);
+  const cards: UnknownRecord = {};
+  for (const [id, c] of Object.entries(rawCards as UnknownRecord)) {
+    const card = (c ?? {}) as UnknownRecord;
+    cards[id] = { ...card, createdAt: num(card.createdAt), updatedAt: num(card.updatedAt), rev: num(card.rev) };
+  }
+  return cards;
+}
+
 const MIGRATIONS: Record<number, MigrationFn> = {
   0: migrateV0toV1,
   1: migrateV1toV2,
@@ -509,6 +530,7 @@ const MIGRATIONS: Record<number, MigrationFn> = {
   16: migrateV16toV17,
   17: migrateV17toV18,
   18: migrateV18toV19,
+  19: migrateV19toV20,
 };
 
 /**
@@ -560,7 +582,7 @@ export function migrateToLatest(raw: UnknownRecord): MindMap {
   if (!Array.isArray(safe.tags)) safe.tags = [];
   if (typeof safe.assets !== "object" || safe.assets === null) safe.assets = {};
   if (typeof safe.activeThemeId !== "string") safe.activeThemeId = null;
-  safe.cards = normalizeTableSizes(normalizeImageBlockSizes(safe.cards));
+  safe.cards = normalizeCardMeta(normalizeTableSizes(normalizeImageBlockSizes(safe.cards)));
 
   // Cùng lý do, cùng cách sửa — nhưng ở CẤP NODE: children/markers/
   // tagIds cũng là mảng, cũng có thể bị "rơi" giống hệt các mảng cấp

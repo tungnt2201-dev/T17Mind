@@ -107,6 +107,16 @@ Tổng ước lượng: khoảng **30–40 phiên làm việc**. Nặng nhất l
 - Nên **merge chuỗi PR #1–#9 vào `main` trước KW1**, để các nhánh mới tách thẳng từ `main` và không phải xếp chồng thêm 10 PR nữa.
 - Nếu vẫn muốn theo đúng prompt: có thể tạo `feat/knowledge-workspace-v1` làm nhánh tích hợp, mỗi KW là một PR nhỏ nhập vào nhánh đó.
 
+### Quyết định đã chốt (20/10/2026)
+
+1. Merge PR #1–#9 vào `main` trước — **đã merge**.
+2. **Mỗi giai đoạn một nhánh + một PR** (`feat/kw0-foundation`, `feat/kw1-…`).
+3. **Nơi lưu chuẩn là thư mục Workspace trên ổ đĩa ngay từ đầu** (D8 đưa lên KW0).
+4. PDF trong bản exe: **cho người dùng tự chọn** nhúng file hay chỉ giữ đường dẫn.
+5. Chấp nhận thêm thư viện editor ngoài (ProseMirror/TipTap) cho KW6.
+
+<details><summary>Các câu hỏi ban đầu</summary>
+
 ### Quyết định cần bạn chốt trước khi bắt đầu
 
 1. **Merge PR #1–#9 vào `main` ngay**, hay tiếp tục xếp chồng?
@@ -114,3 +124,26 @@ Tổng ước lượng: khoảng **30–40 phiên làm việc**. Nặng nhất l
 3. **PDF trong bản exe**: nhúng file PDF vào dữ liệu (mang đi được, nặng) hay chỉ giữ đường dẫn (nhẹ, mất liên kết khi di chuyển file)? Hoặc cho người dùng chọn.
 4. **Editor (KW6)**: chấp nhận thêm thư viện ngoài khoảng 100–150 KB (ProseMirror/TipTap) hay ưu tiên tự viết bản tối giản?
 5. **Một nhánh cho tất cả hay một nhánh mỗi giai đoạn** (mục Git ở trên).
+
+</details>
+
+---
+
+## 3. Kiến trúc Workspace (KW0 — đã làm)
+
+```
+<Workspace>/
+  workspace.json        danh mục: id, tên, danh sách map (id, tên, updatedAt), map mở gần nhất
+  maps/<mapId>.t17m     mỗi map một file .t17m (mở thẳng bằng Tệp → Mở… được)
+  .trash/               map bị xoá được chuyển vào đây
+  (KW1) cards/…         Card Registry      (KW3) sources/…   PDF và nguồn khác
+```
+
+- **Exe:** mặc định `<thư mục chứa exe>/T17Mind-Workspace`. Chép cả thư mục exe sang máy khác là mang theo toàn bộ dữ liệu. Đổi được thư mục trong "Map gần đây"; đường dẫn đã chọn được nhớ trên máy.
+- **Chrome/Edge:** người dùng chọn thư mục (File System Access API); trình duyệt có thể hỏi lại quyền mỗi phiên (nút "Cấp quyền"). **Firefox/Safari:** chỉ dùng bộ nhớ trình duyệt như trước.
+- **Ghi:** IndexedDB ghi ngay mỗi thay đổi (bản dự phòng); thư mục ghi sau khi ngừng sửa 0,8 giây. Ghi ra file tạm rồi đổi tên, nên tắt máy giữa chừng không làm hỏng file cũ. Exe: bấm đóng cửa sổ thì ghi nốt rồi mới thoát.
+- **Đọc:** bản nào mới hơn (theo `updatedAt`) thắng. App tắt đột ngột thì lấy lại từ IndexedDB rồi ghi bù; sửa ở máy khác qua OneDrive/Drive thì thư mục thắng.
+- **Tự sửa:** `workspace.json` hỏng hoặc mất thì dựng lại từ các file trong `maps/` (giữ bản hỏng `workspace.json.hong-…`). File `.t17m` chép tay vào `maps/` được nhận tự động.
+- **Lần đầu gắn thư mục trống:** tự chép mọi map đang có trong bộ nhớ trình duyệt vào; về sau, map chỉ có trong trình duyệt hiện nút "Đưa vào Workspace".
+- **Schema 20:** `Card.createdAt/updatedAt/rev`. `rev` tăng ở mọi lần sửa, **kể cả hoàn tác** (không lùi), để KW1 biết bản nào mới hơn khi đồng bộ.
+- Module: `core/workspace.ts` (thuần), `io/workspaceFs.ts` (exe / thư mục trình duyệt / bộ nhớ), `io/workspaceRepo.ts`, `io/storage.ts` (hai chế độ), `ui/workspaceController.ts`.

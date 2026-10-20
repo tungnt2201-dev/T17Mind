@@ -10,7 +10,7 @@
   "enableNativeAPI": true,
   "tokenSecurity": "none",
   "logging": { "enabled": false },
-  "nativeAllowList": ["os.open", "os.showSaveDialog", "os.showOpenDialog", "filesystem.writeBinaryFile", "filesystem.readBinaryFile"],
+  "nativeAllowList": ["os.open", "os.showSaveDialog", "os.showOpenDialog", "os.showFolderDialog", "filesystem.writeBinaryFile", "filesystem.readBinaryFile", "filesystem.readDirectory", "filesystem.createDirectory", "filesystem.getStats", "filesystem.move", "filesystem.remove", "app.exit"],
   "globalVariables": {},
   "modes": {
     "window": {
@@ -28,7 +28,7 @@
       "maximize": false,
       "hidden": false,
       "resizable": true,
-      "exitProcessOnClose": true
+      "exitProcessOnClose": false
     }
   },
   "cli": {

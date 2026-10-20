@@ -33,6 +33,7 @@ import { wireShortcutsModal } from "./ui/shortcutsModal";
 import { linkingModeStore, viewVersionStore } from "./ui/uiStores";
 import { byId } from "./ui/dom";
 import { loadLastActiveMap, saveMap } from "./io/storage";
+import { initWorkspace } from "./ui/workspaceController";
 import ToolbarComponent from "./ui/components/Toolbar.svelte";
 import SearchBarComponent from "./ui/components/SearchBar.svelte";
 import MapsModalComponent from "./ui/components/MapsModal.svelte";
@@ -54,6 +55,8 @@ async function bootstrap(): Promise<void> {
   // (khác localStorage đồng bộ trước đây) — bootstrap() phải chờ xong
   // mới khởi tạo Store/CanvasRenderer/AppController, nếu không sẽ lỡ
   // khởi tạo với map RỖNG rồi mới "biết" có map cũ cần khôi phục.
+  // KW0 — gắn thư mục Workspace (nếu có) TRƯỚC, để map đầu tiên đọc từ đó.
+  await initWorkspace();
   const initialMap = (await loadLastActiveMap()) ?? createEmptyMap("Chủ đề trung tâm");
   const store = new Store(initialMap);
 
