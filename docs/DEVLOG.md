@@ -3490,3 +3490,42 @@ Thêm Card (tờ nội dung độc lập, gắn vào node qua `node.cardId`) ch�
 - Lõi: `src/core/cards.ts` (tạo/kiểm tra), `src/core/cardCommands.ts` (Command, undo/redo), nối `validate.ts`, `migrate.ts`, `MergeMapCommand`.
 - Giao diện: `src/ui/components/CardSection.svelte` trong SidePanel.
 - Lỗi thật bắt được nhờ test: `MergeMapCommand.revert()` ban đầu quên khôi phục `map.cards` — test "ghép 2 lần rồi hoàn tác 2 lần" so sánh JSON toàn map đã phát hiện.
+
+---
+
+## M2 — Bảng biểu (17/10/2026)
+
+Trình sửa bảng, dán từ Excel/Google Sheets, nhập/xuất CSV, thẻ thu nhỏ của bảng trên node. Không đổi schema (vẫn 17) — chỉ dùng `TableBlock` đã có từ M1.
+
+- Lõi: `src/core/table.ts` — hàm thuần trên **bản nháp** (`TableDraft` = bảng + `colOrigin`): thêm/xoá hàng/cột, căn lề, hàng tiêu đề, `pasteGrid`, `parseDelimited`/`toDelimited`/`detectDelimiter` (TSV/CSV kiểu Excel), `nextCell` (Tab/Enter), `tableThumbnail`, `remapChartColumns`.
+- Command: `UpdateTableCommand` (`core/cardCommands.ts`) — lưu cả phiên sửa thành **một** bước hoàn tác; dùng `colOrigin` để biểu đồ lấy số từ bảng vẫn trỏ đúng cột sau khi chèn/xoá cột (nếu không, `validate.ts` sẽ báo cột ngoài phạm vi). Nhập CSV thành khối mới dùng lại `AddBlockCommand`.
+- Giao diện: `src/ui/components/TableEditorModal.svelte` (mở qua `tableEditorStore` trong `uiStores.ts`); nút "Sửa…" / bấm bản xem trước / "Nhập CSV…" ở `CardSection.svelte`.
+- Canvas: `src/render/tableThumb.ts` (hình học thẻ, dùng chung cho `getMeasurer`, `drawNode`, `hitTestTableThumb`, `hitTestCheckbox`); bấm thẻ trên canvas mở trình sửa (`appController.ts`). `hitTestCheckbox` giờ nhận thêm `map` vì vùng chữ phải trừ phần thẻ.
+- Phím trong hộp thoại bị chặn không lan ra window (kể cả khi tiêu điểm còn ở ngoài, qua listener pha capture) — nếu không, Delete/Ctrl+Z của canvas sẽ chạy nhầm trên map khi đang sửa bảng.
+- Sửa kèm: `#side-panel .small-btn { width: 100% }` thắng `.card-add > .btn` về độ ưu tiên CSS nên hàng nút ↑ ↓ ✕ của khối (từ M1) bị tràn khỏi panel.
+- Lỗi thật bắt được khi chạy thử trên trình duyệt: mở trình sửa bằng cách bấm thẻ trên canvas thì mousedown kéo tiêu điểm về `body` → Esc không đóng được hộp thoại. Sửa bằng cách hoãn focus một nhịp + listener capture nói trên.
+- Sửa sau phản hồi thử trên exe (20/10): kéo node to ra mà thẻ vẫn chỉ 5×4 ô cố định. Giờ lúc vẽ thẻ lấp đầy khoảng trống thật (`thumbLayoutForTable(table, box, capped)`): node kéo to tay hiện thêm hàng/cột, ô giãn tới 140px; node tự động giữ trần 5×4. Phần đo chữ tách thành `measureTextBox` để biết chữ chiếm bao nhiêu chỗ.
+- Test: `core/table.test.ts`, `render/tableThumb.test.ts`, thêm nhóm `UpdateTableCommand` trong `core/cardCommands.test.ts` (172 test / 16 file).
+
+### Checklist kiểm thử tay — M2 (làm trước khi coi M2 là xong)
+
+- [ ] Chọn node → mục Card → "+ Tạo card cho node" → "+ Bảng 3×3" — node trên canvas hiện thẻ bảng nhỏ bên dưới chữ, node tự cao/rộng ra, không chồng lên node khác
+- [ ] Bấm "Sửa…" (hoặc bấm bản xem trước trong panel, hoặc bấm thẻ trên canvas) — hộp thoại sửa bảng mở, con trỏ ở ô A1
+- [ ] Gõ chữ, Tab sang phải; Tab ở ô cuối cùng tự thêm hàng mới; Shift+Tab đi lùi
+- [ ] Enter đi xuống, Enter ở hàng cuối tự thêm hàng; Shift+Enter đi lên; Alt+Enter xuống dòng ngay trong ô
+- [ ] Copy một vùng ô trong Excel (hoặc Google Sheets), dán vào một ô giữa bảng — dữ liệu rải đúng từ ô đó, bảng tự nở thêm hàng/cột; ô có dấu phẩy/xuống dòng giữ nguyên
+- [ ] Dán một chữ đơn (copy 1 ô) — chỉ vào đúng ô đang sửa, không tạo thêm hàng
+- [ ] + Hàng trên/dưới, − Hàng, + Cột trái/phải, − Cột chạy theo ô đang chọn; không xoá được hàng/cột cuối cùng
+- [ ] Căn Trái/Giữa/Phải đổi căn lề cả cột, thẻ trên canvas cũng căn theo
+- [ ] Bỏ tick "Hàng tiêu đề" — hàng đầu hết in đậm cả trong hộp thoại lẫn trên thẻ
+- [ ] "Xuất CSV" → mở bằng Excel: tiếng Việt hiển thị đúng, đúng số hàng/cột
+- [ ] "Nhập CSV…" trong hộp thoại thay nội dung bảng (hỏi xác nhận nếu bảng đã có dữ liệu); CSV dùng dấu `;` (Excel vùng Việt Nam) cũng đọc đúng
+- [ ] "Nhập CSV…" ở mục Card thêm một khối bảng mới, tên bảng = tên file
+- [ ] Lưu → Ctrl+Z **một lần** — toàn bộ thay đổi của phiên sửa biến mất; Ctrl+Shift+Z làm lại
+- [ ] Sửa rồi bấm Huỷ / Esc / bấm ra ngoài — hỏi "Bỏ các thay đổi chưa lưu?"; chưa sửa gì thì đóng luôn
+- [ ] Đang mở hộp thoại, bấm Delete khi tiêu điểm ở nút bấm — node trên canvas KHÔNG bị xoá
+- [ ] Kéo node có bảng to ra (hoặc đặt Rộng/Cao trong panel) — thẻ hiện thêm hàng/cột, ô rộng ra; "Đặt lại kích thước tự động" — thẻ về 5×4
+- [ ] Bảng lớn (ví dụ 20×10) — thẻ chỉ hiện 5 cột × 4 hàng, có "…" bên phải và bên dưới; chữ dài bị cắt bằng "…"
+- [ ] Node có cả Tag và bảng — thẻ nằm trên hàng Tag, không đè nhau; node có checkbox hoàn thành vẫn bấm checkbox được
+- [ ] Xuất `.t17m`/JSON rồi mở lại — bảng giữ nguyên
+- [ ] `npm run check` chạy sạch — 0 lỗi, 0 cảnh báo
