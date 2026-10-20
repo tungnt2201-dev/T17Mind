@@ -75,6 +75,8 @@
       {/if}
     </div>
   {:else}
+    <button type="button" class="btn small-btn card-open-page" title="Mở card thành trang tài liệu: văn bản, ảnh, bảng xen kẽ"
+      on:click={() => card && controller.openCardPage(card.id)}>⤢ Mở dạng trang</button>
     <CardEditor {store} {controller} cardId={card.id} idPrefix="node-card" />
     {#if elsewhere.length > 0}
       <div class="card-usages">

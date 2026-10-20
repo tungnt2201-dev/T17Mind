@@ -41,6 +41,7 @@ export type MenuAction =
   | "toggleCollapse"
   | "expandAll"
   | "createCard"
+  | "openPage"
   | "openTable"
   | "viewImages"
   | "addImages"
@@ -84,7 +85,7 @@ export function buildMenu(t: MenuTarget): MenuEntry[] {
         item("toggleCollapse", "Thu gọn / mở từng cấp", "C", { disabled: !t.hasChildren }),
         item("expandAll", "Mở hết nhánh", "Shift+C", { disabled: !t.hasChildren }),
         SEP,
-        t.hasCard ? item("addImages", "Thêm ảnh vào card…") : item("createCard", "Tạo card cho node"),
+        ...(t.hasCard ? [item("openPage", "Mở trang card"), item("addImages", "Thêm ảnh vào card…")] : [item("createCard", "Tạo card cho node")]),
         ...(t.tableBlockId ? [item("openTable", "Mở bảng")] : []),
         ...(t.imageCount > 0 ? [item("viewImages", t.imageCount > 1 ? `Xem ${t.imageCount} ảnh` : "Xem ảnh")] : []),
         item("startLink", "Tạo liên kết từ node này"),

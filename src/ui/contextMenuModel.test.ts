@@ -44,6 +44,7 @@ describe("Menu chuột phải — chọn mục theo ngữ cảnh", () => {
     const a = actions(m);
     expect(a).toContain("openTable");
     expect(a).toContain("addImages");
+    expect(a).toContain("openPage");
     expect(a).not.toContain("createCard");
     expect(find(m, "viewImages")?.label).toBe("Xem 3 ảnh");
     expect(find(m, "paste")?.disabled).toBe(false);

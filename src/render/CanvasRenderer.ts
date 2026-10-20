@@ -39,30 +39,22 @@ import { lightenHex } from "../core/theme";
 import { isVerticalLayout } from "../core/types";
 import { getRootIds } from "../core/tree";
 import type { NodeMeasurer } from "../layout";
-import {
-  getThumbLayout,
-  getNodeThumbTable,
-  thumbLayoutForTable,
-  thumbReservedHeight,
-  thumbRect,
-  THUMB_PAD,
-  THUMB_ROW_H,
-  THUMB_MORE_W,
-  THUMB_FONT,
-  type ThumbLayout,
-} from "./tableThumb";
+import { THUMB_ROW_H, THUMB_MORE_W, THUMB_FONT, type ThumbLayout } from "./tableThumb";
 import type { ImageAsset, TableBlock } from "../core/types";
+import { assetDims, IMAGE_THUMB_HEIGHT, type ImageDims, type ImageThumbLayout } from "./imageThumb";
 import {
-  getNodeImageBlocks,
-  assetDims,
-  imageThumbLayout,
-  imageReservedHeight,
-  imageThumbRect,
-  fitImageLayout,
-  IMAGE_THUMB_HEIGHT,
-  type ImageDims,
-  type ImageThumbLayout,
-} from "./imageThumb";
+  cardContentOf,
+  measureCard,
+  placeCard,
+  hitCardPart,
+  PREVIEW_FONT,
+  PREVIEW_LINE_H,
+  CHIP_ICON_W,
+  type CardContent,
+  type CardContentKind,
+  type PlacedCard,
+  type Rect,
+} from "./cardLayout";
 
 export interface ViewTransform {
   offsetX: number;
@@ -276,45 +268,26 @@ export class CanvasRenderer {
     for (const id of this.imageCache.keys()) if (!map.assets[id]) this.imageCache.delete(id);
   }
 
-  /** Bố cục thẻ ảnh của node. Node đã được kéo cỡ tay thì ảnh co/giãn
-   *  cho vừa chỗ còn lại (sau chữ, thẻ bảng cỡ mặc định, hàng Tag); node
-   *  chỉ đặt rộng tay thì ảnh co theo bề ngang. Node tự động: cỡ gốc. */
-  private imageLayoutForNode(map: MindMap, node: MindNode, forMeasure = false): ImageThumbLayout | null {
-    const images = getNodeImageBlocks(map, node);
-    const first = images[0];
-    if (!first) return null;
-    const base = imageThumbLayout(images, this.imageDims(first.assetId, map.assets[first.assetId]));
-    if (!base) return null;
-    const innerW = (node.manualWidth ?? Number.POSITIVE_INFINITY) - THUMB_PAD * 2;
-    if (forMeasure || node.manualHeight == null) {
-      return node.manualWidth != null ? fitImageLayout(base, { width: innerW, height: Number.POSITIVE_INFINITY }, false) : base;
-    }
-    const table = getThumbLayout(map, node);
-    const textHeight = this.measureTextBox(node, node.parentId === null).height;
-    const tagRow = node.tagIds.length > 0 ? LABEL_ROW_HEIGHT : 0;
-    const box = {
-      width: node.width - THUMB_PAD * 2,
-      height: node.height - textHeight - tagRow - thumbReservedHeight(table) - THUMB_PAD,
-    };
-    return fitImageLayout(base, box, !table);
+  /** Nội dung card của node (ảnh dùng kích thước biết được sau giải mã nếu asset chưa ghi). */
+  private cardContent(map: MindMap, node: MindNode): CardContent | null {
+    return cardContentOf(map, node, (id, asset) => this.imageDims(id, asset));
   }
 
-  /** M2 — bố cục thẻ bảng theo khoảng trống THẬT của node lúc vẽ/dò bấm
-   *  (node kéo to ra thì thẻ hiện thêm hàng/cột, ô giãn rộng). Chỗ cho
-   *  chữ giữ đúng như lúc đo; phần còn lại (trừ hàng Tag) là của thẻ. */
-  private thumbLayoutForNode(map: MindMap, node: MindNode): ThumbLayout | null {
-    const table = getNodeThumbTable(map, node);
-    if (!table) return null;
-    // Cùng quy ước "gốc" với lúc đo (layout/index.ts: mọi node không có
-    // cha, kể cả nhánh trôi), để chỗ cho chữ khớp đúng chiều cao đã đo.
+  /** Ngắt dòng cho phần trích văn bản của card (đo bằng PREVIEW_FONT). */
+  private wrapPreview = (text: string, width: number): string[] => {
+    this.ctx.font = PREVIEW_FONT;
+    return this.wrapText(text, width);
+  };
+
+  /** Vị trí trích văn bản / ảnh / bảng / hàng biểu tượng của card trong node
+   *  (render/cardLayout.ts). Chỗ cho chữ của node giữ đúng như lúc đo —
+   *  cùng quy ước "gốc" với layout (mọi node không có cha). */
+  private placedCard(map: MindMap, node: MindNode): PlacedCard | null {
+    const content = this.cardContent(map, node);
+    if (!content) return null;
     const textHeight = this.measureTextBox(node, node.parentId === null).height;
     const tagRow = node.tagIds.length > 0 ? LABEL_ROW_HEIGHT : 0;
-    const box = {
-      width: node.width - THUMB_PAD * 2,
-      height: node.height - tagRow - THUMB_PAD - textHeight - imageReservedHeight(this.imageLayoutForNode(map, node)),
-    };
-    const manual = node.manualWidth != null || node.manualHeight != null;
-    return thumbLayoutForTable(table, box, !manual);
+    return placeCard(content, node, textHeight, tagRow, this.wrapPreview);
   }
 
   /** Hàm đo chữ để tiêm vào layout/applyLayout (xem ghi chú kiến trúc
@@ -341,16 +314,12 @@ export class CanvasRenderer {
 
       // M2 — thẻ thu nhỏ của bảng (xem render/tableThumb.ts): node cao
       // thêm đúng phần thẻ chiếm, và rộng ra nếu thẻ rộng hơn phần chữ.
-      const thumb = getThumbLayout(map, node);
-      if (thumb) {
-        width = Math.max(width, thumb.width + THUMB_PAD * 2);
-        height += thumbReservedHeight(thumb);
-      }
-      // M3 — thẻ ảnh (render/imageThumb.ts), nằm trên thẻ bảng.
-      const image = this.imageLayoutForNode(map, node, true);
-      if (image) {
-        width = Math.max(width, image.width + THUMB_PAD * 2);
-        height += imageReservedHeight(image);
+      // Nội dung card (trích văn bản, ảnh, bảng — render/cardLayout.ts).
+      const content = this.cardContent(map, node);
+      if (content) {
+        const extra = measureCard(content, this.wrapPreview, node.manualWidth);
+        width = Math.max(width, extra.width);
+        height += extra.height;
       }
 
       return { width, height };
@@ -1203,9 +1172,8 @@ export class CanvasRenderer {
     // node (bỏ chừa hàng nhãn ở đáy), không phải giữa toàn bộ chiều cao.
     // M2 — thẻ bảng (nếu có) nằm ngay trên hàng Tag, cũng bị trừ ra.
     const tagRowHeight = node.tagIds.length > 0 ? LABEL_ROW_HEIGHT : 0;
-    const thumb = this.thumbLayoutForNode(map, node);
-    const image = this.imageLayoutForNode(map, node);
-    const textAreaHeight = node.height - tagRowHeight - thumbReservedHeight(thumb) - imageReservedHeight(image);
+    const placed = this.placedCard(map, node);
+    const textAreaHeight = node.height - tagRowHeight - (placed?.reserved ?? 0);
     // P2.3 — chừa chỗ cho CẢ HAI icon góc (ghi chú bên trái, link bên
     // phải) nếu có, để chữ chính không đè lên chúng khi node hẹp.
     // P2.7f — chừa thêm chỗ cho checkbox hoàn thành (nếu có) — checkbox
@@ -1372,15 +1340,63 @@ export class CanvasRenderer {
     this.drawProgressRing(node, isLeftLayout);
     this.drawMarkers(node);
     this.drawLabelPills(map, node);
-    if (thumb) this.drawTableThumb(node, thumb, tagRowHeight, isRoot);
-    if (image) this.drawImageThumb(map, node, image, tagRowHeight + thumbReservedHeight(thumb), isRoot);
+    if (placed) this.drawCardContent(map, node, placed, isRoot);
+  }
+
+  /** Nội dung card trên node: trích văn bản, thẻ ảnh, thẻ bảng, hoặc hàng
+   *  biểu tượng khi node bị kéo quá nhỏ (render/cardLayout.ts). */
+  private drawCardContent(map: MindMap, node: MindNode, placed: PlacedCard, isRoot: boolean): void {
+    if (placed.preview) this.drawCardPreview(node, placed.preview.lines, placed.preview.rect, isRoot);
+    if (placed.image) this.drawImageThumb(map, placed.image.layout, placed.image.rect, isRoot);
+    if (placed.table) this.drawTableThumb(node, placed.table.layout, placed.table.rect, isRoot);
+    for (const chip of placed.chips) this.drawCardChip(node, chip.kind, chip.count, chip.rect, isRoot);
+  }
+
+  /** Vài dòng đầu của khối văn bản trong card, chữ nhỏ, có vạch dọc bên
+   *  trái như một đoạn trích dẫn. */
+  private drawCardPreview(node: MindNode, lines: string[], r: Rect, isRoot: boolean): void {
+    const ctx = this.ctx;
+    const color = node.color || (isRoot ? "#ffffff" : "#1f2933");
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = color;
+    ctx.fillRect(r.x, r.y + 1, 2, r.height - 2);
+    ctx.globalAlpha = 0.8;
+    ctx.font = PREVIEW_FONT;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    lines.forEach((line, i) => ctx.fillText(line, r.x + 7, r.y + i * PREVIEW_LINE_H + PREVIEW_LINE_H / 2, r.width - 8));
+    ctx.restore();
+  }
+
+  /** Biểu tượng đính kèm (chế độ thu gọn): viên bo tròn + hình vẽ vector
+   *  theo loại nội dung + số lượng nếu > 1. */
+  private drawCardChip(node: MindNode, kind: CardContentKind, count: number, r: Rect, isRoot: boolean): void {
+    const ctx = this.ctx;
+    const ink = isRoot ? "#ffffff" : node.color || "#2f6fed";
+    ctx.save();
+    ctx.beginPath();
+    this.roundRectPath(r.x, r.y, r.width, r.height, r.height / 2);
+    ctx.fillStyle = isRoot ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.92)";
+    ctx.fill();
+    ctx.strokeStyle = isRoot ? "rgba(255,255,255,0.55)" : "rgba(47,111,237,0.35)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    drawContentGlyph(ctx, kind, r.x + CHIP_ICON_W / 2, r.y + r.height / 2, ink);
+    if (count > 1) {
+      ctx.fillStyle = ink;
+      ctx.font = "600 10px -apple-system, Segoe UI, sans-serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(String(count), r.x + CHIP_ICON_W - 3, r.y + r.height / 2 + 0.5);
+    }
+    ctx.restore();
   }
 
   /** M3 — vẽ thẻ ảnh (ảnh đầu tiên của card + huy hiệu "+N"). Ảnh chưa
    *  giải mã xong thì vẽ ô giữ chỗ; xong sẽ tự vẽ lại qua onImageReady. */
-  private drawImageThumb(map: MindMap, node: MindNode, layout: ImageThumbLayout, belowReserved: number, isRoot: boolean): void {
+  private drawImageThumb(map: MindMap, layout: ImageThumbLayout, r: Rect, isRoot: boolean): void {
     const ctx = this.ctx;
-    const r = imageThumbRect(node, layout, belowReserved);
     const asset = map.assets[layout.block.assetId];
     if (asset) this.ensureImageBitmap(layout.block.assetId, asset);
     const entry = this.imageCache.get(layout.block.assetId);
@@ -1439,9 +1455,8 @@ export class CanvasRenderer {
 
   /** M2 — vẽ thẻ thu nhỏ của bảng (tối đa 5×4 ô, phần ẩn hiện "…").
    *  Bấm vào thẻ mở trình sửa bảng — xem hitTestTableThumb. */
-  private drawTableThumb(node: MindNode, layout: ThumbLayout, tagRowHeight: number, isRoot: boolean): void {
+  private drawTableThumb(node: MindNode, layout: ThumbLayout, rect: Rect, isRoot: boolean): void {
     const ctx = this.ctx;
-    const rect = thumbRect(node, layout, tagRowHeight);
     const { thumb } = layout;
     const cols = thumb.align.length;
     const rows = thumb.cells.length;
@@ -1760,27 +1775,19 @@ export class CanvasRenderer {
     return wx >= node.x + node.width - 22 && wx <= node.x + node.width && wy >= node.y - 2 && wy <= node.y + 20;
   }
 
-  /** M2 — bấm trúng thẻ thu nhỏ của bảng thì trả về id bảng (để mở
-   *  trình sửa), không thì null. Dùng đúng thumbRect như lúc vẽ. */
-  hitTestTableThumb(map: MindMap, node: MindNode, screenX: number, screenY: number, view: ViewTransform): string | null {
-    const layout = this.thumbLayoutForNode(map, node);
-    if (!layout) return null;
+  /** Phần nội dung card bị bấm trúng (trích văn bản / ảnh / bảng / biểu
+   *  tượng đính kèm), null nếu không trúng. Dùng đúng placeCard như lúc vẽ. */
+  hitTestCardPart(
+    map: MindMap,
+    node: MindNode,
+    screenX: number,
+    screenY: number,
+    view: ViewTransform
+  ): ReturnType<typeof hitCardPart> {
+    const placed = this.placedCard(map, node);
+    if (!placed) return null;
     const { x: wx, y: wy } = this.toWorld(screenX, screenY, view);
-    const r = thumbRect(node, layout, node.tagIds.length > 0 ? LABEL_ROW_HEIGHT : 0);
-    const slack = 2;
-    const inside = wx >= r.x - slack && wx <= r.x + r.width + slack && wy >= r.y - slack && wy <= r.y + r.height + slack;
-    return inside ? layout.table.id : null;
-  }
-
-  /** M3 — bấm trúng thẻ ảnh thì trả về id khối ảnh đang hiện, không thì null. */
-  hitTestImageThumb(map: MindMap, node: MindNode, screenX: number, screenY: number, view: ViewTransform): string | null {
-    const layout = this.imageLayoutForNode(map, node);
-    if (!layout) return null;
-    const { x: wx, y: wy } = this.toWorld(screenX, screenY, view);
-    const below = (node.tagIds.length > 0 ? LABEL_ROW_HEIGHT : 0) + thumbReservedHeight(this.thumbLayoutForNode(map, node));
-    const r = imageThumbRect(node, layout, below);
-    const inside = wx >= r.x && wx <= r.x + r.width && wy >= r.y && wy <= r.y + r.height;
-    return inside ? layout.block.id : null;
+    return hitCardPart(placed, wx, wy);
   }
 
   /**
@@ -1813,9 +1820,7 @@ export class CanvasRenderer {
   hitTestCheckbox(map: MindMap, node: MindNode, screenX: number, screenY: number, view: ViewTransform): boolean {
     if (node.checked === null) return false;
     const { x: wx, y: wy } = this.toWorld(screenX, screenY, view);
-    const textAreaHeight =
-      node.height - (node.tagIds.length > 0 ? LABEL_ROW_HEIGHT : 0) - thumbReservedHeight(this.thumbLayoutForNode(map, node)) -
-      imageReservedHeight(this.imageLayoutForNode(map, node));
+    const textAreaHeight = node.height - (node.tagIds.length > 0 ? LABEL_ROW_HEIGHT : 0) - (this.placedCard(map, node)?.reserved ?? 0);
     const CHECKBOX_SIZE = 14;
     const TEXT_PADDING_X = 10;
     const cbX = node.x + TEXT_PADDING_X;
@@ -1976,4 +1981,50 @@ export class CanvasRenderer {
       this.cssHeight = savedH;
     }
   }
+}
+
+/**
+ * Hình vẽ vector cho từng loại nội dung card (dùng chung kiểu với
+ * components/CardGlyph.svelte): văn bản = các dòng kẻ, bảng = lưới, ảnh =
+ * khung có núi + mặt trời, biểu đồ = các cột. Tâm (cx, cy), cỡ ~12px.
+ */
+export function drawContentGlyph(ctx: CanvasRenderingContext2D, kind: CardContentKind, cx: number, cy: number, color: string): void {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 1.4;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  const x = cx - 6;
+  const y = cy - 6;
+  ctx.beginPath();
+  switch (kind) {
+    case "text":
+      ctx.moveTo(x + 1, y + 2.5); ctx.lineTo(x + 11, y + 2.5);
+      ctx.moveTo(x + 1, y + 6); ctx.lineTo(x + 11, y + 6);
+      ctx.moveTo(x + 1, y + 9.5); ctx.lineTo(x + 7.5, y + 9.5);
+      break;
+    case "table":
+      ctx.rect(x + 0.5, y + 1, 11, 10);
+      ctx.moveTo(x + 0.5, y + 4.5); ctx.lineTo(x + 11.5, y + 4.5);
+      ctx.moveTo(x + 0.5, y + 7.8); ctx.lineTo(x + 11.5, y + 7.8);
+      ctx.moveTo(x + 4.5, y + 1); ctx.lineTo(x + 4.5, y + 11);
+      break;
+    case "image":
+      ctx.rect(x + 0.5, y + 1, 11, 10);
+      ctx.moveTo(x + 1.5, y + 10); ctx.lineTo(x + 4.8, y + 6); ctx.lineTo(x + 7, y + 8.2); ctx.lineTo(x + 8.6, y + 6.8); ctx.lineTo(x + 10.8, y + 10);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(x + 8.3, y + 3.9, 1.1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      return;
+    case "chart":
+      ctx.moveTo(x + 2, y + 11); ctx.lineTo(x + 2, y + 6.5);
+      ctx.moveTo(x + 6, y + 11); ctx.lineTo(x + 6, y + 2);
+      ctx.moveTo(x + 10, y + 11); ctx.lineTo(x + 10, y + 4.5);
+      break;
+  }
+  ctx.stroke();
+  ctx.restore();
 }

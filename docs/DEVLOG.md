@@ -3663,3 +3663,30 @@ Theo yêu cầu ưu tiên: trước đây Lưu/Xuất trên bản exe chỉ "t�
 - [ ] Lưu vào thư mục không có quyền ghi (ví dụ C:\Windows) — có thông báo "Không lưu được file"
 - [ ] Đóng app, mở lại — map vẫn còn (tự lưu ngầm), thư mục mặc định quay về thư mục exe
 
+---
+
+## Hiển thị card trên node, biểu tượng đính kèm, trang card, thẻ nổi (20/10/2026)
+
+Theo phản hồi sau khi thử H1. Không đổi dữ liệu.
+
+1. **Node có card hiện nội dung**: trích tối đa 3 dòng đầu của khối văn bản đầu tiên (chữ nhỏ, vạch dọc trích dẫn), nằm trên thẻ ảnh và thẻ bảng (bảng nhập từ CSV là khối bảng nên hiện thẻ bảng).
+2. **Co node nhỏ → hàng biểu tượng**: node đã kéo cỡ tay mà không đủ chỗ tối thiểu cho các thẻ thì chữ của node được ưu tiên, nội dung card thu thành hàng biểu tượng (văn bản / bảng / ảnh / biểu đồ, kèm số lượng). Biểu tượng vẽ bằng nét vector thống nhất (`drawContentGlyph` trên canvas, `CardGlyph.svelte` trong giao diện). Bấm biểu tượng hoặc đoạn trích → mở trang card (cuộn tới khối tương ứng); bấm ảnh → xem lớn; bấm bảng → trình sửa bảng.
+3. **Trang card** (`CardPageModal.svelte`): card mở thành trang tài liệu — tiêu đề lớn, đoạn văn / ảnh (chú thích) / bảng (đúng cỡ cột, căn lề) xen kẽ theo thứ tự trong card; sửa ngay trên trang, ＋ chèn đoạn văn dưới một khối, ↑↓ đổi thứ tự, ✕ xoá, thanh thêm Đoạn văn / Bảng / Nhập CSV / Ảnh; dán hoặc kéo-thả ảnh vào trang. Mở từ: node (đoạn trích, biểu tượng), menu chuột phải "Mở trang card", nút "⤢ Mở dạng trang" ở mục Card, "⤢ Mở trang" trong Thư viện.
+4. **Thẻ nổi trong Thư viện**: mỗi card là một tấm thẻ trắng trên nền xám nhạt, bóng đổ nhiều lớp, dải màu nhấn bên trái (màu Tag đầu tiên, không thì màu băm từ id), nhấc lên khi rê chuột; có dòng trích nội dung, biểu tượng loại nội dung; card gắn ở nhiều node có "lá" xếp chồng phía sau.
+
+- Kỹ thuật: `render/cardLayout.ts` (thuần) thay việc tính rời từng thẻ — `cardContentOf`, `measureCard`, `placeCard` (chế độ full/compact), `hitCardPart`; `CanvasRenderer` dùng chung cho đo, vẽ, dò bấm (`hitTestCardPart` thay `hitTestTableThumb`/`hitTestImageThumb`). `core/library.ts` thêm `cardSnippet`, `cardAccentHue`.
+- Test: `render/cardLayout.test.ts` (226 test). Chạy thử trên Chromium: card văn bản dài + bảng + ảnh → node hiện 3 dòng trích, ảnh, bảng; đặt node 130×70 → hàng 3 biểu tượng (văn bản ×2, bảng, ảnh); bấm biểu tượng → trang card, chèn đoạn văn giữa văn bản và bảng; Esc đóng; Thư viện hiện thẻ nổi.
+
+### Checklist kiểm thử tay — hiển thị card
+
+- [ ] Node có card chỉ có văn bản — dưới chữ node hiện 2–3 dòng đầu của văn bản (dài thì "…")
+- [ ] Card có văn bản + ảnh + bảng (kể cả bảng nhập CSV) — thứ tự trên node: chữ node, trích văn bản, ảnh, bảng
+- [ ] Kéo góc node nhỏ dần — các thẻ co lại; tới mức quá nhỏ thì thành hàng biểu tượng, chữ node vẫn đọc được
+- [ ] Bấm biểu tượng văn bản/bảng trong hàng biểu tượng — trang card mở, cuộn tới đúng khối
+- [ ] "Đặt lại kích thước tự động" — node về cỡ tự động, hiện lại đầy đủ các thẻ
+- [ ] Trang card: sửa tiêu đề, gõ đoạn văn, chèn đoạn văn giữa hai khối (＋), đổi thứ tự (↑↓), xoá (✕), thêm bảng/ảnh/CSV, dán ảnh vào trang — node trên map cập nhật theo
+- [ ] Trong trang card bấm "Sửa bảng…" — trình sửa bảng mở đè lên trang; lưu xong trang hiện bảng mới
+- [ ] Esc / bấm ra ngoài trang — đóng (đoạn văn đang gõ vẫn được lưu); Ctrl+Z hoàn tác từng thao tác trên trang
+- [ ] Menu chuột phải node có card → "Mở trang card"
+- [ ] Thư viện: mỗi card là một thẻ nổi, có dải màu riêng, dòng trích, biểu tượng loại nội dung; card gắn ở ≥2 node có lớp xếp chồng phía sau; rê chuột — thẻ nhấc lên
+
