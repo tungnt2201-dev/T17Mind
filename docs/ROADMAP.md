@@ -68,7 +68,7 @@ Mô hình chung (một lần, dùng cho cả hai định dạng): **cây map →
 
 ## 3. Rủi ro / quyết định cần chốt sớm
 
-1. **Lưu file trên bản .exe (Neutralino/WebView2)**: tải file kiểu trình duyệt (blob + `<a download>`) có thể không hoạt động ổn trong cửa sổ Neutralino. Xuất `.docx/.md/.zip` là tính năng cốt lõi, nên cần **kiểm tra trên Windows ngay ở M1**; nếu lỗi sẽ dùng hộp thoại lưu của Neutralino (`os.showSaveDialog` + `filesystem.writeBinaryFile`) và mở thêm đúng các quyền đó trong `nativeAllowList`.
+1. ✅ *(20/10/2026: đã chuyển sang hộp thoại Lưu/Mở của Neutralino — `io/nativeFs.ts`; còn cần xác nhận trên Windows thật)* **Lưu file trên bản .exe (Neutralino/WebView2)**: tải file kiểu trình duyệt (blob + `<a download>`) có thể không hoạt động ổn trong cửa sổ Neutralino. Xuất `.docx/.md/.zip` là tính năng cốt lõi, nên cần **kiểm tra trên Windows ngay ở M1**; nếu lỗi sẽ dùng hộp thoại lưu của Neutralino (`os.showSaveDialog` + `filesystem.writeBinaryFile`) và mở thêm đúng các quyền đó trong `nativeAllowList`.
 2. **Bảng có công thức?** Đề xuất v1: chỉ chữ/số thô; tính toán chỉ ở biểu đồ. Công thức để sau.
 3. **Cỡ file `.t17m`**: ảnh lớn làm nặng — cần nén và cảnh báo.
 4. **Layout**: node có khối cao hơn bình thường; nên vẽ khối dạng thẻ có kích thước tối đa cố định để bố cục không "nổ".

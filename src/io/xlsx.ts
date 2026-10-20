@@ -341,6 +341,17 @@ function buildMapFromRows(rows: RawRow[], sheetName: string): ImportResult {
 }
 
 export function exportXlsx(map: MindMap, filename: string): void {
+  XLSX.writeFile(buildXlsxWorkbook(map), filename);
+}
+
+/** Như exportXlsx nhưng trả về nội dung file (để ghi qua hộp thoại Lưu
+ *  của bản exe / File System Access) thay vì để thư viện tự tải xuống. */
+export function exportXlsxBlob(map: MindMap): Blob {
+  const data = XLSX.write(buildXlsxWorkbook(map), { bookType: "xlsx", type: "array" }) as ArrayBuffer;
+  return new Blob([data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+}
+
+function buildXlsxWorkbook(map: MindMap): XLSX.WorkBook {
   const rows: RawRow[] = [];
   const walk = (nodeId: string): void => {
     const node = map.nodes[nodeId];
@@ -387,5 +398,5 @@ export function exportXlsx(map: MindMap, filename: string): void {
   const worksheet = XLSX.utils.json_to_sheet(rows);
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Mindmap");
-  XLSX.writeFile(workbook, filename);
+  return workbook;
 }

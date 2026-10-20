@@ -99,7 +99,19 @@ import { loadMap as loadMapFromStorage } from "../io/storage";
 import { exportMarkdown } from "../io/markdown";
 import { exportSvg } from "../io/svg";
 import { exportOpml, parseOpmlFile } from "../io/opml";
-import { isFileSystemAccessSupported, pickAndSaveNewFile, writeToHandle, pickAndOpenFile } from "../io/fileSystemAccess";
+import { isFileSystemAccessSupported, pickSaveHandle, writeToHandle, pickOpenHandle } from "../io/fileSystemAccess";
+import { isDesktopApp, appDir, nativeSaveDialog, nativeOpenDialog, nativeWriteFile, nativeReadFile } from "../io/nativeFs";
+import {
+  FORMATS,
+  formatOrder,
+  formatFromPath,
+  ensureExtension,
+  dirOf,
+  baseName,
+  joinPath,
+  suggestBaseName,
+  type FileFormat,
+} from "../io/fileFormats";
 
 type DragMode =
   | "pan"
@@ -119,7 +131,16 @@ export class AppController {
   /** P1.12 — file thật trên đĩa đang liên kết với map hiện tại, nếu
    *  có (qua "Lưu file..."/"Mở file..."). CHỈ tồn tại trong phiên làm
    *  việc hiện tại — xem ghi chú đầu io/fileSystemAccess.ts. */
-  private fileHandle: FileSystemFileHandle | null = null;
+  /** File thật đang liên kết với map (sau "Lưu"/"Lưu thành…"/"Mở…" một
+   *  file .t17m/.json): Ctrl+S ghi thẳng vào đó. Bản exe giữ đường dẫn,
+   *  trình duyệt (Chrome/Edge) giữ handle của File System Access API. */
+  private linkedFile:
+    | { kind: "path"; path: string; format: FileFormat }
+    | { kind: "handle"; handle: FileSystemFileHandle; format: FileFormat }
+    | null = null;
+  /** Bản exe: thư mục mặc định của hộp thoại Lưu/Mở trong phiên này —
+   *  ban đầu là thư mục chứa T17Mind.exe, đổi theo file vừa mở/nhập/lưu. */
+  private lastDir: string | null = null;
 
   private dragMode: DragMode = null;
   private dragStartScreen = { x: 0, y: 0 };
@@ -276,10 +297,9 @@ export class AppController {
     this.store.loadMap(map);
     this.selection.resetToRoot(map.rootId);
     this.resetView();
-    // P1.12 — map mới không liên kết với file thật nào — handle cũ
-    // (nếu có) không còn hợp lý cho nội dung hoàn toàn khác này.
-    this.fileHandle = null;
-    hasLinkedFileStore.set(false);
+    // P1.12 — map mới không liên kết với file thật nào — file cũ (nếu
+    // có) không còn hợp lý cho nội dung hoàn toàn khác này.
+    this.setLinkedFile(null);
   }
 
   /**
@@ -296,10 +316,9 @@ export class AppController {
     this.store.loadMap(map);
     this.selection.resetToRoot(map.rootId);
     this.resetView();
-    // P1.12 — handle cũ (nếu có) liên kết với map TRƯỚC đó, không phải
+    // P1.12 — file cũ (nếu có) liên kết với map TRƯỚC đó, không phải
     // map vừa chuyển sang từ "Map gần đây".
-    this.fileHandle = null;
-    hasLinkedFileStore.set(false);
+    this.setLinkedFile(null);
     return true;
   }
 
@@ -461,12 +480,6 @@ export class AppController {
     }
   }
 
-  async exportXmindFile(): Promise<void> {
-    const { exportXmindFile: writeXmindFile } = await import("../io/xmind");
-    const blob = await writeXmindFile(this.store.getMap());
-    downloadBlob(blob, "t17mind-export.xmind");
-  }
-
   /**
    * P2.10 — "Ảnh nhúng": chọn một file ảnh từ máy, gắn lên node đang
    * chọn. Giới hạn 8MB/ảnh — KHÔNG phải giới hạn kỹ thuật (base64 không
@@ -585,31 +598,6 @@ export class AppController {
     this.resetView();
   }
 
-  /** P2.10 — xuất map đang mở ra file `.t17m` (nhúng thật mọi ảnh đã
-   *  gắn trên node, xem io/t17m.ts). */
-  async exportT17mFile(): Promise<void> {
-    const { exportT17mFile: writeT17mFile } = await import("../io/t17m");
-    const blob = await writeT17mFile(this.store.getMap());
-    downloadBlob(blob, "t17mind-export.t17m");
-  }
-
-  exportJson(): void {
-    downloadText(exportFlatJson(this.store.getMap()), "t17mind-export.json", "application/json");
-  }
-
-  async exportXlsx(): Promise<void> {
-    const { exportXlsx: writeXlsxFile } = await import("../io/xlsx");
-    writeXlsxFile(this.store.getMap(), "t17mind-export.xlsx");
-  }
-
-  exportMarkdownFile(): void {
-    downloadText(exportMarkdown(this.store.getMap()), "t17mind-export.md", "text/markdown");
-  }
-
-  exportSvgFile(): void {
-    downloadText(exportSvg(this.store.getMap()), "t17mind-export.svg", "image/svg+xml");
-  }
-
   async importOpml(file: File): Promise<void> {
     const text = await file.text();
     const result = parseOpmlFile(text);
@@ -622,73 +610,199 @@ export class AppController {
     this.resetView();
   }
 
-  exportOpmlFile(): void {
-    downloadText(exportOpml(this.store.getMap()), "t17mind-export.opml", "text/x-opml");
+  // ===================================================================
+  // Lưu / Xuất / Mở file thật (hộp thoại chọn vị trí, tên, định dạng)
+  // ===================================================================
+
+  isDesktop(): boolean {
+    return isDesktopApp();
   }
 
-  /** P1.12 — có hỗ trợ "Lưu/Mở file thật" trên trình duyệt này không
-   *  (chỉ Chrome/Edge) — UI dùng hàm này để ẩn hẳn nút liên quan thay
-   *  vì hiện ra rồi báo lỗi khi bấm. */
-  isFileSystemAccessSupported(): boolean {
-    return isFileSystemAccessSupported();
+  /** Có hộp thoại chọn vị trí lưu không (bản exe, hoặc Chrome/Edge). Không
+   *  có thì Lưu/Xuất rơi về kiểu tải file của trình duyệt. */
+  canPickSaveLocation(): boolean {
+    return isDesktopApp() || isFileSystemAccessSupported();
   }
 
-  /** true nếu đã có file thật liên kết trong phiên này — dùng để đổi
-   *  chữ nút Toolbar giữa "Lưu file..." (chưa có) và "Lưu" (đã có,
-   *  ghi thẳng không hỏi lại vị trí). */
   hasLinkedFile(): boolean {
-    return this.fileHandle !== null;
+    return this.linkedFile !== null;
   }
 
-  /** "Lưu file..." — LUÔN mở hộp thoại chọn vị trí mới, dù đã có file
-   *  liên kết từ trước (dùng khi muốn LƯU THÀNH một file khác, giống
-   *  "Save As" trong Word/Excel). */
-  async saveAsFile(): Promise<void> {
+  private setLinkedFile(file: AppController["linkedFile"]): void {
+    this.linkedFile = file;
+    hasLinkedFileStore.set(file !== null);
+  }
+
+  /** Thư mục mặc định cho hộp thoại của bản exe. */
+  private defaultDir(): string {
+    return this.lastDir ?? appDir();
+  }
+
+  /** Tên file gợi ý (không đuôi) — theo file đang liên kết, không thì theo chữ node gốc. */
+  private suggestedBase(): string {
+    if (this.linkedFile?.kind === "path") return baseName(this.linkedFile.path).replace(/\.[^.]+$/, "");
+    const map = this.store.getMap();
+    return suggestBaseName(map.nodes[map.rootId]?.text ?? "");
+  }
+
+  /** Nội dung file của map đang mở theo định dạng. */
+  private async buildFile(format: FileFormat): Promise<Blob | string | null> {
+    const map = this.store.getMap();
+    switch (format) {
+      case "t17m":
+        return (await import("../io/t17m")).exportT17mFile(map);
+      case "json":
+        return exportFlatJson(map);
+      case "xlsx":
+        return (await import("../io/xlsx")).exportXlsxBlob(map);
+      case "xmind":
+        return (await import("../io/xmind")).exportXmindFile(map);
+      case "opml":
+        return exportOpml(map);
+      case "md":
+        return exportMarkdown(map);
+      case "svg":
+        return exportSvg(map);
+      case "png":
+        return this.renderPngBlob();
+    }
+  }
+
+  /**
+   * "Lưu thành…" / "Xuất …": luôn mở hộp thoại để chọn THƯ MỤC, TÊN FILE
+   * và ĐỊNH DẠNG (ô "Save as type"; định dạng thật lấy theo đuôi tên file,
+   * gõ tên không đuôi thì dùng `format`).
+   * - Bản exe: hộp thoại Windows, thư mục mặc định = thư mục file vừa
+   *   mở/nhập/lưu, ban đầu là thư mục chứa T17Mind.exe.
+   * - Chrome/Edge: hộp thoại của trình duyệt (tự nhớ thư mục lần trước).
+   * - Trình duyệt khác: tải file xuống như cũ.
+   * `link` = true (Lưu/Lưu thành…): lưu .t17m/.json thì từ đó Ctrl+S ghi
+   * thẳng vào file này. Xuất (link = false) không đổi file đang liên kết.
+   */
+  async saveAs(format: FileFormat = this.linkedFile?.format ?? "t17m", link = true): Promise<void> {
+    const formats = formatOrder(format);
     try {
-      const handle = await pickAndSaveNewFile(this.store.getMap());
-      if (handle) {
-        this.fileHandle = handle; // null = người dùng bấm Huỷ, giữ nguyên handle cũ (nếu có)
-        hasLinkedFileStore.set(true);
+      if (isDesktopApp()) {
+        const chosen = await nativeSaveDialog(
+          link ? "Lưu map" : `Xuất ${FORMATS[format].label}`,
+          joinPath(this.defaultDir(), `${this.suggestedBase()}.${FORMATS[format].ext}`),
+          formats
+        );
+        if (!chosen) return; // bấm Huỷ
+        const path = ensureExtension(chosen, format);
+        const fmt = formatFromPath(path) ?? format;
+        const data = await this.buildFile(fmt);
+        if (data === null) return;
+        await nativeWriteFile(path, data);
+        this.lastDir = dirOf(path) || this.lastDir;
+        if (link && (fmt === "t17m" || fmt === "json")) this.setLinkedFile({ kind: "path", path, format: fmt });
+        return;
       }
+      if (isFileSystemAccessSupported()) {
+        const handle = await pickSaveHandle(`${this.suggestedBase()}.${FORMATS[format].ext}`, formats);
+        if (!handle) return;
+        const fmt = formatFromPath(handle.name) ?? format;
+        const data = await this.buildFile(fmt);
+        if (data === null) return;
+        await writeToHandle(handle, data);
+        if (link && (fmt === "t17m" || fmt === "json")) this.setLinkedFile({ kind: "handle", handle, format: fmt });
+        return;
+      }
+      const data = await this.buildFile(format);
+      if (data === null) return;
+      const name = `${this.suggestedBase()}.${FORMATS[format].ext}`;
+      if (typeof data === "string") downloadText(data, name, FORMATS[format].mime);
+      else downloadBlob(data, name);
     } catch (err) {
-      showErrors("Không lưu được file", [String((err as Error).message ?? err)]);
+      showErrors("Không lưu được file", [String((err as Error)?.message ?? err)]);
     }
   }
 
-  /** "Lưu" (Ctrl+S) — ghi thẳng vào file ĐÃ liên kết nếu có (không hỏi
-   *  lại vị trí); nếu CHƯA có file nào liên kết trong phiên này, hành
-   *  xử giống hệt "Lưu file..." (hỏi vị trí lần đầu, giống Word/Excel
-   *  khi Ctrl+S một tài liệu chưa từng lưu). */
-  async saveToFile(): Promise<void> {
-    if (!this.fileHandle) {
-      await this.saveAsFile();
-      return;
-    }
+  /** "Xuất …" một định dạng: hộp thoại lưu (chọn sẵn định dạng đó). */
+  exportAs(format: FileFormat): Promise<void> {
+    return this.saveAs(format, false);
+  }
+
+  /** "Lưu" (Ctrl+S): đã liên kết file thì ghi thẳng (không hỏi lại), chưa
+   *  thì như "Lưu thành…" (mặc định .t17m — giữ cả ảnh). */
+  async save(): Promise<void> {
+    const linked = this.linkedFile;
+    if (!linked) return this.saveAs("t17m", true);
     try {
-      await writeToHandle(this.fileHandle, this.store.getMap());
+      const data = await this.buildFile(linked.format);
+      if (data === null) return;
+      if (linked.kind === "path") await nativeWriteFile(linked.path, data);
+      else await writeToHandle(linked.handle, data);
     } catch (err) {
-      showErrors("Không lưu được file", [String((err as Error).message ?? err)]);
+      showErrors("Không lưu được file", [String((err as Error)?.message ?? err)]);
     }
   }
 
-  /** "Mở file..." — đọc một file JSON thật trên đĩa, THAY THẾ hoàn
-   *  toàn map đang mở (giống "Nhập JSON"), VÀ liên kết file đó cho
-   *  "Lưu" (Ctrl+S) sau này ghi thẳng lại đúng nó. */
-  async openFromFile(): Promise<void> {
+  /**
+   * "Mở…" / "Nhập …" bằng hộp thoại có đường dẫn (bản exe, hoặc Chrome/
+   * Edge). Trả về false nếu môi trường không có hộp thoại này — nơi gọi
+   * dùng ô chọn file thường. Mở xong thì thư mục mặc định của lần Lưu/Xuất
+   * sau chuyển về thư mục chứa file vừa mở; mở .t17m/.json (không phải
+   * ghép) thì Ctrl+S ghi thẳng lại đúng file đó.
+   */
+  async openWithDialog(formats: FileFormat[] = formatOrder("t17m", true), merge = false): Promise<boolean> {
+    if (!this.canPickSaveLocation()) return false;
     try {
-      const result = await pickAndOpenFile();
-      if (!result) return; // người dùng bấm Huỷ
-      this.fileHandle = result.handle;
-      hasLinkedFileStore.set(true);
-      this.store.loadMap(result.map);
-      this.selection.resetToRoot(result.map.rootId);
-      this.resetView();
+      let file: File;
+      let link: AppController["linkedFile"] = null;
+      if (isDesktopApp()) {
+        const path = await nativeOpenDialog(merge ? "Ghép JSON vào map" : "Mở file", this.defaultDir(), formats);
+        if (!path) return true;
+        file = new File([await nativeReadFile(path)], baseName(path));
+        this.lastDir = dirOf(path) || this.lastDir;
+        const fmt = formatFromPath(path);
+        if (fmt === "t17m" || fmt === "json") link = { kind: "path", path, format: fmt };
+      } else {
+        const picked = await pickOpenHandle(formats);
+        if (!picked) return true;
+        file = picked.file;
+        const fmt = formatFromPath(file.name);
+        if (fmt === "t17m" || fmt === "json") link = { kind: "handle", handle: picked.handle, format: fmt };
+      }
+      if (merge) {
+        await this.importJsonMerge(file);
+        return true;
+      }
+      if (await this.importFile(file)) this.setLinkedFile(link);
     } catch (err) {
-      showErrors("Lỗi trong file JSON", [String((err as Error).message ?? err)]);
+      showErrors("Không mở được file", [String((err as Error)?.message ?? err)]);
     }
+    return true;
   }
 
-  exportPng(): void {
+  /** Nhập một file theo đuôi (thay map đang mở). Trả về true nếu đọc được. */
+  async importFile(file: File): Promise<boolean> {
+    const before = this.store.getMap();
+    switch (formatFromPath(file.name)) {
+      case "t17m":
+        await this.importT17m(file);
+        break;
+      case "xlsx":
+        await this.importXlsx(file);
+        break;
+      case "xmind":
+        await this.importXmind(file);
+        break;
+      case "opml":
+        await this.importOpml(file);
+        break;
+      case "json":
+        await this.importJson(file);
+        break;
+      default:
+        void showAlert(`Không mở được "${file.name}": T17Mind chỉ mở file .t17m, .json, .xlsx, .xmind, .opml.`);
+        return false;
+    }
+    return this.store.getMap() !== before;
+  }
+
+  /** Vẽ toàn bộ map ra ảnh PNG (nền trắng, gấp đôi độ phân giải). */
+  private renderPngBlob(): Promise<Blob | null> {
     const map = this.store.getMap();
     let minX = Infinity;
     let minY = Infinity;
@@ -709,7 +823,7 @@ export class AppController {
         maxY = Math.max(maxY, g.maxY);
       }
     }
-    if (!Number.isFinite(minX)) return; // map rỗng bất thường — không có gì để xuất
+    if (!Number.isFinite(minX)) return Promise.resolve(null); // map rỗng bất thường — không có gì để xuất
 
     const pad = 40;
     const scale = 2;
@@ -719,7 +833,7 @@ export class AppController {
     off.width = w * scale;
     off.height = h * scale;
     const ctx = off.getContext("2d");
-    if (!ctx) return;
+    if (!ctx) return Promise.resolve(null);
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, w, h);
@@ -741,9 +855,7 @@ export class AppController {
       { offsetX: pad - minX, offsetY: pad - minY, scale: 1 },
       neutralSelection
     );
-    off.toBlob((blob) => {
-      if (blob) downloadBlob(blob, "t17mind-export.png");
-    });
+    return new Promise((resolve) => off.toBlob(resolve, "image/png"));
   }
 
   addChildToSelection(): void {
@@ -2307,13 +2419,8 @@ export class AppController {
     // không làm gì sẽ khiến người dùng tưởng phím tắt bị hỏng.
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
       e.preventDefault();
-      if (this.isFileSystemAccessSupported()) {
-        void this.saveToFile();
-      } else {
-        void showAlert(
-          "Trình duyệt này chưa hỗ trợ Lưu file trực tiếp (chỉ Chrome/Edge). Dùng nút \"Xuất JSON\" trên Toolbar thay thế — dữ liệu vẫn luôn được tự động lưu ngầm trong trình duyệt."
-        );
-      }
+      // Ctrl+Shift+S = "Lưu thành…" (luôn hỏi vị trí/tên/định dạng).
+      void (e.shiftKey ? this.saveAs() : this.save());
       return;
     }
 

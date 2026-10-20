@@ -2,7 +2,7 @@
  * io/fileSystemAccess.ts
  * ---------------------------------------------------------------------
  * P1.12 — File System Access API: cho phép "Lưu"/"Mở" trực tiếp một
- * file JSON THẬT trên đĩa (giống Word/Excel), khác hẳn IndexedDB
+ * file THẬT trên đĩa (mọi định dạng trong io/fileFormats.ts) (giống Word/Excel), khác hẳn IndexedDB
  * (P1.11 — tự động lưu NGẦM trong trình duyệt, người dùng không thấy
  * file nào) và khác "Xuất JSON" (luôn tải xuống một file MỚI, không
  * "nhớ" để ghi đè lại đúng file cũ).
@@ -20,10 +20,12 @@
  * không tương xứng lợi ích cho một tính năng P1 chèn thêm). Mở lại
  * trang thì "Lưu" sẽ hỏi lại vị trí như lần đầu — người dùng vẫn luôn
  * có IndexedDB tự động lưu ngầm làm lưới an toàn phía sau.
+ *
+ * Bản exe dùng hộp thoại của Windows qua io/nativeFs.ts thay cho file
+ * này (đặt được thư mục mặc định theo đường dẫn).
  * ---------------------------------------------------------------------
  */
-import type { MindMap } from "../core/types";
-import { exportFlatJson, parseJsonFile } from "./json";
+import { FORMATS, type FileFormat } from "./fileFormats";
 
 /**
  * Khai báo type TỐI THIỂU cho File System Access API — TypeScript's
@@ -38,13 +40,14 @@ declare global {
     getFile(): Promise<File>;
   }
   interface FileSystemWritableFileStream {
-    write(data: string): Promise<void>;
+    write(data: string | Blob): Promise<void>;
     close(): Promise<void>;
   }
   interface Window {
     showSaveFilePicker(options?: {
       suggestedName?: string;
       types?: { description: string; accept: Record<string, string[]> }[];
+      excludeAcceptAllOption?: boolean;
     }): Promise<FileSystemFileHandle>;
     showOpenFilePicker(options?: {
       types?: { description: string; accept: Record<string, string[]> }[];
@@ -59,65 +62,43 @@ export function isFileSystemAccessSupported(): boolean {
   return typeof window !== "undefined" && "showSaveFilePicker" in window;
 }
 
-/** Mở hộp thoại "Lưu file" (như Save As), ghi map hiện tại vào đó,
- *  trả về handle để các lần "Lưu" sau ghi thẳng không cần hỏi lại vị
- *  trí. Trả về `null` nếu người dùng bấm Huỷ (không phải lỗi thật —
- *  nơi gọi không nên báo lỗi cho trường hợp này). */
-export async function pickAndSaveNewFile(map: MindMap): Promise<FileSystemFileHandle | null> {
-  let handle: FileSystemFileHandle;
+const typesFor = (formats: FileFormat[]) =>
+  formats.map((f) => ({ description: FORMATS[f].label, accept: { [FORMATS[f].mime]: [`.${FORMATS[f].ext}`] } }));
+
+const isAbort = (err: unknown): boolean => err instanceof DOMException && err.name === "AbortError";
+
+/** Hộp thoại "Lưu" của trình duyệt (Chrome/Edge). Trả về handle, hoặc
+ *  null nếu người dùng bấm Huỷ. Định dạng thật do nơi gọi suy ra từ tên
+ *  file đã chọn (handle.name). Trình duyệt không cho đặt thư mục mặc
+ *  định theo đường dẫn — nó tự nhớ thư mục lần trước. */
+export async function pickSaveHandle(suggestedName: string, formats: FileFormat[]): Promise<FileSystemFileHandle | null> {
   try {
-    handle = await window.showSaveFilePicker({
-      suggestedName: "t17mind-export.json",
-      types: [{ description: "T17Mind JSON", accept: { "application/json": [".json"] } }],
-    });
+    return await window.showSaveFilePicker({ suggestedName, types: typesFor(formats) });
   } catch (err) {
-    if (err instanceof DOMException && err.name === "AbortError") return null; // người dùng bấm Huỷ
+    if (isAbort(err)) return null;
     throw err;
   }
-  await writeToHandle(handle, map);
-  return handle;
 }
 
-/** Ghi map hiện tại vào ĐÚNG handle đã có sẵn (không hỏi lại vị trí) —
- *  dùng cho "Lưu" (Ctrl+S) sau khi đã "Lưu file..." hoặc "Mở file..."
- *  ít nhất một lần trong phiên này. */
-export async function writeToHandle(handle: FileSystemFileHandle, map: MindMap): Promise<void> {
+/** Ghi dữ liệu vào handle đã có (không hỏi lại vị trí). */
+export async function writeToHandle(handle: FileSystemFileHandle, data: Blob | string): Promise<void> {
   const writable = await handle.createWritable();
   try {
-    await writable.write(exportFlatJson(map));
+    await writable.write(data);
   } finally {
     await writable.close();
   }
 }
 
-export interface OpenFileResult {
-  handle: FileSystemFileHandle;
-  map: MindMap;
-}
-
-/** Mở hộp thoại "Mở file", đọc + di trú + xác thực nội dung JSON —
- *  TÁI DÙNG đúng `parseJsonFile` như "Nhập JSON" thường (không bỏ qua
- *  bước kiểm tra nào chỉ vì đây là luồng khác). Trả về `null` nếu
- *  người dùng bấm Huỷ; ném lỗi kèm danh sách nếu file không hợp lệ (để
- *  nơi gọi tự quyết định cách hiển thị, giống các luồng nhập khác). */
-export async function pickAndOpenFile(): Promise<OpenFileResult | null> {
+/** Hộp thoại "Mở" của trình duyệt; null nếu bấm Huỷ. */
+export async function pickOpenHandle(formats: FileFormat[]): Promise<{ handle: FileSystemFileHandle; file: File } | null> {
   let handles: FileSystemFileHandle[];
   try {
-    handles = await window.showOpenFilePicker({
-      types: [{ description: "T17Mind JSON", accept: { "application/json": [".json"] } }],
-      multiple: false,
-    });
+    handles = await window.showOpenFilePicker({ types: typesFor(formats), multiple: false });
   } catch (err) {
-    if (err instanceof DOMException && err.name === "AbortError") return null;
+    if (isAbort(err)) return null;
     throw err;
   }
   const handle = handles[0];
-  if (!handle) return null;
-  const file = await handle.getFile();
-  const text = await file.text();
-  const result = parseJsonFile(text);
-  if (!result.ok) {
-    throw new Error(result.errors.join("\n"));
-  }
-  return { handle, map: result.map };
+  return handle ? { handle, file: await handle.getFile() } : null;
 }
