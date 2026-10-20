@@ -3690,3 +3690,26 @@ Theo phản hồi sau khi thử H1. Không đổi dữ liệu.
 - [ ] Menu chuột phải node có card → "Mở trang card"
 - [ ] Thư viện: mỗi card là một thẻ nổi, có dải màu riêng, dòng trích, biểu tượng loại nội dung; card gắn ở ≥2 node có lớp xếp chồng phía sau; rê chuột — thẻ nhấc lên
 
+---
+
+## H2 — Liên kết hai chiều (20/10/2026)
+
+Bước kế tiếp theo mục 5.5 ROADMAP. Không đổi schema: liên kết là token trong chữ của khối văn bản — `[[card:<id>|Tên]]` hoặc `[[node:<id>|Tên]]`.
+
+- Lõi `core/links.ts`: `makeLinkToken`, `parseSegments`, `plainText` (thay token bằng tên HIỆN TẠI của đích — đổi tên card không làm hỏng liên kết; đích bị xoá thì hiện liên kết hỏng), `findBacklinks` / `nodeBacklinks` (node được nhắc trực tiếp hoặc qua card đang gắn), `mentionQuery` / `mentionCandidates` (gõ `@từ` hoặc `[[chữ`), `relationshipTargetsFromLinks`, `remapLinks` — `MergeMapCommand` đổi id trong token theo id mới khi ghép map.
+- Trích văn bản trên node, dòng trích và tìm kiếm trong Thư viện dùng chữ thuần (không lộ token).
+- UI: `MentionTextarea.svelte` (ô văn bản có gợi ý liên kết — dùng ở mục Card và trang card), `LinkedText.svelte` (liên kết thành viên bấm được: card → mở trang card đó, node → nhảy tới node; rê chuột xem trước), `BacklinksList.svelte` ("Được nhắc tới ở" — trong mục Card của node, trang card, Thư viện; bấm → mở trang card, cuộn tới đoạn văn). Trang card: đoạn văn hiện dạng chữ có liên kết, bấm vào để sửa. Mục Card: nút "↗ Vẽ đường liên kết cho N nhắc tới" (đường nét đứt, một bước hoàn tác).
+- Hạn chế: ô văn bản ở thanh bên hiện token thô khi sửa (dạng chữ đẹp xem trong trang card).
+- Test: `core/links.test.ts` (233 test) — gồm ghép map đổi id liên kết. Chạy thử trên Chromium: gõ "@ngan" → gợi ý card + node "Ngân sách", Enter chèn token; trang card hiện "Ngân sách" bấm được → mở trang card Ngân sách có "Được nhắc tới ở"; nút vẽ đường liên kết tạo đường nét đứt; mục Card của node đích hiện liên kết ngược.
+
+### Checklist kiểm thử tay — H2
+
+- [ ] Trong ô văn bản của card gõ `@` + vài chữ (không dấu cũng được) — hiện danh sách card/node khớp; ↑↓ chọn, Enter/Tab chèn; Esc đóng danh sách
+- [ ] Gõ `[[` + tên có khoảng trắng — cũng gợi ý được
+- [ ] Mở trang card — liên kết hiện thành chữ xanh (card) / xanh lá (node); rê chuột thấy xem trước; bấm card → mở trang card đó; bấm node → map nhảy tới node
+- [ ] Đổi tên card đích — chỗ liên kết hiện tên mới; xoá card đích — liên kết thành gạch ngang (hỏng), Ctrl+Z trả lại
+- [ ] Card/node đích hiện "Được nhắc tới ở" (mục Card của node, trang card, Thư viện); bấm → mở đúng trang và đoạn văn
+- [ ] Trích văn bản trên node và dòng trích trong Thư viện hiện tên, không lộ `[[card:…]]`
+- [ ] "↗ Vẽ đường liên kết cho N nhắc tới" — xuất hiện đường nét đứt tới node được nhắc; Ctrl+Z gỡ cả loạt
+- [ ] Ghép thêm JSON chứa card có liên kết — liên kết trong phần ghép vẫn trỏ đúng
+

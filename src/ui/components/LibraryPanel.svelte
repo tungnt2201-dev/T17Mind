@@ -24,6 +24,8 @@
   import { showConfirm } from "../dialog";
   import { listLibrary, describeCounts, cardSnippet, cardAccentHue } from "../../core/library";
   import CardGlyph from "./CardGlyph.svelte";
+  import BacklinksList from "./BacklinksList.svelte";
+  import { findBacklinks } from "../../core/links";
   import { createCard } from "../../core/cards";
   import { AddCardCommand, AttachCardToNodeCommand, DeleteCardCommand } from "../../core/cardCommands";
   import CardEditor from "./CardEditor.svelte";
@@ -174,6 +176,7 @@
                   on:click={() => controller.addCardAsChildOfSelection(e.card.id)}>Thêm làm nhánh con</button>
                 <button type="button" class="btn danger small-btn" on:click={() => remove(e.card.id, e.usages.length)}>Xoá</button>
               </div>
+              <BacklinksList map={$map} backlinks={findBacklinks($map, { type: "card", id: e.card.id }).filter((b) => b.cardId !== e.card.id)} {controller} />
               <CardEditor {store} {controller} cardId={e.card.id} idPrefix="lib-card" />
             </div>
           {/if}

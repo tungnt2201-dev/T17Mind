@@ -9,6 +9,7 @@
  */
 import type { Card, MindMap } from "./types";
 import { normalizeForSearch } from "./search";
+import { plainText } from "./links";
 
 export type LibraryFilter = "all" | "inbox" | "used";
 
@@ -32,7 +33,7 @@ export function cardUsages(map: MindMap, cardId: string): string[] {
 export function cardSearchText(card: Card): string {
   const parts: string[] = [card.title];
   for (const b of card.blocks) {
-    if (b.type === "text") parts.push(b.text);
+    if (b.type === "text") parts.push(plainText(b.text));
     else if (b.type === "table") parts.push(b.title, ...b.cells.flat());
     else if (b.type === "image") parts.push(b.caption);
     else if (b.type === "chart") parts.push(b.title);
@@ -104,7 +105,7 @@ export function listLibrary(
 export function cardSnippet(card: Card, max = 90): string {
   const text = card.blocks.find((b) => b.type === "text" && b.text.trim());
   if (!text || text.type !== "text") return "";
-  const one = text.text.replace(/\s+/g, " ").trim();
+  const one = plainText(text.text).replace(/\s+/g, " ").trim();
   return one.length > max ? `${one.slice(0, max - 1).trimEnd()}…` : one;
 }
 

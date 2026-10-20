@@ -31,6 +31,10 @@
   } from "../../core/cardCommands";
   import { createTextBlock, createTableBlock, summarizeBlock } from "../../core/cards";
   import CardGlyph from "./CardGlyph.svelte";
+  import MentionTextarea from "./MentionTextarea.svelte";
+  import LinkedText from "./LinkedText.svelte";
+  import BacklinksList from "./BacklinksList.svelte";
+  import { findBacklinks, type LinkType } from "../../core/links";
 
   export let store: Store;
   export let controller: AppController;
@@ -41,11 +45,19 @@
   let imageInput: HTMLInputElement | undefined;
   let csvInput: HTMLInputElement | undefined;
   let pendingFocus: string | null = null;
+  /** Đoạn văn đang ở chế độ sửa (các đoạn khác hiện chữ có liên kết bấm được). */
+  let editingBlock: string | null = null;
+
+  function followLink(type: LinkType, id: string): void {
+    if (type === "card") controller.openCardPage(id);
+    else goTo(id);
+  }
 
   $: target = $cardPageStore;
   $: card = target ? $map.cards[target.cardId] ?? null : null;
   $: if (target && !card) cardPageStore.set(null); // card bị xoá / hoàn tác việc tạo
   $: usages = card ? cardUsages($map, card.id) : [];
+  $: backlinks = card ? findBacklinks($map, { type: "card", id: card.id }).filter((b) => b.cardId !== card?.id) : [];
   $: if (card && target?.focusBlockId) void focusBlock(target.focusBlockId);
 
   async function focusBlock(id: string): Promise<void> {
@@ -64,21 +76,12 @@
     cardPageStore.set(null);
   }
 
-  function autoGrow(el: HTMLTextAreaElement): { update: () => void } {
-    const fit = (): void => {
-      el.style.height = "auto";
-      el.style.height = `${el.scrollHeight}px`;
-    };
-    fit();
-    el.addEventListener("input", fit);
-    return { update: fit };
-  }
-
   async function addTextAt(index: number | null): Promise<void> {
     if (!card) return;
     const block = createTextBlock("");
     store.dispatch(new AddBlockCommand(card.id, block, index));
     pendingFocus = block.id;
+    editingBlock = block.id;
     await tick();
     paperEl?.querySelector<HTMLTextAreaElement>(`[data-block="${block.id}"] textarea`)?.focus();
     pendingFocus = null;
@@ -166,6 +169,9 @@
           {/each}
         {/if}
       </div>
+      {#if backlinks.length > 0}
+        <div class="pg-backlinks"><BacklinksList map={$map} {backlinks} {controller} /></div>
+      {/if}
 
       {#if card.blocks.length === 0}
         <p class="pg-empty">Trang trống — thêm đoạn văn, bảng hoặc ảnh ở thanh bên dưới, hoặc dán/kéo-thả ảnh vào đây.</p>
@@ -182,8 +188,17 @@
           </div>
 
           {#if b.type === "text"}
-            <textarea class="pg-text" rows="1" placeholder="Viết gì đó…" value={b.text} use:autoGrow
-              on:change={(e) => { if (card && e.currentTarget.value !== b.text) store.dispatch(new ReplaceBlockCommand(card.id, { ...b, text: e.currentTarget.value })); }}></textarea>
+            {#if editingBlock === b.id || !b.text.trim()}
+              <MentionTextarea map={$map} cls="pg-text" rows={1} autogrow autofocus={editingBlock === b.id}
+                placeholder="Viết gì đó… (gõ @ hoặc [[ để liên kết tới card/node khác)" value={b.text} excludeCardId={card.id}
+                on:commit={(e) => card && store.dispatch(new ReplaceBlockCommand(card.id, { ...b, text: e.detail }))}
+                on:blur={() => { if (editingBlock === b.id) editingBlock = null; }} />
+            {:else}
+              <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+              <div class="pg-text pg-text-view" title="Bấm để sửa" on:click={() => (editingBlock = b.id)}>
+                <LinkedText map={$map} text={b.text} on:open={(e) => followLink(e.detail.type, e.detail.id)} />
+              </div>
+            {/if}
           {:else if b.type === "image"}
             <figure class="pg-figure">
               <button type="button" class="pg-img-btn" title="Bấm để xem lớn" on:click={() => card && controller.openCardImages(card.id, b.id)}>
@@ -258,6 +273,8 @@
     width: 100%; border: none; outline: none; resize: none; overflow: hidden; background: transparent; padding: 2px 0;
     font: inherit; font-size: 15px; line-height: 1.7; color: #1f2933; display: block;
   }
+  .pg-text-view { white-space: pre-wrap; cursor: text; min-height: 1.7em; }
+  .pg-backlinks { margin: -12px 0 18px; }
   .pg-figure { margin: 6px 0; text-align: center; }
   .pg-img-btn { border: none; padding: 0; background: none; cursor: zoom-in; max-width: 100%; }
   .pg-img-btn img { max-width: 100%; max-height: 60vh; border-radius: 4px; display: block; margin: 0 auto; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12); }
