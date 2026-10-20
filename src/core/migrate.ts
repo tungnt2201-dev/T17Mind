@@ -434,6 +434,42 @@ function migrateV17toV18(raw: UnknownRecord): UnknownRecord {
 
 const IMAGE_SIZES = new Set(["small", "medium", "large"]);
 
+/**
+ * Phiên bản 18 -> 19: bảng có thêm `colWidths` / `rowHeights` (kéo đổi
+ * cỡ cột/hàng trong trình sửa bảng), mặc định 130 / 28 px.
+ */
+function migrateV18toV19(raw: UnknownRecord): UnknownRecord {
+  return { ...raw, schemaVersion: 19, cards: normalizeTableSizes(raw.cards) };
+}
+
+/** Bảo đảm mọi bảng có colWidths/rowHeights đúng độ dài, số dương; giá
+ *  trị thiếu/sai thay bằng mặc định (giữ lại phần còn dùng được). */
+function normalizeTableSizes(rawCards: unknown): UnknownRecord {
+  if (typeof rawCards !== "object" || rawCards === null || Array.isArray(rawCards)) return {};
+  const fix = (arr: unknown, len: number, def: number): number[] =>
+    Array.from({ length: len }, (_, i) => {
+      const v = Array.isArray(arr) ? arr[i] : undefined;
+      return typeof v === "number" && Number.isFinite(v) && v > 0 ? v : def;
+    });
+  const cards: UnknownRecord = {};
+  for (const [id, c] of Object.entries(rawCards as UnknownRecord)) {
+    const card = (c ?? {}) as UnknownRecord;
+    const blocks = Array.isArray(card.blocks)
+      ? card.blocks.map((b: unknown) => {
+          const block = (b ?? {}) as UnknownRecord;
+          if (block.type !== "table" || !Array.isArray(block.align) || !Array.isArray(block.cells)) return block;
+          return {
+            ...block,
+            colWidths: fix(block.colWidths, block.align.length, 130),
+            rowHeights: fix(block.rowHeights, block.cells.length, 28),
+          };
+        })
+      : card.blocks;
+    cards[id] = { ...card, blocks };
+  }
+  return cards;
+}
+
 /** Bảo đảm mọi khối ảnh có `size` hợp lệ (dùng cho migrate 17->18 và cho
  *  bước chuẩn hoá cuối migrateToLatest — dữ liệu ghi "18" nhưng thiếu). */
 function normalizeImageBlockSizes(rawCards: unknown): UnknownRecord {
@@ -472,6 +508,7 @@ const MIGRATIONS: Record<number, MigrationFn> = {
   15: migrateV15toV16,
   16: migrateV16toV17,
   17: migrateV17toV18,
+  18: migrateV18toV19,
 };
 
 /**
@@ -523,7 +560,7 @@ export function migrateToLatest(raw: UnknownRecord): MindMap {
   if (!Array.isArray(safe.tags)) safe.tags = [];
   if (typeof safe.assets !== "object" || safe.assets === null) safe.assets = {};
   if (typeof safe.activeThemeId !== "string") safe.activeThemeId = null;
-  safe.cards = normalizeImageBlockSizes(safe.cards);
+  safe.cards = normalizeTableSizes(normalizeImageBlockSizes(safe.cards));
 
   // Cùng lý do, cùng cách sửa — nhưng ở CẤP NODE: children/markers/
   // tagIds cũng là mảng, cũng có thể bị "rơi" giống hệt các mảng cấp

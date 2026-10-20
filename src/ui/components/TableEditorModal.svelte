@@ -28,6 +28,10 @@
     setAlign,
     setHeaderRow,
     setTitle,
+    setColWidth,
+    setRowHeight,
+    autoFitColWidth,
+    autoFitRowHeight,
     insertRow,
     deleteRow,
     insertColumn,
@@ -174,6 +178,45 @@
     draft = deleteColumn(draft, active.c);
     void focusCell(active.r, Math.min(active.c, draft.table.align.length - 1));
   }
+  // ----- Kéo mép tiêu đề cột/số hàng để đổi cỡ; bấm đúp = vừa khít chữ -----
+  let resizing: { kind: "col" | "row"; index: number; start: number; size: number } | null = null;
+
+  function startResize(kind: "col" | "row", index: number, e: MouseEvent): void {
+    if (!draft || e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const size = kind === "col" ? draft.table.colWidths[index] : draft.table.rowHeights[index];
+    resizing = { kind, index, start: kind === "col" ? e.clientX : e.clientY, size: size ?? 0 };
+    window.addEventListener("mousemove", onResizeMove);
+    window.addEventListener("mouseup", stopResize);
+  }
+  function onResizeMove(e: MouseEvent): void {
+    if (!draft || !resizing) return;
+    const { kind, index, start, size } = resizing;
+    draft = kind === "col" ? setColWidth(draft, index, size + e.clientX - start) : setRowHeight(draft, index, size + e.clientY - start);
+  }
+  function stopResize(): void {
+    resizing = null;
+    window.removeEventListener("mousemove", onResizeMove);
+    window.removeEventListener("mouseup", stopResize);
+  }
+  onDestroy(stopResize);
+
+  let measureCtx: CanvasRenderingContext2D | null = null;
+  function measureText(text: string): number {
+    measureCtx ??= document.createElement("canvas").getContext("2d");
+    if (!measureCtx) return text.length * 7;
+    measureCtx.font = "600 13px -apple-system, Segoe UI, sans-serif"; // đo theo chữ đậm cho chắc (hàng tiêu đề)
+    return measureCtx.measureText(text).width;
+  }
+  function autoFit(kind: "col" | "row", index: number): void {
+    if (!draft) return;
+    draft =
+      kind === "col"
+        ? setColWidth(draft, index, autoFitColWidth(draft.table, index, measureText))
+        : setRowHeight(draft, index, autoFitRowHeight(draft.table, index));
+  }
+
   function alignActive(a: TableAlign): void {
     if (draft) draft = setAlign(draft, active.c, a);
   }
@@ -283,17 +326,29 @@
             <tr>
               <th class="te-corner"></th>
               {#each table.align as _, c}
-                <th class:te-active-col={c === active.c}>{colName(c)}</th>
+                <th class:te-active-col={c === active.c}>
+                  {colName(c)}
+                  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                  <span class="te-col-handle" role="separator" aria-orientation="vertical"
+                    title="Kéo để đổi độ rộng cột · bấm đúp: vừa khít chữ"
+                    on:mousedown={(e) => startResize("col", c, e)} on:dblclick={() => autoFit("col", c)}></span>
+                </th>
               {/each}
             </tr>
           </thead>
           <tbody>
             {#each table.cells as row, r}
               <tr class:te-header-row={r === 0 && table.headerRow}>
-                <th class="te-rownum" class:te-active-col={r === active.r}>{r + 1}</th>
+                <th class="te-rownum" class:te-active-col={r === active.r}>
+                  {r + 1}
+                  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                  <span class="te-row-handle" role="separator" aria-orientation="horizontal"
+                    title="Kéo để đổi chiều cao hàng · bấm đúp: vừa khít chữ"
+                    on:mousedown={(e) => startResize("row", r, e)} on:dblclick={() => autoFit("row", r)}></span>
+                </th>
                 {#each row as cell, c}
                   <td class:te-active={r === active.r && c === active.c}>
-                    <textarea rows="1" data-r={r} data-c={c} value={cell} style="text-align:{table.align[c]}"
+                    <textarea rows="1" data-r={r} data-c={c} value={cell} style="text-align:{table.align[c]};width:{table.colWidths[c]}px;height:{table.rowHeights[r]}px"
                       aria-label="Ô {colName(c)}{r + 1}"
                       on:focus={() => (active = { r, c })}
                       on:input={(e) => onCellInput(r, c, e)}
@@ -309,7 +364,8 @@
 
       <p class="te-hint">
         Tab/Shift+Tab: sang ô kế/trước · Enter/Shift+Enter: xuống/lên · Alt+Enter: xuống dòng trong ô ·
-        Dán vùng ô copy từ Excel/Google Sheets vào ô bất kỳ để rải dữ liệu từ ô đó · Ctrl+Enter: lưu
+        Dán vùng ô copy từ Excel/Google Sheets vào ô bất kỳ để rải dữ liệu từ ô đó · Kéo mép tiêu đề cột/số hàng
+        để đổi cỡ (bấm đúp: vừa khít chữ) · Ctrl+Enter: lưu
       </p>
 
       <div class="close-row te-actions">
@@ -339,9 +395,14 @@
   .te-corner { left: 0; z-index: 2 !important; }
   .te-active-col { background: #dbe6fd !important; color: #2f6fed !important; }
   .te-grid td textarea {
-    display: block; box-sizing: border-box; width: 130px; min-height: 28px; height: 28px; resize: none;
-    border: none; outline: none; padding: 5px 7px; font: inherit; font-size: 13px; background: transparent; overflow: hidden;
+    display: block; box-sizing: border-box; width: 130px; height: 28px; resize: none;
+    border: none; outline: none; padding: 5px 7px; font: inherit; font-size: 13px; line-height: 18px; background: transparent; overflow: hidden;
   }
+  /* Tay nắm nằm TRỌN trong ô tiêu đề: phần thò ra ngoài sẽ bị ô kế bên
+   * (cũng sticky, cùng z-index) che mất, kéo không ăn. */
+  .te-col-handle { position: absolute; top: 0; right: 0; width: 7px; height: 100%; cursor: col-resize; z-index: 3; }
+  .te-row-handle { position: absolute; left: 0; bottom: 0; height: 7px; width: 100%; cursor: row-resize; z-index: 3; }
+  .te-col-handle:hover, .te-row-handle:hover { background: rgba(47, 111, 237, 0.35); }
   .te-header-row td textarea { font-weight: 600; background: #f8f9fb; }
   .te-grid td.te-active { outline: 2px solid #2f6fed; outline-offset: -2px; }
   .te-hint { margin: 0; font-size: 12px; color: #6b7280; }

@@ -21,7 +21,17 @@ import {
   tableThumbnail,
   TABLE_MAX_COLS,
   TABLE_MAX_ROWS,
+  TABLE_DEFAULT_COL_W,
+  TABLE_DEFAULT_ROW_H,
+  TABLE_MIN_COL_W,
+  TABLE_MAX_COL_W,
+  TABLE_MIN_ROW_H,
+  setColWidth,
+  setRowHeight,
+  autoFitColWidth,
+  autoFitRowHeight,
 } from "./table";
+import { migrateToLatest } from "./migrate";
 import type { Card, TableBlock } from "./types";
 
 function filled(rows: number, cols: number): TableBlock {
@@ -212,5 +222,88 @@ describe("Biểu đồ phụ thuộc + thẻ thu nhỏ (M2)", () => {
     expect(big.cells[0]).toHaveLength(5);
     expect(big.align).toHaveLength(5);
     expect(big).toMatchObject({ moreRows: true, moreCols: true });
+  });
+});
+
+describe("Đổi cỡ cột/hàng (schema 19)", () => {
+  it("bảng mới có colWidths/rowHeights mặc định đúng độ dài", () => {
+    const t = createTableBlock(3, 4);
+    expect(t.colWidths).toEqual([TABLE_DEFAULT_COL_W, TABLE_DEFAULT_COL_W, TABLE_DEFAULT_COL_W, TABLE_DEFAULT_COL_W]);
+    expect(t.rowHeights).toEqual([TABLE_DEFAULT_ROW_H, TABLE_DEFAULT_ROW_H, TABLE_DEFAULT_ROW_H]);
+    expect(tableFromGrid("x", [["a", "b"], ["c"]]).colWidths).toHaveLength(2);
+  });
+
+  it("setColWidth/setRowHeight kẹp trong giới hạn, chỉ số sai bị bỏ qua", () => {
+    let d = createDraft(createTableBlock(2, 2));
+    d = setColWidth(d, 1, 9999);
+    expect(d.table.colWidths).toEqual([TABLE_DEFAULT_COL_W, TABLE_MAX_COL_W]);
+    d = setColWidth(d, 0, 1);
+    expect(d.table.colWidths[0]).toBe(TABLE_MIN_COL_W);
+    d = setRowHeight(d, 0, 87.6);
+    expect(d.table.rowHeights[0]).toBe(88);
+    expect(setRowHeight(d, 0, 1).table.rowHeights[0]).toBe(TABLE_MIN_ROW_H);
+    expect(setColWidth(d, 5, 100)).toBe(d);
+    expect(setRowHeight(d, 0, Number.NaN)).toBe(d);
+  });
+
+  it("chèn/xoá/dán giữ colWidths và rowHeights khớp số cột/hàng, cột cũ giữ cỡ đã chỉnh", () => {
+    let d = createDraft(createTableBlock(2, 2));
+    d = setColWidth(d, 1, 300);
+    d = setRowHeight(d, 1, 60);
+    d = insertColumn(d, 0);
+    d = insertRow(d, 0);
+    expect(d.table.colWidths).toEqual([TABLE_DEFAULT_COL_W, TABLE_DEFAULT_COL_W, 300]);
+    expect(d.table.rowHeights).toEqual([TABLE_DEFAULT_ROW_H, TABLE_DEFAULT_ROW_H, 60]);
+    d = deleteColumn(d, 1);
+    d = deleteRow(d, 0);
+    expect(d.table.colWidths).toEqual([TABLE_DEFAULT_COL_W, 300]);
+    expect(d.table.rowHeights).toEqual([TABLE_DEFAULT_ROW_H, 60]);
+    d = pasteGrid(d, 0, 0, [["a", "b", "c"], ["d", "e", "f"], ["g", "h", "i"]]).draft;
+    expect(d.table.colWidths).toEqual([TABLE_DEFAULT_COL_W, 300, TABLE_DEFAULT_COL_W]);
+    expect(d.table.rowHeights).toHaveLength(3);
+    d = replaceWithGrid(d, [["x", "y"]]);
+    expect(d.table.colWidths).toEqual([TABLE_DEFAULT_COL_W, 300]);
+    expect(d.table.rowHeights).toEqual([TABLE_DEFAULT_ROW_H]);
+    const card: Card = { id: "c", title: "", blocks: [d.table] };
+    expect(validateCard(card, {})).toEqual([]);
+  });
+
+  it("vừa khít chữ: cột theo dòng chữ dài nhất, hàng theo ô nhiều dòng nhất", () => {
+    const t = createTableBlock(2, 2);
+    t.cells = [["ngắn", ""], ["một dòng rất dài\nx", "a\nb\nc"]];
+    const measure = (s: string): number => s.length * 10;
+    expect(autoFitColWidth(t, 0, measure)).toBe("một dòng rất dài".length * 10 + 18);
+    expect(autoFitColWidth(t, 1, () => 0)).toBe(TABLE_MIN_COL_W);
+    expect(autoFitRowHeight(t, 1)).toBe(3 * 18 + 10);
+    expect(autoFitRowHeight(t, 0)).toBe(TABLE_DEFAULT_ROW_H);
+  });
+
+  it("validateCard báo lỗi khi colWidths/rowHeights lệch độ dài hoặc không phải số dương", () => {
+    const t = { ...createTableBlock(2, 2), colWidths: [100], rowHeights: [28, -1] };
+    const errors = validateCard({ id: "c", title: "", blocks: [t] }, {});
+    expect(errors.some((e) => e.includes("colWidths"))).toBe(true);
+    expect(errors.some((e) => e.includes("rowHeights"))).toBe(true);
+  });
+
+  it("migrate 18 → 19: bảng cũ được thêm cỡ mặc định, giá trị hợp lệ được giữ", () => {
+    const raw = {
+      schemaVersion: 18,
+      rootId: "n1",
+      nodes: { n1: { id: "n1", text: "Gốc", parentId: null, children: [] } },
+      cards: {
+        c1: {
+          id: "c1",
+          title: "",
+          blocks: [
+            { id: "t1", type: "table", title: "", headerRow: true, align: ["left", "left"], cells: [["a", "b"]] },
+            { id: "t2", type: "table", title: "", headerRow: true, align: ["left"], cells: [["a"], ["b"]], colWidths: [200], rowHeights: ["x", 50] },
+          ],
+        },
+      },
+    };
+    const m = migrateToLatest(raw as never);
+    expect(m.cards.c1!.blocks[0]).toMatchObject({ colWidths: [TABLE_DEFAULT_COL_W, TABLE_DEFAULT_COL_W], rowHeights: [TABLE_DEFAULT_ROW_H] });
+    expect(m.cards.c1!.blocks[1]).toMatchObject({ colWidths: [200], rowHeights: [TABLE_DEFAULT_ROW_H, 50] });
+    expect(validateCard(m.cards.c1!, {})).toEqual([]);
   });
 });

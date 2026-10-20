@@ -3561,3 +3561,25 @@ Nhiều ảnh mỗi node (khối ảnh trong card), chú thích, cỡ hiển th�
 - [ ] "Chọn ảnh..." (ảnh nhúng kiểu cũ) với ảnh lớn — vẫn chạy, ảnh đã được thu nhỏ
 - [ ] `npm run check` chạy sạch — 0 lỗi, 0 cảnh báo
 
+---
+
+## Đổi cỡ cột/hàng trong bảng (20/10/2026)
+
+Theo yêu cầu sau khi thử M2 trên exe. **Schema 18 → 19.**
+
+- Dữ liệu: `TableBlock.colWidths` / `rowHeights` (px trong trình sửa, mặc định 130 / 28, kẹp 40–600 / 24–300). Migrate 18→19 điền mặc định; bước chuẩn hoá cuối `migrateToLatest` sửa mảng thiếu/sai độ dài/không phải số dương (giữ lại giá trị còn dùng được). `validateCard` kiểm tra độ dài và giá trị.
+- Lõi (`core/table.ts`): `setColWidth`, `setRowHeight`, `autoFitColWidth` (giống bấm đúp mép cột trong Excel), `autoFitRowHeight`; mọi thao tác chèn/xoá/dán/nhập CSV giữ hai mảng khớp số cột/hàng, cột cũ giữ cỡ đã chỉnh.
+- Trình sửa: tay nắm ở mép phải tiêu đề cột và mép dưới số hàng (kéo để đổi, bấm đúp để vừa khít). Vẫn nằm trong bản nháp → Lưu = một `UpdateTableCommand`.
+- Thẻ trên node (`render/tableThumb.ts`): `ThumbLayout.colW[]` thay cho `cellW` — cột theo đúng tỉ lệ `colWidths` (130px ↔ 46px trên thẻ, tối thiểu 18px), cùng giãn một hệ số khi node rộng.
+- Lỗi bắt được khi chạy thử: tay nắm cột ban đầu thò ra ngoài ô tiêu đề 4px và bị ô kế bên (cũng `position: sticky`, cùng z-index) che → kéo không ăn, chỉ bấm đúp cột cuối là chạy. Sửa bằng cách để tay nắm nằm trọn trong ô.
+- Test: thêm nhóm "Đổi cỡ cột/hàng" trong `core/table.test.ts`, test tỉ lệ cột trong `render/tableThumb.test.ts` (199 test).
+
+### Checklist kiểm thử tay — đổi cỡ cột/hàng
+
+- [ ] Rê chuột vào mép phải chữ A/B/C ở tiêu đề cột — con trỏ thành ↔; kéo sang phải/trái — cột rộng/hẹp theo
+- [ ] Rê vào mép dưới số hàng — con trỏ thành ↕; kéo — hàng cao/thấp theo (ô nhiều dòng hiện đủ chữ)
+- [ ] Bấm đúp mép cột — cột vừa khít chữ dài nhất; bấm đúp mép hàng — hàng vừa đủ ô nhiều dòng nhất
+- [ ] Lưu → thẻ trên node vẽ cột rộng/hẹp đúng tỉ lệ; Ctrl+Z một lần — về cỡ cũ
+- [ ] Chèn/xoá cột, dán từ Excel — cột đã chỉnh vẫn giữ cỡ, cột mới cỡ mặc định
+- [ ] Mở map cũ có bảng (trước bản này) — không lỗi, cột/hàng cỡ mặc định
+
