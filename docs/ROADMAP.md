@@ -39,7 +39,7 @@ Mỗi giai đoạn = 1 milestone GitHub, chia thành các issue nhỏ, mỗi iss
 ### M2 — Bảng biểu ✅ (hoàn thành 17/10/2026, còn các mục ghi chú bên dưới)
 - [x] Trình sửa bảng (`TableEditorModal.svelte`): thêm/xoá hàng/cột, hàng tiêu đề, căn lề, Tab/Enter di chuyển ô (Tab ở ô cuối / Enter ở hàng cuối tự thêm hàng), Alt+Enter xuống dòng trong ô. Sửa trên bản nháp (`core/table.ts`), bấm Lưu → **một** `UpdateTableCommand` = một bước hoàn tác; Command này đưa cột của biểu đồ cùng card về đúng chỗ khi chèn/xoá cột.
 - [x] **Dán từ Excel/Google Sheets** (TSV, hiểu ngoặc kép/ô nhiều dòng, tự nở bảng) và nhập CSV (tự nhận `,` / `;`, bỏ BOM) — cả trong trình sửa lẫn nút "Nhập CSV…" ở mục Card; xuất bảng ra CSV (UTF-8 có BOM để Excel đọc đúng tiếng Việt). Giới hạn 1000 hàng × 100 cột.
-- [x] Hiển thị trên canvas: node hiện **thẻ thu nhỏ** của bảng đầu tiên trong card (tối đa 5×4 ô, phần còn lại "…"); bấm thẻ mở trình sửa. *Chưa làm:* thẻ chưa có trong xuất SVG (node vẫn cao đúng nhưng phần thẻ để trống).
+- [x] Hiển thị trên canvas: node hiện **thẻ thu nhỏ** của bảng đầu tiên trong card (tối đa 5×4 ô, phần còn lại "…"); bấm thẻ mở trình sửa. Node được kéo to tay thì thẻ lấp đầy chỗ trống (thêm hàng/cột, ô giãn rộng). *Chưa làm:* thẻ chưa có trong xuất SVG (node vẫn cao đúng nhưng phần thẻ để trống).
 - [x] Đo chiều cao node có tính khối (`render/tableThumb.ts` dùng chung cho đo/vẽ/dò bấm): ô thẻ có bề rộng cố định nên bước đo không phải đo chữ; chữ đã cắt cho vừa ô được cache theo object bảng (WeakMap, tự hết hạn khi Command thay bảng mới).
 
 ### M3 — Hình ảnh (nâng cấp)

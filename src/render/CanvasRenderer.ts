@@ -41,10 +41,11 @@ import { getRootIds } from "../core/tree";
 import type { NodeMeasurer } from "../layout";
 import {
   getThumbLayout,
+  getNodeThumbTable,
+  thumbLayoutForTable,
   thumbReservedHeight,
   thumbRect,
   THUMB_PAD,
-  THUMB_CELL_W,
   THUMB_ROW_H,
   THUMB_MORE_W,
   THUMB_FONT,
@@ -172,6 +173,77 @@ export class CanvasRenderer {
     this.cssHeight = rect.height;
   }
 
+  /** Kích thước phần CHỮ của node (chưa kể hàng Tag, thẻ bảng) — dùng
+   *  cho getMeasurer và để biết thẻ bảng còn bao nhiêu chỗ lúc vẽ (M2). */
+  private measureTextBox(node: MindNode, isRoot: boolean): { width: number; height: number } {
+    // P2.6b-1 — fontSize null dùng đúng cỡ mặc định cũ (15/13), nên
+    // với node chưa từng đụng vào tính năng này, mọi phép tính dưới
+    // đây cho ra kết quả HỆT NHƯ TRƯỚC — không có node nào tự đổi
+    // hình dạng chỉ vì bản này thêm tính năng mới.
+    const fontSize = node.fontSize ?? (isRoot ? 15 : 13);
+    const fontWeight = isRoot ? "600" : "400";
+    // P2.6c — dùng ĐÚNG font stack như lúc vẽ (drawNode), nếu không
+    // đo bằng font hệ thống mà vẽ bằng font tuỳ chỉnh sẽ ra bề rộng
+    // sai lệch, chữ dễ bị tràn hoặc chừa dư khoảng trống.
+    const fontStack = node.fontFamily
+      ? `${node.fontFamily}, -apple-system, Segoe UI, sans-serif`
+      : "-apple-system, Segoe UI, sans-serif";
+    this.ctx.font = `${fontWeight} ${fontSize}px ${fontStack}`;
+
+    // P2.7f — checkbox hoàn thành (nếu có) chiếm thêm bề ngang, phải
+    // tính vào đây — nếu không, node có checkbox sẽ bị đo HẸP HƠN
+    // cần thiết (vì lúc vẽ đã dịch chữ sang phải nhường chỗ, nhưng
+    // lúc đo lại không cộng thêm khoảng đó), khiến chữ chật/tràn oan.
+    const checkboxSpace = node.checked !== null ? 14 + 6 : 0;
+
+    let width: number;
+    let height: number;
+
+    if (node.textFit === "wrap") {
+      // Cần một bề rộng CỐ ĐỊNH để có gì đó mà ngắt dòng vào — nếu
+      // không thì rộng tự động sẽ luôn "vừa đủ 1 dòng", không bao
+      // giờ thật sự cần xuống dòng. Dùng manualWidth nếu người dùng
+      // đã tự đặt, không thì lấy một cỡ mặc định vừa phải.
+      const wrapWidth = node.manualWidth ?? 200;
+      const innerWidth = wrapWidth - 24 - checkboxSpace;
+      const lines = this.wrapText(node.text || "", innerWidth);
+      const lineHeight = Math.round(fontSize * 1.35);
+      width = wrapWidth;
+      height = Math.max(isRoot ? 46 : 36, lines.length * lineHeight + 16);
+    } else {
+      // "auto" VÀ "shrink" đo GIỐNG HỆT NHAU — khác nhau chỉ ở lúc
+      // VẼ (auto cắt bớt bằng "...", shrink tự thu nhỏ cỡ chữ). Nếu
+      // người dùng không đặt manualWidth, "shrink" thực chất không
+      // có gì để co vào (rộng tự động đã luôn vừa đủ 1 dòng) — chỉ
+      // thật sự phát huy tác dụng khi kết hợp với một manualWidth
+      // hẹp hơn nội dung cần.
+      const textWidth = this.ctx.measureText(node.text || "").width;
+      width = Math.max(60, Math.min(320, textWidth + 32 + checkboxSpace));
+      const baseHeight = isRoot ? 46 : 36;
+      height = Math.max(baseHeight, Math.round(fontSize * 1.8) + 12);
+    }
+
+    return { width, height };
+  }
+
+  /** M2 — bố cục thẻ bảng theo khoảng trống THẬT của node lúc vẽ/dò bấm
+   *  (node kéo to ra thì thẻ hiện thêm hàng/cột, ô giãn rộng). Chỗ cho
+   *  chữ giữ đúng như lúc đo; phần còn lại (trừ hàng Tag) là của thẻ. */
+  private thumbLayoutForNode(map: MindMap, node: MindNode): ThumbLayout | null {
+    const table = getNodeThumbTable(map, node);
+    if (!table) return null;
+    // Cùng quy ước "gốc" với lúc đo (layout/index.ts: mọi node không có
+    // cha, kể cả nhánh trôi), để chỗ cho chữ khớp đúng chiều cao đã đo.
+    const textHeight = this.measureTextBox(node, node.parentId === null).height;
+    const tagRow = node.tagIds.length > 0 ? LABEL_ROW_HEIGHT : 0;
+    const box = {
+      width: node.width - THUMB_PAD * 2,
+      height: node.height - tagRow - THUMB_PAD - textHeight,
+    };
+    const manual = node.manualWidth != null || node.manualHeight != null;
+    return thumbLayoutForTable(table, box, !manual);
+  }
+
   /** Hàm đo chữ để tiêm vào layout/applyLayout (xem ghi chú kiến trúc
    *  trong layout/index.ts về lý do tách riêng việc đo khỏi việc xếp).
    *  P2.7e — nhận thêm map để tra TÊN Tag qua tagIds (trước đây
@@ -179,52 +251,7 @@ export class CanvasRenderer {
   getMeasurer(map: MindMap): NodeMeasurer {
     const tagNameById = new Map(map.tags.map((t) => [t.id, t.name]));
     return (node: MindNode, isRoot: boolean) => {
-      // P2.6b-1 — fontSize null dùng đúng cỡ mặc định cũ (15/13), nên
-      // với node chưa từng đụng vào tính năng này, mọi phép tính dưới
-      // đây cho ra kết quả HỆT NHƯ TRƯỚC — không có node nào tự đổi
-      // hình dạng chỉ vì bản này thêm tính năng mới.
-      const fontSize = node.fontSize ?? (isRoot ? 15 : 13);
-      const fontWeight = isRoot ? "600" : "400";
-      // P2.6c — dùng ĐÚNG font stack như lúc vẽ (drawNode), nếu không
-      // đo bằng font hệ thống mà vẽ bằng font tuỳ chỉnh sẽ ra bề rộng
-      // sai lệch, chữ dễ bị tràn hoặc chừa dư khoảng trống.
-      const fontStack = node.fontFamily
-        ? `${node.fontFamily}, -apple-system, Segoe UI, sans-serif`
-        : "-apple-system, Segoe UI, sans-serif";
-      this.ctx.font = `${fontWeight} ${fontSize}px ${fontStack}`;
-
-      // P2.7f — checkbox hoàn thành (nếu có) chiếm thêm bề ngang, phải
-      // tính vào đây — nếu không, node có checkbox sẽ bị đo HẸP HƠN
-      // cần thiết (vì lúc vẽ đã dịch chữ sang phải nhường chỗ, nhưng
-      // lúc đo lại không cộng thêm khoảng đó), khiến chữ chật/tràn oan.
-      const checkboxSpace = node.checked !== null ? 14 + 6 : 0;
-
-      let width: number;
-      let height: number;
-
-      if (node.textFit === "wrap") {
-        // Cần một bề rộng CỐ ĐỊNH để có gì đó mà ngắt dòng vào — nếu
-        // không thì rộng tự động sẽ luôn "vừa đủ 1 dòng", không bao
-        // giờ thật sự cần xuống dòng. Dùng manualWidth nếu người dùng
-        // đã tự đặt, không thì lấy một cỡ mặc định vừa phải.
-        const wrapWidth = node.manualWidth ?? 200;
-        const innerWidth = wrapWidth - 24 - checkboxSpace;
-        const lines = this.wrapText(node.text || "", innerWidth);
-        const lineHeight = Math.round(fontSize * 1.35);
-        width = wrapWidth;
-        height = Math.max(isRoot ? 46 : 36, lines.length * lineHeight + 16);
-      } else {
-        // "auto" VÀ "shrink" đo GIỐNG HỆT NHAU — khác nhau chỉ ở lúc
-        // VẼ (auto cắt bớt bằng "...", shrink tự thu nhỏ cỡ chữ). Nếu
-        // người dùng không đặt manualWidth, "shrink" thực chất không
-        // có gì để co vào (rộng tự động đã luôn vừa đủ 1 dòng) — chỉ
-        // thật sự phát huy tác dụng khi kết hợp với một manualWidth
-        // hẹp hơn nội dung cần.
-        const textWidth = this.ctx.measureText(node.text || "").width;
-        width = Math.max(60, Math.min(320, textWidth + 32 + checkboxSpace));
-        const baseHeight = isRoot ? 46 : 36;
-        height = Math.max(baseHeight, Math.round(fontSize * 1.8) + 12);
-      }
+      let { width, height } = this.measureTextBox(node, isRoot);
 
       // P2.2 — có nhãn thì node cao thêm một hàng, và rộng ra đủ để
       // chứa trọn hàng viên thuốc đó nếu nó rộng hơn phần chữ chính.
@@ -1096,7 +1123,7 @@ export class CanvasRenderer {
     // node (bỏ chừa hàng nhãn ở đáy), không phải giữa toàn bộ chiều cao.
     // M2 — thẻ bảng (nếu có) nằm ngay trên hàng Tag, cũng bị trừ ra.
     const tagRowHeight = node.tagIds.length > 0 ? LABEL_ROW_HEIGHT : 0;
-    const thumb = getThumbLayout(map, node);
+    const thumb = this.thumbLayoutForNode(map, node);
     const textAreaHeight = node.height - tagRowHeight - thumbReservedHeight(thumb);
     // P2.3 — chừa chỗ cho CẢ HAI icon góc (ghi chú bên trái, link bên
     // phải) nếu có, để chữ chính không đè lên chúng khi node hẹp.
@@ -1269,7 +1296,7 @@ export class CanvasRenderer {
 
   /** M2 — chữ đã cắt cho vừa ô của từng bảng, cache theo object bảng
    *  (xem ghi chú hiệu năng đầu file render/tableThumb.ts). */
-  private thumbTextCache = new WeakMap<TableBlock, string[][]>();
+  private thumbTextCache = new WeakMap<TableBlock, Map<string, string[][]>>();
 
   private fitThumbText(text: string, maxWidth: number): string {
     const ctx = this.ctx;
@@ -1295,18 +1322,25 @@ export class CanvasRenderer {
     const rows = thumb.cells.length;
     const lineColor = isRoot ? "rgba(255,255,255,0.55)" : "rgba(31,41,51,0.22)";
     const textColor = node.color || (isRoot ? "#ffffff" : "#1f2933");
-    const gridW = cols * THUMB_CELL_W;
+    const gridW = cols * layout.cellW;
     const gridH = rows * THUMB_ROW_H;
 
     ctx.save();
     ctx.font = THUMB_FONT;
-    let fitted = this.thumbTextCache.get(layout.table);
+    const cellW = layout.cellW;
+    let byShape = this.thumbTextCache.get(layout.table);
+    if (!byShape) {
+      byShape = new Map();
+      this.thumbTextCache.set(layout.table, byShape);
+    }
+    const shapeKey = `${rows}x${cols}@${cellW}/${thumb.headerRow ? 1 : 0}`;
+    let fitted = byShape.get(shapeKey);
     if (!fitted) {
       fitted = thumb.cells.map((row, r) => {
         ctx.font = r === 0 && thumb.headerRow ? `600 ${THUMB_FONT}` : THUMB_FONT;
-        return row.map((v) => this.fitThumbText(v, THUMB_CELL_W - 6));
+        return row.map((v) => this.fitThumbText(v, cellW - 6));
       });
-      this.thumbTextCache.set(layout.table, fitted);
+      byShape.set(shapeKey, fitted);
     }
 
     ctx.fillStyle = isRoot ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.75)";
@@ -1325,7 +1359,7 @@ export class CanvasRenderer {
       ctx.lineTo(rect.x + gridW, y);
     }
     for (let c = 0; c <= cols; c++) {
-      const x = Math.round(rect.x + c * THUMB_CELL_W) + 0.5;
+      const x = Math.round(rect.x + c * cellW) + 0.5;
       ctx.moveTo(x, rect.y);
       ctx.lineTo(x, rect.y + gridH);
     }
@@ -1338,9 +1372,9 @@ export class CanvasRenderer {
       row.forEach((text, c) => {
         if (!text) return;
         const align = thumb.align[c] ?? "left";
-        const cellX = rect.x + c * THUMB_CELL_W;
+        const cellX = rect.x + c * cellW;
         ctx.textAlign = align;
-        const tx = align === "left" ? cellX + 3 : align === "right" ? cellX + THUMB_CELL_W - 3 : cellX + THUMB_CELL_W / 2;
+        const tx = align === "left" ? cellX + 3 : align === "right" ? cellX + cellW - 3 : cellX + cellW / 2;
         ctx.fillText(text, tx, rect.y + r * THUMB_ROW_H + THUMB_ROW_H / 2);
       });
     });
@@ -1600,7 +1634,7 @@ export class CanvasRenderer {
   /** M2 — bấm trúng thẻ thu nhỏ của bảng thì trả về id bảng (để mở
    *  trình sửa), không thì null. Dùng đúng thumbRect như lúc vẽ. */
   hitTestTableThumb(map: MindMap, node: MindNode, screenX: number, screenY: number, view: ViewTransform): string | null {
-    const layout = getThumbLayout(map, node);
+    const layout = this.thumbLayoutForNode(map, node);
     if (!layout) return null;
     const { x: wx, y: wy } = this.toWorld(screenX, screenY, view);
     const r = thumbRect(node, layout, node.tagIds.length > 0 ? LABEL_ROW_HEIGHT : 0);
@@ -1640,7 +1674,7 @@ export class CanvasRenderer {
     if (node.checked === null) return false;
     const { x: wx, y: wy } = this.toWorld(screenX, screenY, view);
     const textAreaHeight =
-      node.height - (node.tagIds.length > 0 ? LABEL_ROW_HEIGHT : 0) - thumbReservedHeight(getThumbLayout(map, node));
+      node.height - (node.tagIds.length > 0 ? LABEL_ROW_HEIGHT : 0) - thumbReservedHeight(this.thumbLayoutForNode(map, node));
     const CHECKBOX_SIZE = 14;
     const TEXT_PADDING_X = 10;
     const cbX = node.x + TEXT_PADDING_X;

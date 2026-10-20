@@ -3504,6 +3504,7 @@ Trình sửa bảng, dán từ Excel/Google Sheets, nhập/xuất CSV, thẻ thu
 - Phím trong hộp thoại bị chặn không lan ra window (kể cả khi tiêu điểm còn ở ngoài, qua listener pha capture) — nếu không, Delete/Ctrl+Z của canvas sẽ chạy nhầm trên map khi đang sửa bảng.
 - Sửa kèm: `#side-panel .small-btn { width: 100% }` thắng `.card-add > .btn` về độ ưu tiên CSS nên hàng nút ↑ ↓ ✕ của khối (từ M1) bị tràn khỏi panel.
 - Lỗi thật bắt được khi chạy thử trên trình duyệt: mở trình sửa bằng cách bấm thẻ trên canvas thì mousedown kéo tiêu điểm về `body` → Esc không đóng được hộp thoại. Sửa bằng cách hoãn focus một nhịp + listener capture nói trên.
+- Sửa sau phản hồi thử trên exe (20/10): kéo node to ra mà thẻ vẫn chỉ 5×4 ô cố định. Giờ lúc vẽ thẻ lấp đầy khoảng trống thật (`thumbLayoutForTable(table, box, capped)`): node kéo to tay hiện thêm hàng/cột, ô giãn tới 140px; node tự động giữ trần 5×4. Phần đo chữ tách thành `measureTextBox` để biết chữ chiếm bao nhiêu chỗ.
 - Test: `core/table.test.ts`, `render/tableThumb.test.ts`, thêm nhóm `UpdateTableCommand` trong `core/cardCommands.test.ts` (172 test / 16 file).
 
 ### Checklist kiểm thử tay — M2 (làm trước khi coi M2 là xong)
@@ -3523,6 +3524,7 @@ Trình sửa bảng, dán từ Excel/Google Sheets, nhập/xuất CSV, thẻ thu
 - [ ] Lưu → Ctrl+Z **một lần** — toàn bộ thay đổi của phiên sửa biến mất; Ctrl+Shift+Z làm lại
 - [ ] Sửa rồi bấm Huỷ / Esc / bấm ra ngoài — hỏi "Bỏ các thay đổi chưa lưu?"; chưa sửa gì thì đóng luôn
 - [ ] Đang mở hộp thoại, bấm Delete khi tiêu điểm ở nút bấm — node trên canvas KHÔNG bị xoá
+- [ ] Kéo node có bảng to ra (hoặc đặt Rộng/Cao trong panel) — thẻ hiện thêm hàng/cột, ô rộng ra; "Đặt lại kích thước tự động" — thẻ về 5×4
 - [ ] Bảng lớn (ví dụ 20×10) — thẻ chỉ hiện 5 cột × 4 hàng, có "…" bên phải và bên dưới; chữ dài bị cắt bằng "…"
 - [ ] Node có cả Tag và bảng — thẻ nằm trên hàng Tag, không đè nhau; node có checkbox hoàn thành vẫn bấm checkbox được
 - [ ] Xuất `.t17m`/JSON rồi mở lại — bảng giữ nguyên

@@ -12,6 +12,7 @@ import {
   THUMB_MORE_W,
   THUMB_MORE_H,
   THUMB_PAD,
+  THUMB_CELL_W_MAX,
 } from "./tableThumb";
 
 function mapWithCard(blocks: ReturnType<typeof createTextBlock | typeof createTableBlock>[]) {
@@ -58,5 +59,41 @@ describe("Thẻ thu nhỏ của bảng trên node (M2)", () => {
     expect(r.x).toBe(100 + (200 - layout.width) / 2);
     expect(r.y + r.height).toBe(node.y + node.height - 22 - THUMB_PAD);
     expect(r.y).toBeGreaterThanOrEqual(node.y + 36);
+  });
+
+  it("khung bằng đúng cỡ mặc định thì ra đúng bố cục mặc định (node tự động không đổi)", () => {
+    const t = createTableBlock(10, 8);
+    const def = thumbLayoutForTable(t);
+    const same = thumbLayoutForTable(t, { width: def.width, height: def.height }, true);
+    expect(same).toMatchObject({ width: def.width, height: def.height, cellW: THUMB_CELL_W });
+  });
+
+  it("node tự động nhưng rộng (tiêu đề dài): ô giãn rộng, vẫn giữ trần 5×4", () => {
+    const l = thumbLayoutForTable(createTableBlock(10, 8), { width: 600, height: 400 }, true);
+    expect(l.thumb.cells).toHaveLength(4);
+    expect(l.thumb.align).toHaveLength(5);
+    expect(l.cellW).toBeGreaterThan(THUMB_CELL_W);
+    expect(l.cellW).toBeLessThanOrEqual(THUMB_CELL_W_MAX);
+    expect(l.width).toBeLessThanOrEqual(600);
+  });
+
+  it("node kéo to tay: hiện thêm hàng/cột vừa khung, bảng nhỏ thì hiện đủ không có '…'", () => {
+    const big = thumbLayoutForTable(createTableBlock(30, 12), { width: 500, height: 200 }, false);
+    expect(big.thumb.cells.length).toBe(Math.floor((200 - THUMB_MORE_H) / THUMB_ROW_H));
+    expect(big.thumb.align.length).toBe(Math.floor((500 - THUMB_MORE_W) / THUMB_CELL_W));
+    expect(big.thumb).toMatchObject({ moreRows: true, moreCols: true });
+    expect(big.width).toBeLessThanOrEqual(500);
+    expect(big.height).toBeLessThanOrEqual(200);
+
+    const small = thumbLayoutForTable(createTableBlock(7, 4), { width: 500, height: 200 }, false);
+    expect(small.thumb.cells).toHaveLength(7);
+    expect(small.thumb).toMatchObject({ moreRows: false, moreCols: false });
+    expect(small.cellW).toBe(Math.min(THUMB_CELL_W_MAX, Math.floor(500 / 4)));
+  });
+
+  it("khung quá nhỏ vẫn hiện ít nhất 1×1", () => {
+    const l = thumbLayoutForTable(createTableBlock(5, 5), { width: 10, height: 5 }, false);
+    expect(l.thumb.cells).toHaveLength(1);
+    expect(l.thumb.align).toHaveLength(1);
   });
 });

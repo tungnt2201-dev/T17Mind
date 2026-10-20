@@ -7,8 +7,10 @@
  * (hitTestTableThumb) — giống lý do hitTestLinkIcon phải khớp chỗ vẽ 🔗.
  *
  * VỀ HIỆU NĂNG: layout chạy lại sau MỖI thay đổi của store, nên kích
- * thước thẻ cố tình chỉ phụ thuộc SỐ hàng/cột hiển thị (ô có bề rộng cố
- * định) — không phải đo chữ từng ô, không cần cache cho bước đo. Phần
+ * thước thẻ lúc ĐO cố tình chỉ phụ thuộc SỐ hàng/cột hiển thị (ô có bề
+ * rộng cố định) — không phải đo chữ từng ô, không cần cache cho bước đo.
+ * Lúc VẼ, thẻ lấp đầy khoảng trống thật của node (node được kéo to ra thì
+ * hiện thêm hàng/cột, ô giãn rộng) — xem thumbLayoutForTable. Phần
  * tốn kém duy nhất (cắt chữ cho vừa ô bằng measureText) được
  * CanvasRenderer cache theo đúng đối tượng TableBlock (WeakMap) — mọi
  * Command sửa bảng đều thay bằng object mới, nên cache tự hết hạn đúng
@@ -41,23 +43,61 @@ export function getNodeThumbTable(map: MindMap, node: MindNode): TableBlock | nu
 export interface ThumbLayout {
   table: TableBlock;
   thumb: TableThumbnail;
+  /** Bề rộng mỗi ô — mặc định THUMB_CELL_W, giãn ra (tới THUMB_CELL_W_MAX)
+   *  khi node rộng hơn cần thiết. */
+  cellW: number;
   /** Kích thước phần lưới (không kể THUMB_PAD). */
   width: number;
   height: number;
 }
 
-export function thumbLayoutForTable(table: TableBlock): ThumbLayout {
-  const thumb = tableThumbnail(table, THUMB_MAX_ROWS, THUMB_MAX_COLS);
-  const cols = thumb.align.length;
-  const rows = thumb.cells.length;
+/** Ô thẻ giãn ra tối đa bằng này khi node rộng (đủ cho chữ dài hơn). */
+export const THUMB_CELL_W_MAX = 140;
+
+/** Số mục (hàng/cột) vừa với `space` px, mỗi mục `unit` px; chừa chỗ
+ *  cho dấu "…" (`more` px) nếu không hiện hết. Luôn ít nhất 1. */
+function fitCount(total: number, space: number, unit: number, more: number, cap: number): number {
+  const limit = Math.min(total, cap);
+  const all = Math.floor(space / unit);
+  if (all >= total && total <= cap) return Math.max(1, total);
+  return Math.max(1, Math.min(limit, Math.floor((space - more) / unit)));
+}
+
+/**
+ * Bố cục thẻ của một bảng.
+ * - Không truyền `box`: kích thước mặc định (tối đa 5×4 ô bề rộng cố
+ *   định) — dùng khi ĐO node tự động.
+ * - Có `box` (khoảng trống thật trong node lúc vẽ/dò bấm): hiện nhiều
+ *   hàng/cột nhất vừa khung, ô giãn rộng cho kín bề ngang. `capped` =
+ *   true giữ trần 5×4 (node tự động — khung chỉ rộng vì chữ tiêu đề dài);
+ *   false khi người dùng đã tự kéo node to ra (manualWidth/Height).
+ */
+export function thumbLayoutForTable(
+  table: TableBlock,
+  box: { width: number; height: number } | null = null,
+  capped = true
+): ThumbLayout {
+  const totalRows = table.cells.length;
+  const totalCols = table.align.length;
+  const maxRows = capped ? THUMB_MAX_ROWS : Number.POSITIVE_INFINITY;
+  const maxCols = capped ? THUMB_MAX_COLS : Number.POSITIVE_INFINITY;
+  const rows = box ? fitCount(totalRows, box.height, THUMB_ROW_H, THUMB_MORE_H, maxRows) : Math.min(totalRows, THUMB_MAX_ROWS);
+  const cols = box ? fitCount(totalCols, box.width, THUMB_CELL_W, THUMB_MORE_W, maxCols) : Math.min(totalCols, THUMB_MAX_COLS);
+  const thumb = tableThumbnail(table, rows, cols);
+  const moreW = thumb.moreCols ? THUMB_MORE_W : 0;
+  const cellW = box
+    ? Math.max(THUMB_CELL_W, Math.min(THUMB_CELL_W_MAX, Math.floor((box.width - moreW) / cols)))
+    : THUMB_CELL_W;
   return {
     table,
     thumb,
-    width: cols * THUMB_CELL_W + (thumb.moreCols ? THUMB_MORE_W : 0),
+    cellW,
+    width: cols * cellW + moreW,
     height: rows * THUMB_ROW_H + (thumb.moreRows ? THUMB_MORE_H : 0),
   };
 }
 
+/** Bố cục mặc định (dùng khi đo node). */
 export function getThumbLayout(map: MindMap, node: MindNode): ThumbLayout | null {
   const table = getNodeThumbTable(map, node);
   return table ? thumbLayoutForTable(table) : null;
