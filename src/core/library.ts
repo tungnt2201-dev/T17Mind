@@ -98,3 +98,20 @@ export function listLibrary(
     return a.card.title.localeCompare(b.card.title, "vi");
   });
 }
+
+/** Dòng trích ngắn của card (đoạn văn bản đầu tiên có chữ, gộp thành một
+ *  dòng, tối đa `max` ký tự) — hiện trên thẻ card trong Thư viện. */
+export function cardSnippet(card: Card, max = 90): string {
+  const text = card.blocks.find((b) => b.type === "text" && b.text.trim());
+  if (!text || text.type !== "text") return "";
+  const one = text.text.replace(/\s+/g, " ").trim();
+  return one.length > max ? `${one.slice(0, max - 1).trimEnd()}…` : one;
+}
+
+/** Màu nhấn ổn định cho mỗi card (dải màu bên trái thẻ) — băm id ra sắc
+ *  độ, để các card khác nhau dễ phân biệt khi xem lướt. */
+export function cardAccentHue(cardId: string): number {
+  let h = 0;
+  for (let i = 0; i < cardId.length; i++) h = (h * 31 + cardId.charCodeAt(i)) >>> 0;
+  return h % 360;
+}

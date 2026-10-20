@@ -172,3 +172,7 @@ export interface LibraryState {
   expandedCardId: string | null;
 }
 export const libraryStore = writable<LibraryState>({ open: false, query: "", filter: "all", tagId: null, expandedCardId: null });
+
+/** Card đang mở dạng trang tài liệu (CardPageModal), null = đóng.
+ *  `focusBlockId` = khối cần cuộn tới khi mở (ví dụ bấm biểu tượng bảng). */
+export const cardPageStore = writable<{ cardId: string; focusBlockId: string | null } | null>(null);

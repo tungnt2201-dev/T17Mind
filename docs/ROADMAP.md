@@ -139,6 +139,7 @@ Phần 1 đặt Block ở cấp **map** (an toàn, dễ nhập/xuất `.t17m`). 
 - [x] Khung "Thư viện" bên phải (nút 📖 trên thanh công cụ): danh sách, tìm theo nội dung (không phân biệt dấu — tên, văn bản, ô bảng, chú thích ảnh), lọc Tất cả / Inbox / Đang dùng và theo Tag của các node đang gắn card; **kéo card thả vào map** thành node (thả lên node → nhánh con, vùng trống → nhánh trôi tại chỗ thả); nút "Gắn vào node đang chọn", "Thêm làm nhánh con".
 - [x] "Card này đang xuất hiện ở đâu": danh sách node đang gắn card (trong Thư viện và mục Card của node), bấm để nhảy tới. *Chưa làm:* card dùng chung **giữa nhiều map** — cần chốt cách "nâng" card lên cấp workspace (mục 5.3): đồng bộ thật hay "sao chép kèm liên kết nguồn".
 - [x] Hộp thư **Inbox**: "+ Card nhanh" tạo card chưa gắn node nào, sửa ngay trong Thư viện (kể cả thêm ảnh/bảng).
+- [x] *(bổ sung theo phản hồi)* Node hiện trích văn bản của card; node kéo quá nhỏ → hàng biểu tượng đính kèm (bấm mở card); **trang card** (văn bản/ảnh/bảng xen kẽ, sửa trên trang); thẻ card nổi (giả 3D) trong Thư viện.
 
 **H2 — Liên kết hai chiều**
 - [ ] Gõ `@` hoặc `[[` trong khối văn bản để liên kết tới card/node; **Backlinks** hiển thị ở thanh bên; di chuột xem trước.

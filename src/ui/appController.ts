@@ -91,7 +91,14 @@ import { getNodeThumbTable } from "../render/tableThumb";
 import { cardImageBlocks, formatBytes, MAP_ASSETS_WARN_BYTES, totalAssetBytes } from "../core/image";
 import { toSafeUrl } from "../core/safeUrl";
 import { toggleShortcutsModal } from "./shortcutsModal";
-import { searchOpenStore, formatPainterModeStore, hasLinkedFileStore, tableEditorStore, contextMenuStore } from "./uiStores";
+import {
+  searchOpenStore,
+  formatPainterModeStore,
+  hasLinkedFileStore,
+  tableEditorStore,
+  contextMenuStore,
+  cardPageStore,
+} from "./uiStores";
 import { parseJsonFile, exportFlatJson } from "../io/json";
 import { loadMap as loadMapFromStorage } from "../io/storage";
 // P1.16 (tối ưu bundle) — xlsx/xmind KHÔNG import tĩnh ở đây nữa, xem
@@ -556,6 +563,11 @@ export class AppController {
       }
     }
     if (errors.length > 0) void showAlert(errors.join(" "));
+  }
+
+  /** Mở card dạng trang tài liệu (components/CardPageModal.svelte), cuộn tới khối `blockId`. */
+  openCardPage(cardId: string, blockId: string | null = null): void {
+    if (this.store.getMap().cards[cardId]) cardPageStore.set({ cardId, focusBlockId: blockId });
   }
 
   /** M3 — xem lớn các ảnh trong card của node, bắt đầu từ khối `blockId`. */
@@ -1448,6 +1460,11 @@ export class AppController {
         if (node) this.store.dispatch(new CreateCardForNodeCommand(node.id, createCard(node.text)));
         break;
       }
+      case "openPage": {
+        const node = nodeId ? this.store.getMap().nodes[nodeId] : null;
+        if (node?.cardId) this.openCardPage(node.cardId);
+        break;
+      }
       case "openTable": {
         const node = nodeId ? this.store.getMap().nodes[nodeId] : null;
         if (node?.cardId && target.kind === "node" && target.tableBlockId) {
@@ -1698,19 +1715,15 @@ export class AppController {
         this.store.dispatch(new UpdateNodeStyleCommand(hitId, { checked: !hitNode.checked }));
         return;
       }
-      // M3 — bấm thẻ ảnh: chọn node và xem lớn các ảnh của card.
-      const thumbImageId = this.renderer.hitTestImageThumb(map, hitNode, x, y, this.view);
-      if (thumbImageId) {
+      // Bấm vào nội dung card trên node (render/cardLayout.ts): ảnh → xem
+      // lớn; bảng → trình sửa bảng; trích văn bản / biểu tượng đính kèm →
+      // mở trang card. Hành động riêng, không chọn-kéo node.
+      const part = this.renderer.hitTestCardPart(map, hitNode, x, y, this.view);
+      if (part && hitNode.cardId) {
         this.selection.selectSingleNode(hitId);
-        this.openNodeImages(hitId, thumbImageId);
-        return;
-      }
-      // M2 — bấm thẻ thu nhỏ của bảng: chọn node và mở trình sửa bảng
-      // (giống bấm icon 🖼 mở ảnh cỡ lớn — một hành động riêng, không kéo).
-      const thumbTableId = this.renderer.hitTestTableThumb(map, hitNode, x, y, this.view);
-      if (thumbTableId && hitNode.cardId) {
-        this.selection.selectSingleNode(hitId);
-        tableEditorStore.set({ cardId: hitNode.cardId, blockId: thumbTableId });
+        if (part.kind === "image") this.openNodeImages(hitId, part.blockId);
+        else if (part.kind === "table") tableEditorStore.set({ cardId: hitNode.cardId, blockId: part.blockId });
+        else this.openCardPage(hitNode.cardId, part.blockId);
         return;
       }
       if (e.ctrlKey || e.metaKey || e.shiftKey) {
@@ -2329,9 +2342,7 @@ export class AppController {
         this.canvas.style.cursor = "pointer";
       } else if (this.renderer.hitTestCheckbox(map, node, screenX, screenY, this.view)) {
         this.canvas.style.cursor = "pointer";
-      } else if (this.renderer.hitTestTableThumb(map, node, screenX, screenY, this.view)) {
-        this.canvas.style.cursor = "pointer";
-      } else if (this.renderer.hitTestImageThumb(map, node, screenX, screenY, this.view)) {
+      } else if (this.renderer.hitTestCardPart(map, node, screenX, screenY, this.view)) {
         this.canvas.style.cursor = "pointer";
       } else if (
         this.selection.ids.size === 1 &&
