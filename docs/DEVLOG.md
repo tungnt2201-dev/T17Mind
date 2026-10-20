@@ -3636,3 +3636,30 @@ Bước kế tiếp theo mục 5.5 ROADMAP (sau M3). Không đổi schema. Phạ
 - [ ] Xoá card trong Thư viện (có hỏi xác nhận) — Ctrl+Z trả lại
 - [ ] Mọi thao tác trên (kéo thả, gắn, tạo, xoá) đều Ctrl+Z / Ctrl+Shift+Z được
 
+---
+
+## Hộp thoại Lưu / Xuất / Mở — chọn thư mục, tên file, định dạng (20/10/2026)
+
+Theo yêu cầu ưu tiên: trước đây Lưu/Xuất trên bản exe chỉ "tải file" kiểu trình duyệt (rơi vào thư mục Downloads, tên cố định `t17mind-export.*`), người dùng không chọn được nơi lưu. Tự động lưu ngầm (IndexedDB) vẫn giữ nguyên làm lưới an toàn.
+
+- **Bản exe** (`io/nativeFs.ts`, Neutralino): Lưu / Lưu thành… / mọi mục Xuất mở **hộp thoại Lưu của Windows** — chọn thư mục, tên file và định dạng (ô "Save as type" có đủ .t17m, .json, .xlsx, .xmind, .opml, .md, .svg, .png; định dạng chọn sẵn = định dạng của mục vừa bấm; gõ tên không đuôi thì tự thêm đuôi; gõ đuôi khác thì ghi đúng định dạng của đuôi đó). Mở… / mọi mục Nhập dùng **hộp thoại Mở của Windows** (cần đường dẫn để biết thư mục).
+  - Thư mục mặc định: lúc mới mở app = thư mục chứa `T17Mind.exe` (`NL_PATH`); sau khi **mở/nhập** một file (.t17m, .json, .xlsx, .xmind, .opml) = thư mục của file đó; sau khi lưu/xuất = thư mục vừa lưu. Chỉ nhớ trong phiên làm việc (mở lại app thì về thư mục exe).
+  - Quyền mới trong `desktop/neutralino.config.json` → `nativeAllowList`: `os.showSaveDialog`, `os.showOpenDialog`, `filesystem.writeBinaryFile`, `filesystem.readBinaryFile`.
+- **Lưu** (Ctrl+S): lần đầu như Lưu thành… (mặc định .t17m — giữ cả ảnh); đã lưu/mở một file .t17m/.json thì ghi đè thẳng file đó không hỏi lại. **Lưu thành…** (Ctrl+Shift+S): luôn hỏi. Xuất không đổi file đang liên kết.
+- **Chrome/Edge**: cùng luồng qua File System Access API (`io/fileSystemAccess.ts` viết lại cho mọi định dạng) — trình duyệt không cho đặt thư mục mặc định theo đường dẫn, nó tự nhớ thư mục lần trước. Trình duyệt khác: tải file như cũ nhưng tên file theo chữ node gốc.
+- Menu Tệp gộp lại: Mới / Mở… / Lưu / Lưu thành… (bỏ "Mở .t17m", "Lưu .t17m" riêng). `io/fileFormats.ts` (thuần, có test): danh sách định dạng, nhận định dạng theo đuôi, đường dẫn Windows/`/`, tên file gợi ý bỏ ký tự cấm. `io/xlsx.ts` thêm `exportXlsxBlob`; xuất PNG trả về Blob để ghi qua hộp thoại.
+- Chạy thử trên Chromium với API Neutralino giả lập (`NL_PATH = C:\Apps\T17Mind`): Ctrl+S lần đầu hỏi đúng `C:\Apps\T17Mind\Chủ đề trung tâm.t17m`, gõ "ban do" → ghi `ban do.t17m` (zip); Ctrl+S lần hai ghi đè không hỏi; Xuất PNG mặc định thư mục vừa lưu, ghi PNG thật; Lưu thành… gõ `.json` → ghi JSON; Mở file ở `E:\Imports` → lần Xuất sau mặc định `E:\Imports`. **Chưa chạy trên Windows thật.**
+
+### Checklist kiểm thử tay — Lưu / Xuất / Mở (bản exe)
+
+- [ ] Mở app từ thư mục mới giải nén, Ctrl+S — hộp thoại Lưu của Windows mở đúng **thư mục chứa T17Mind.exe**, tên gợi ý = chữ node gốc, kiểu file .t17m
+- [ ] Gõ tên không đuôi → Save — file `.t17m` xuất hiện đúng thư mục; mở lại bằng Tệp → Mở… — đủ dữ liệu, cả ảnh
+- [ ] Sửa map, Ctrl+S — không hỏi lại, file được ghi đè (xem giờ sửa đổi của file)
+- [ ] Tệp → Lưu thành… — luôn hỏi; đổi "Save as type" sang .json hoặc gõ tên `.json` — ra file JSON
+- [ ] Xuất → PNG / SVG / Markdown / XLSX / XMind / OPML — mỗi mục mở hộp thoại, chọn sẵn đúng định dạng; file mở được bằng phần mềm tương ứng
+- [ ] Nhập JSON / XLSX / XMind / OPML từ một thư mục khác (ví dụ D:\Tai lieu) — sau đó Ctrl+S hoặc Xuất — hộp thoại mặc định **D:\Tai lieu**
+- [ ] Mở một file .t17m ở thư mục khác, sửa, Ctrl+S — ghi đè đúng file vừa mở (không hỏi)
+- [ ] Bấm Huỷ trong hộp thoại — không có gì xảy ra, không báo lỗi
+- [ ] Lưu vào thư mục không có quyền ghi (ví dụ C:\Windows) — có thông báo "Không lưu được file"
+- [ ] Đóng app, mở lại — map vẫn còn (tự lưu ngầm), thư mục mặc định quay về thư mục exe
+

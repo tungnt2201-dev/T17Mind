@@ -10,7 +10,7 @@
   "enableNativeAPI": true,
   "tokenSecurity": "none",
   "logging": { "enabled": false },
-  "nativeAllowList": ["os.open"],
+  "nativeAllowList": ["os.open", "os.showSaveDialog", "os.showOpenDialog", "filesystem.writeBinaryFile", "filesystem.readBinaryFile"],
   "globalVariables": {},
   "modes": {
     "window": {

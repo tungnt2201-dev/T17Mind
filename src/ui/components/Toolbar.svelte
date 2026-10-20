@@ -43,6 +43,7 @@
   import { THEMES } from "../../core/theme";
   import { toggleShortcutsModal } from "../shortcutsModal";
   import Icon from "./Icon.svelte";
+  import type { FileFormat } from "../../io/fileFormats";
 
   export let store: Store;
   export let selection: SelectionModel;
@@ -104,7 +105,7 @@
   function onImportT17mChange(): void {
     const file = t17mInput.files?.[0];
     t17mInput.value = "";
-    if (file) void controller.importT17m(file);
+    if (file) void controller.importFile(file); // "Mở…" ở trình duyệt không có hộp thoại có đường dẫn
   }
 
   function toggleLinkMode(): void {
@@ -151,6 +152,12 @@
   function runAndClose(action: () => void): void {
     action();
     closeMenu();
+  }
+  /** Nhập một định dạng: bản exe / Chrome-Edge dùng hộp thoại có đường dẫn
+   *  (để thư mục lưu mặc định theo file vừa mở); trình duyệt khác dùng ô
+   *  chọn file thường. */
+  async function importVia(format: FileFormat, input: HTMLInputElement, merge = false): Promise<void> {
+    if (!(await controller.openWithDialog([format], merge))) input.click();
   }
   function onWindowClick(e: MouseEvent): void {
     const target = e.target as HTMLElement | null;
@@ -204,21 +211,15 @@
         <div class="menu-panel" style="top:{menuPos.top}px; left:{menuPos.left}px;">
           <button class="menu-item" on:click={() => runAndClose(() => controller.newMap())}>
             <Icon name="plus" />Mới</button>
-          {#if controller.isFileSystemAccessSupported()}
-            <button class="menu-item" title="Lưu trực tiếp vào file thật trên đĩa (Ctrl+S) — khác 'Xuất JSON' (luôn tải file mới), lần sau ghi thẳng lại đúng file này"
-              on:click={() => runAndClose(() => controller.saveToFile())}>
-              <Icon name="save" />{$hasLinkedFileStore ? "Lưu" : "Lưu file..."}</button>
-            <button class="menu-item" title="Mở một file JSON thật trên đĩa, thay thế map đang mở"
-              on:click={() => runAndClose(() => controller.openFromFile())}>
-              <Icon name="folder" />Mở file...</button>
-          {/if}
-          <div class="menu-sep"></div>
-          <button class="menu-item" title="Mở file .t17m — định dạng nguyên bản của T17Mind, nhúng thật ảnh gắn trên node bên trong (portable, mở lại đủ 100% dữ liệu) — thay thế map đang mở"
-            on:click={() => runAndClose(() => t17mInput.click())}>
-            <Icon name="package" />Mở .t17m</button>
-          <button class="menu-item" title="Lưu map đang mở (kèm mọi ảnh nhúng) ra file .t17m — một file DUY NHẤT, mang đi máy khác mở lại vẫn đủ ảnh"
-            on:click={() => runAndClose(() => controller.exportT17mFile())}>
-            <Icon name="package" />Lưu .t17m</button>
+          <button class="menu-item" title="Mở file .t17m / .json / .xlsx / .xmind / .opml — thay thế map đang mở. Thư mục lưu mặc định chuyển về thư mục của file này"
+            on:click={() => runAndClose(() => void controller.openWithDialog().then((ok) => { if (!ok) t17mInput.click(); }))}>
+            <Icon name="folder" />Mở…</button>
+          <button class="menu-item" title={$hasLinkedFileStore ? "Ghi đè vào file đang mở (Ctrl+S)" : "Chọn thư mục, tên file và định dạng để lưu (Ctrl+S)"}
+            on:click={() => runAndClose(() => void controller.save())}>
+            <Icon name="save" />{$hasLinkedFileStore ? "Lưu" : "Lưu…"}<span class="menu-key">Ctrl+S</span></button>
+          <button class="menu-item" title="Luôn hỏi thư mục, tên file và định dạng (.t17m giữ cả ảnh; .json; hoặc xuất .xlsx/.xmind/.md/.png…)"
+            on:click={() => runAndClose(() => void controller.saveAs())}>
+            <Icon name="package" />Lưu thành…<span class="menu-key">Ctrl+Shift+S</span></button>
         </div>
       {/if}
     </div>
@@ -228,18 +229,18 @@
         <Icon name="download" /><span class="label">Nhập</span><span class="chevron">▾</span></button>
       {#if openMenu === "import"}
         <div class="menu-panel" style="top:{menuPos.top}px; left:{menuPos.left}px;">
-          <button class="menu-item" on:click={() => runAndClose(() => jsonInput.click())}>
+          <button class="menu-item" on:click={() => runAndClose(() => void importVia("json", jsonInput))}>
             <Icon name="download" />Nhập JSON</button>
           <button class="menu-item" title="Ghép thêm một file JSON khác vào map đang mở, thành (các) nhánh trôi mới — tự tránh trùng ID, gộp Tag theo tên, hoàn tác được bằng Ctrl+Z"
-            on:click={() => runAndClose(() => jsonMergeInput.click())}>
+            on:click={() => runAndClose(() => void importVia("json", jsonMergeInput, true))}>
             <Icon name="plus" />Ghép JSON</button>
-          <button class="menu-item" on:click={() => runAndClose(() => xlsxInput.click())}>
+          <button class="menu-item" on:click={() => runAndClose(() => void importVia("xlsx", xlsxInput))}>
             <Icon name="table" />Nhập XLSX</button>
           <button class="menu-item" title="Nhập file .xmind (XMind Zen/2024+, cần có content.json bên trong) — thay thế map đang mở"
-            on:click={() => runAndClose(() => xmindInput.click())}>
+            on:click={() => runAndClose(() => void importVia("xmind", xmindInput))}>
             <Icon name="grid" />Nhập XMind</button>
           <button class="menu-item" title="Nhập file .opml (Workflowy, Dynalist, OmniOutliner...) — thay thế map đang mở"
-            on:click={() => runAndClose(() => opmlInput.click())}>
+            on:click={() => runAndClose(() => void importVia("opml", opmlInput))}>
             <Icon name="list" />Nhập OPML</button>
           <div class="menu-sep"></div>
           <button class="menu-item" title="Xem quy tắc định dạng file JSON mà T17Mind hiểu được" id="btn-help"
@@ -254,23 +255,23 @@
         <Icon name="upload" /><span class="label">Xuất</span><span class="chevron">▾</span></button>
       {#if openMenu === "export"}
         <div class="menu-panel" style="top:{menuPos.top}px; left:{menuPos.left}px;">
-          <button class="menu-item" on:click={() => runAndClose(() => controller.exportJson())}>
+          <button class="menu-item" on:click={() => runAndClose(() => void controller.exportAs("json"))}>
             <Icon name="upload" />Xuất JSON</button>
-          <button class="menu-item" on:click={() => runAndClose(() => controller.exportXlsx())}>
+          <button class="menu-item" on:click={() => runAndClose(() => void controller.exportAs("xlsx"))}>
             <Icon name="table" />XLSX</button>
           <button class="menu-item" title="Xuất ra file .xmind mở được bằng phần mềm XMind — không kèm màu chủ đề/hiệu ứng riêng của XMind, chỉ giữ cấu trúc/màu nền/ghi chú/Tag/quan hệ chéo cơ bản"
-            on:click={() => runAndClose(() => controller.exportXmindFile())}>
+            on:click={() => runAndClose(() => void controller.exportAs("xmind"))}>
             <Icon name="grid" />XMind</button>
           <button class="menu-item" title="Xuất outline chuẩn (.opml) — mở được bằng Workflowy/Dynalist/OmniOutliner... chỉ gồm cấu trúc/ghi chú/checkbox, không kèm màu sắc/Tag"
-            on:click={() => runAndClose(() => controller.exportOpmlFile())}>
+            on:click={() => runAndClose(() => void controller.exportAs("opml"))}>
             <Icon name="list" />OPML</button>
           <button class="menu-item" title="Xuất dạng danh sách lồng nhau (.md) — chỉ gồm cấu trúc/checkbox/Tag/link, không kèm màu sắc hay dữ liệu khác"
-            on:click={() => runAndClose(() => controller.exportMarkdownFile())}>
+            on:click={() => runAndClose(() => void controller.exportAs("md"))}>
             <Icon name="doc-text" />Markdown</button>
           <button class="menu-item" title="Xuất ảnh vector (.svg) — khung/màu/chữ/đường nối, không kèm Tag/checkbox/icon hay hiệu ứng Kiểu tự nhiên"
-            on:click={() => runAndClose(() => controller.exportSvgFile())}>
+            on:click={() => runAndClose(() => void controller.exportAs("svg"))}>
             <Icon name="image" />SVG</button>
-          <button class="menu-item" on:click={() => runAndClose(() => controller.exportPng())}>
+          <button class="menu-item" on:click={() => runAndClose(() => void controller.exportAs("png"))}>
             <Icon name="image" />PNG</button>
         </div>
       {/if}
@@ -388,4 +389,4 @@
 <input bind:this={xlsxInput} type="file" accept=".xlsx,.xls" on:change={onImportXlsxChange} style="display:none" />
 <input bind:this={xmindInput} type="file" accept=".xmind" on:change={onImportXmindChange} style="display:none" />
 <input bind:this={opmlInput} type="file" accept=".opml,.xml" on:change={onImportOpmlChange} style="display:none" />
-<input bind:this={t17mInput} type="file" accept=".t17m" on:change={onImportT17mChange} style="display:none" />
+<input bind:this={t17mInput} type="file" accept=".t17m,.json,.xlsx,.xls,.xmind,.opml,.xml" on:change={onImportT17mChange} style="display:none" />
