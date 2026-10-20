@@ -157,3 +157,18 @@ export interface ContextMenuState {
   onPick: (action: import("./contextMenuModel").MenuAction) => void;
 }
 export const contextMenuStore = writable<ContextMenuState | null>(null);
+
+/** H1 — kiểu dữ liệu kéo-thả của một card (giá trị = cardId), từ khung
+ *  Thư viện sang canvas. */
+export const CARD_DRAG_TYPE = "application/x-t17mind-card";
+
+/** H1 — trạng thái giao diện của khung Thư viện Card (không lưu vào map). */
+export interface LibraryState {
+  open: boolean;
+  query: string;
+  filter: "all" | "inbox" | "used";
+  tagId: string | null;
+  /** Card đang mở rộng để xem/sửa trong khung. */
+  expandedCardId: string | null;
+}
+export const libraryStore = writable<LibraryState>({ open: false, query: "", filter: "all", tagId: null, expandedCardId: null });

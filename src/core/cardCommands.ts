@@ -7,7 +7,7 @@
  * khi Command tự dọn ảnh/biểu đồ phụ thuộc.
  * ---------------------------------------------------------------------
  */
-import { CompositeCommand, type Command } from "./commands";
+import { AddChildCommand, CompositeCommand, CreateFloatingBranchCommand, type Command } from "./commands";
 import type { Block, Card, ImageAsset, MindMap, TableBlock } from "./types";
 import { deepClone, requireNode } from "./tree";
 import { cardAssetIds, createCard, createImageBlock, isAssetReferenced } from "./cards";
@@ -255,6 +255,68 @@ export class MoveBlockCommand implements Command {
     const [b] = card.blocks.splice(cur, 1);
     card.blocks.splice(this.oldIndex, 0, b as Block);
   }
+}
+
+/** H1 — thêm card MỚI vào map mà không gắn node nào ("Card nhanh" ở
+ *  Inbox của Thư viện). */
+export class AddCardCommand implements Command {
+  readonly label = "Tạo card";
+  constructor(private readonly card: Card) {}
+  apply(map: MindMap): void {
+    if (map.cards[this.card.id]) throw new Error(`Card trùng id: ${this.card.id}`);
+    map.cards[this.card.id] = deepClone(this.card);
+  }
+  revert(map: MindMap): void {
+    delete map.cards[this.card.id];
+  }
+}
+
+/**
+ * H1 — kéo card từ Thư viện thả vào map: tạo node MỚI mang card đó (chữ
+ * của node = tên card). `parentId` khác null → node con cuối của node
+ * đó; null → nhánh trôi đặt tại `at` (toạ độ world). Một bước hoàn tác.
+ */
+export class CreateNodeWithCardCommand implements Command {
+  readonly label = "Thêm card vào map";
+  private readonly inner: AddChildCommand | CreateFloatingBranchCommand;
+  constructor(
+    private readonly cardId: string,
+    text: string,
+    private readonly parentId: string | null,
+    private readonly at: { x: number; y: number } | null = null
+  ) {
+    this.inner = parentId ? new AddChildCommand(parentId, text) : new CreateFloatingBranchCommand(text, at?.y ?? 0);
+  }
+  get newNodeId(): string {
+    return this.inner.newNodeId;
+  }
+  apply(map: MindMap): void {
+    requireCard(map, this.cardId);
+    this.inner.apply(map);
+    const node = requireNode(map, this.inner.newNodeId);
+    node.cardId = this.cardId;
+    if (!this.parentId && this.at) {
+      // Gốc nhánh trôi: offset chính là toạ độ tuyệt đối (layout/index.ts).
+      node.offsetX = this.at.x;
+      node.offsetY = this.at.y;
+    }
+  }
+  revert(map: MindMap): void {
+    this.inner.revert(map);
+  }
+}
+
+/** H1 — thêm ảnh thẳng vào một card (card Inbox chưa gắn node nào). */
+export function buildAddImagesToCardCommand(
+  cardId: string,
+  images: { assetId: string; asset: ImageAsset; caption?: string }[]
+): Command {
+  return new CompositeCommand(
+    images.map(
+      (img) => new AddBlockCommand(cardId, createImageBlock(img.assetId, img.caption ?? ""), null, { assetId: img.assetId, asset: img.asset })
+    ),
+    images.length > 1 ? `Thêm ${images.length} ảnh` : "Thêm ảnh"
+  );
 }
 
 /**

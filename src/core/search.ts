@@ -20,7 +20,7 @@ import { collectAllNodeIdsInOrder } from "./tree";
  * NFD không tách được nó thành "d" + dấu (đây là chữ cái riêng trong
  * bảng chữ cái tiếng Việt, không phải "d" có dấu).
  */
-function normalizeForSearch(text: string): string {
+export function normalizeForSearch(text: string): string {
   return text
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")

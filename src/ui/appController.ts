@@ -77,9 +77,15 @@ import { downloadText, downloadBlob, byId } from "./dom";
 import { showErrors } from "./errorBox";
 import { showConfirm, showAlert, showImagePreview, showImageGallery } from "./dialog";
 import { imageFilesFrom, prepareImageFile } from "./imageImport";
-import { buildAddImagesToNodeCommand, CreateCardForNodeCommand } from "../core/cardCommands";
+import {
+  buildAddImagesToNodeCommand,
+  buildAddImagesToCardCommand,
+  CreateCardForNodeCommand,
+  CreateNodeWithCardCommand,
+} from "../core/cardCommands";
 import { createCard } from "../core/cards";
 import { buildMenu, type MenuAction, type MenuTarget } from "./contextMenuModel";
+import { CARD_DRAG_TYPE } from "./uiStores";
 import { getNodeImageBlocks } from "../render/imageThumb";
 import { getNodeThumbTable } from "../render/tableThumb";
 import { cardImageBlocks, formatBytes, MAP_ASSETS_WARN_BYTES, totalAssetBytes } from "../core/image";
@@ -495,6 +501,30 @@ export class AppController {
    * (ui/imageImport.ts). Cả loạt ảnh là MỘT bước hoàn tác.
    */
   async addImagesToNode(nodeId: string, files: File[]): Promise<void> {
+    await this.addImages(files, (images) => {
+      const map = this.store.getMap();
+      if (!map.nodes[nodeId]) return false;
+      this.store.dispatch(buildAddImagesToNodeCommand(map, nodeId, images));
+      this.selection.selectSingleNode(nodeId);
+      return true;
+    });
+  }
+
+  /** H1 — thêm ảnh thẳng vào một card (card Inbox chưa gắn node nào). */
+  async addImagesToCard(cardId: string, files: File[]): Promise<void> {
+    await this.addImages(files, (images) => {
+      if (!this.store.getMap().cards[cardId]) return false;
+      this.store.dispatch(buildAddImagesToCardCommand(cardId, images));
+      return true;
+    });
+  }
+
+  /** Chuẩn bị (thu nhỏ/nén) các file ảnh rồi giao cho `commit` ghi vào map;
+   *  gom lỗi + cảnh báo dung lượng thành một thông báo. */
+  private async addImages(
+    files: File[],
+    commit: (images: { assetId: string; asset: ImageAsset }[]) => boolean
+  ): Promise<void> {
     const errors: string[] = [];
     const images: { assetId: string; asset: ImageAsset }[] = [];
     for (const file of files) {
@@ -504,10 +534,7 @@ export class AppController {
         errors.push((err as Error).message || `Không đọc được "${file.name}".`);
       }
     }
-    const map = this.store.getMap();
-    if (images.length > 0 && map.nodes[nodeId]) {
-      this.store.dispatch(buildAddImagesToNodeCommand(map, nodeId, images));
-      this.selection.selectSingleNode(nodeId);
+    if (images.length > 0 && commit(images)) {
       const total = totalAssetBytes(this.store.getMap());
       if (total > MAP_ASSETS_WARN_BYTES) {
         errors.push(
@@ -520,9 +547,14 @@ export class AppController {
 
   /** M3 — xem lớn các ảnh trong card của node, bắt đầu từ khối `blockId`. */
   openNodeImages(nodeId: string, blockId: string | null = null): void {
+    const node = this.store.getMap().nodes[nodeId];
+    if (node?.cardId) this.openCardImages(node.cardId, blockId);
+  }
+
+  /** Xem lớn các ảnh của một card, bắt đầu từ khối `blockId`. */
+  openCardImages(cardId: string, blockId: string | null = null): void {
     const map = this.store.getMap();
-    const node = map.nodes[nodeId];
-    const card = node?.cardId ? map.cards[node.cardId] : null;
+    const card = map.cards[cardId];
     if (!card) return;
     const blocks = cardImageBlocks(card).filter((b) => map.assets[b.assetId]);
     const items = blocks.map((b) => ({ ...(map.assets[b.assetId] as ImageAsset), caption: b.caption }));
@@ -1183,12 +1215,23 @@ export class AppController {
     window.addEventListener("keydown", (e) => this.onActionKeyDown(e));
     document.addEventListener("paste", (e) => this.onNativePaste(e));
     // M3 — kéo-thả file ảnh vào node.
+    // H1 — kéo card từ khung Thư viện thả vào map (CARD_DRAG_TYPE).
     this.canvas.addEventListener("dragover", (e) => {
-      if (!e.dataTransfer?.types.includes("Files")) return;
+      const types = e.dataTransfer?.types ?? [];
+      if (!types.includes("Files") && !types.includes(CARD_DRAG_TYPE)) return;
       e.preventDefault();
-      e.dataTransfer.dropEffect = "copy";
+      if (e.dataTransfer) e.dataTransfer.dropEffect = types.includes(CARD_DRAG_TYPE) ? "link" : "copy";
     });
-    this.canvas.addEventListener("drop", (e) => this.onFileDrop(e));
+    this.canvas.addEventListener("drop", (e) => {
+      const cardId = e.dataTransfer?.getData(CARD_DRAG_TYPE);
+      if (cardId) {
+        e.preventDefault();
+        const { x, y } = this.screenPos(e);
+        this.placeCardAt(cardId, x, y);
+        return;
+      }
+      this.onFileDrop(e);
+    });
     this.canvas.addEventListener("contextmenu", (e) => this.onContextMenu(e));
     // Bản exe (Neutralino/WebView2): chuột phải ở chỗ khác ngoài canvas sẽ
     // hiện menu mặc định của WebView2 (Back/Reload/Print… — vô nghĩa, dễ
@@ -1360,6 +1403,31 @@ export class AppController {
       if (files.length > 0) void this.addImagesToNode(nodeId, files);
     });
     input.click();
+  }
+
+  /** H1 — thả card ở điểm màn hình (x, y): trúng node → thành nhánh con
+   *  của node đó; vùng trống → nhánh trôi mới tại đúng chỗ thả. */
+  placeCardAt(cardId: string, x: number, y: number): void {
+    const map = this.store.getMap();
+    const card = map.cards[cardId];
+    if (!card) return;
+    const hit = this.renderer.hitTestNode(map, x, y, this.view);
+    const w = this.renderer.toWorld(x, y, this.view);
+    const cmd = new CreateNodeWithCardCommand(cardId, card.title || "Card", hit, hit ? null : { x: w.x, y: w.y - 18 });
+    this.store.dispatch(cmd);
+    this.selection.selectSingleNode(cmd.newNodeId);
+  }
+
+  /** H1 — thêm card thành nhánh con của node đang chọn (nút trong Thư viện,
+   *  cách không cần kéo-thả). */
+  addCardAsChildOfSelection(cardId: string): void {
+    const map = this.store.getMap();
+    const card = map.cards[cardId];
+    const parentId = this.selection.primary ?? map.rootId;
+    if (!card || !map.nodes[parentId]) return;
+    const cmd = new CreateNodeWithCardCommand(cardId, card.title || "Card", parentId);
+    this.store.dispatch(cmd);
+    this.revealNode(cmd.newNodeId);
   }
 
   private onFileDrop(e: DragEvent): void {
