@@ -118,3 +118,14 @@ describe("io/t17m — Card & Block (M1)", () => {
     if (viaJson.ok) expect(viaJson.map.cards[card.id]).toEqual(map.cards[card.id]);
   });
 });
+
+describe("io/t17m — kích thước gốc của ảnh (M3)", () => {
+  it("round-trip giữ width/height của asset", async () => {
+    const map = buildMapWithImage();
+    map.assets["img_test1"] = { ...map.assets["img_test1"]!, width: 640, height: 480 };
+    const result = await parseT17mFile(await (await exportT17mFile(map)).arrayBuffer());
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.map.assets["img_test1"]).toMatchObject({ mimeType: "image/png", width: 640, height: 480, dataBase64: TINY_PNG_BASE64 });
+  });
+});

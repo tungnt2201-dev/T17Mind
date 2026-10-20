@@ -38,6 +38,7 @@ import type {
   LayoutType,
   TagDef,
   Card,
+  ImageAsset,
 } from "./types";
 import {
   createNode,
@@ -455,7 +456,7 @@ export class SetNodeImageCommand implements Command {
   constructor(
     private readonly nodeId: string,
     private readonly newAssetId: string | null,
-    private readonly newAsset: { mimeType: string; dataBase64: string } | null
+    private readonly newAsset: ImageAsset | null
   ) {}
 
   apply(map: MindMap): void {

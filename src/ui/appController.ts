@@ -12,7 +12,7 @@
  * được lưu xuống file hay có trong lịch sử hoàn tác.
  * ---------------------------------------------------------------------
  */
-import type { MindNode, MindMap } from "../core/types";
+import type { ImageAsset, MindNode, MindMap } from "../core/types";
 import { isVerticalLayout } from "../core/types";
 import type { NodeStylePatch } from "../core/commands";
 import type { MapDisplayFlag } from "../core/commands";
@@ -73,9 +73,12 @@ import {
 } from "../core/clipboard";
 import { startInlineEdit, startInlineEditMultiline, isEditing, cancelInlineEdit } from "./editingInput";
 import { writeSystemClipboard } from "./clipboardBridge";
-import { downloadText, downloadBlob, byId, readFileAsBase64 } from "./dom";
+import { downloadText, downloadBlob, byId } from "./dom";
 import { showErrors } from "./errorBox";
-import { showConfirm, showAlert, showImagePreview } from "./dialog";
+import { showConfirm, showAlert, showImagePreview, showImageGallery } from "./dialog";
+import { imageFilesFrom, prepareImageFile } from "./imageImport";
+import { buildAddImagesToNodeCommand } from "../core/cardCommands";
+import { cardImageBlocks, formatBytes, MAP_ASSETS_WARN_BYTES, totalAssetBytes } from "../core/image";
 import { toSafeUrl } from "../core/safeUrl";
 import { toggleShortcutsModal } from "./shortcutsModal";
 import { searchOpenStore, formatPainterModeStore, hasLinkedFileStore, tableEditorStore } from "./uiStores";
@@ -462,18 +465,64 @@ export class AppController {
    * ràng thay vì âm thầm làm chậm ứng dụng.
    */
   async insertNodeImage(nodeId: string, file: File): Promise<void> {
+    // M3 — ảnh lớn được tự thu nhỏ/nén trước (ui/imageImport.ts); giới hạn
+    // 8MB chỉ còn chặn những file không nén lại được (GIF, SVG...).
     const MAX_BYTES = 8 * 1024 * 1024;
-    if (file.size > MAX_BYTES) {
+    let asset: ImageAsset;
+    try {
+      asset = await prepareImageFile(file);
+    } catch (err) {
+      void showAlert((err as Error).message);
+      return;
+    }
+    const bytes = (asset.dataBase64.length * 3) / 4;
+    if (bytes > MAX_BYTES) {
       void showAlert(
-        `Ảnh "${file.name}" nặng ${(file.size / 1024 / 1024).toFixed(1)}MB, vượt quá giới hạn 8MB cho một ảnh nhúng. Hãy nén nhỏ lại rồi thử lại.`
+        `Ảnh "${file.name}" nặng ${(bytes / 1024 / 1024).toFixed(1)}MB, vượt quá giới hạn 8MB cho một ảnh nhúng. Hãy nén nhỏ lại rồi thử lại.`
       );
       return;
     }
-    const dataBase64 = await readFileAsBase64(file);
-    const assetId = generateId("img");
-    this.store.dispatch(
-      new SetNodeImageCommand(nodeId, assetId, { mimeType: file.type || "application/octet-stream", dataBase64 })
-    );
+    this.store.dispatch(new SetNodeImageCommand(nodeId, generateId("img"), asset));
+  }
+
+  /**
+   * M3 — thêm ảnh (dán, kéo-thả, chọn file) thành khối ảnh trong card của
+   * node; node chưa có card thì tự tạo. Ảnh lớn tự thu nhỏ/nén
+   * (ui/imageImport.ts). Cả loạt ảnh là MỘT bước hoàn tác.
+   */
+  async addImagesToNode(nodeId: string, files: File[]): Promise<void> {
+    const errors: string[] = [];
+    const images: { assetId: string; asset: ImageAsset }[] = [];
+    for (const file of files) {
+      try {
+        images.push({ assetId: generateId("img"), asset: await prepareImageFile(file) });
+      } catch (err) {
+        errors.push((err as Error).message || `Không đọc được "${file.name}".`);
+      }
+    }
+    const map = this.store.getMap();
+    if (images.length > 0 && map.nodes[nodeId]) {
+      this.store.dispatch(buildAddImagesToNodeCommand(map, nodeId, images));
+      this.selection.selectSingleNode(nodeId);
+      const total = totalAssetBytes(this.store.getMap());
+      if (total > MAP_ASSETS_WARN_BYTES) {
+        errors.push(
+          `Tổng dung lượng ảnh trong map đã là ${formatBytes(total)} — map nặng sẽ lưu/mở chậm. Cân nhắc xoá bớt ảnh không cần.`
+        );
+      }
+    }
+    if (errors.length > 0) void showAlert(errors.join(" "));
+  }
+
+  /** M3 — xem lớn các ảnh trong card của node, bắt đầu từ khối `blockId`. */
+  openNodeImages(nodeId: string, blockId: string | null = null): void {
+    const map = this.store.getMap();
+    const node = map.nodes[nodeId];
+    const card = node?.cardId ? map.cards[node.cardId] : null;
+    if (!card) return;
+    const blocks = cardImageBlocks(card).filter((b) => map.assets[b.assetId]);
+    const items = blocks.map((b) => ({ ...(map.assets[b.assetId] as ImageAsset), caption: b.caption }));
+    void showImageGallery(items, Math.max(0, blocks.findIndex((b) => b.id === blockId)));
   }
 
   /** P2.10 — gỡ ảnh nhúng khỏi node (chỉ gỡ con trỏ, xem ghi chú tại
@@ -1010,6 +1059,15 @@ export class AppController {
     if (isEditing() || isTypingTarget(document.activeElement)) return; // để trình duyệt tự lo dán ở ô nhập khác
     e.preventDefault();
 
+    // M3 — clipboard CHỈ có ảnh (chụp màn hình, "Copy image") → thêm ảnh
+    // vào node đang chọn. Có kèm chữ thì vẫn dán chữ như cũ: Excel copy ô
+    // luôn kèm thêm một ảnh PNG của vùng ô, không được biến nó thành ảnh.
+    const images = imageFilesFrom(e.clipboardData);
+    if (images.length > 0 && !(e.clipboardData?.getData("text/plain") ?? "").trim()) {
+      void this.addImagesToNode(this.selection.primary ?? this.store.getMap().rootId, images);
+      return;
+    }
+
     if (this.internalClipboard) {
       this.performPaste(this.internalClipboard);
       return;
@@ -1117,6 +1175,30 @@ export class AppController {
     window.addEventListener("keyup", (e) => this.onSpaceKeyUp(e));
     window.addEventListener("keydown", (e) => this.onActionKeyDown(e));
     document.addEventListener("paste", (e) => this.onNativePaste(e));
+    // M3 — kéo-thả file ảnh vào node.
+    this.canvas.addEventListener("dragover", (e) => {
+      if (!e.dataTransfer?.types.includes("Files")) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    });
+    this.canvas.addEventListener("drop", (e) => this.onFileDrop(e));
+  }
+
+  private onFileDrop(e: DragEvent): void {
+    const files = imageFilesFrom(e.dataTransfer);
+    if (!e.dataTransfer?.types.includes("Files")) return;
+    e.preventDefault();
+    if (files.length === 0) {
+      void showAlert("Chỉ thả được file ảnh vào node.");
+      return;
+    }
+    const { x, y } = this.screenPos(e);
+    const hit = this.renderer.hitTestNode(this.store.getMap(), x, y, this.view);
+    if (!hit) {
+      void showAlert("Thả ảnh lên đúng một node để thêm ảnh vào card của node đó.");
+      return;
+    }
+    void this.addImagesToNode(hit, files);
   }
 
   private screenPos(e: MouseEvent): { x: number; y: number } {
@@ -1253,6 +1335,13 @@ export class AppController {
       if (this.renderer.hitTestCheckbox(map, hitNode, x, y, this.view)) {
         this.selection.selectSingleNode(hitId);
         this.store.dispatch(new UpdateNodeStyleCommand(hitId, { checked: !hitNode.checked }));
+        return;
+      }
+      // M3 — bấm thẻ ảnh: chọn node và xem lớn các ảnh của card.
+      const thumbImageId = this.renderer.hitTestImageThumb(map, hitNode, x, y, this.view);
+      if (thumbImageId) {
+        this.selection.selectSingleNode(hitId);
+        this.openNodeImages(hitId, thumbImageId);
         return;
       }
       // M2 — bấm thẻ thu nhỏ của bảng: chọn node và mở trình sửa bảng
@@ -1880,6 +1969,8 @@ export class AppController {
       } else if (this.renderer.hitTestCheckbox(map, node, screenX, screenY, this.view)) {
         this.canvas.style.cursor = "pointer";
       } else if (this.renderer.hitTestTableThumb(map, node, screenX, screenY, this.view)) {
+        this.canvas.style.cursor = "pointer";
+      } else if (this.renderer.hitTestImageThumb(map, node, screenX, screenY, this.view)) {
         this.canvas.style.cursor = "pointer";
       } else if (
         this.selection.ids.size === 1 &&

@@ -6,7 +6,7 @@
  * core/cardCommands.ts.
  * ---------------------------------------------------------------------
  */
-import type { Block, Card, ChartBlock, ImageBlock, MindMap, TableAlign, TableBlock, TextBlock } from "./types";
+import type { Block, Card, ChartBlock, ImageBlock, ImageDisplaySize, MindMap, TableAlign, TableBlock, TextBlock } from "./types";
 import { generateBlockId, generateCardId } from "./tree";
 
 export function createCard(title = ""): Card {
@@ -31,8 +31,8 @@ export function createTableBlock(rows = 3, cols = 3, title = ""): TableBlock {
   };
 }
 
-export function createImageBlock(assetId: string, caption = ""): ImageBlock {
-  return { id: generateBlockId(), type: "image", assetId, caption };
+export function createImageBlock(assetId: string, caption = "", size: ImageDisplaySize = "medium"): ImageBlock {
+  return { id: generateBlockId(), type: "image", assetId, caption, size };
 }
 
 export function createChartBlock(tableBlockId: string, kind: ChartBlock["kind"] = "bar"): ChartBlock {
@@ -127,6 +127,7 @@ export function validateCard(card: Card, assets: MindMap["assets"]): string[] {
       }
       case "image":
         if (!assets[b.assetId]) errors.push(`${bw}: tham chiếu ảnh không tồn tại "${b.assetId}".`);
+        if (b.size !== "small" && b.size !== "medium" && b.size !== "large") errors.push(`${bw}: cỡ ảnh không hợp lệ "${String(b.size)}".`);
         break;
       case "chart": {
         const t = card.blocks.find((x) => x.id === b.tableBlockId);

@@ -3529,3 +3529,37 @@ Trình sửa bảng, dán từ Excel/Google Sheets, nhập/xuất CSV, thẻ thu
 - [ ] Node có cả Tag và bảng — thẻ nằm trên hàng Tag, không đè nhau; node có checkbox hoàn thành vẫn bấm checkbox được
 - [ ] Xuất `.t17m`/JSON rồi mở lại — bảng giữ nguyên
 - [ ] `npm run check` chạy sạch — 0 lỗi, 0 cảnh báo
+
+---
+
+## M3 — Hình ảnh (20/10/2026)
+
+Nhiều ảnh mỗi node (khối ảnh trong card), chú thích, cỡ hiển thị, dán/kéo-thả ảnh, tự thu nhỏ/nén, thẻ ảnh trên node với bitmap cache. **Schema 17 → 18.**
+
+- Dữ liệu: `ImageBlock.size` ("small" | "medium" | "large", mặc định "medium") — migrate 17→18 và bước chuẩn hoá cuối `migrateToLatest` (dữ liệu ghi 18 nhưng thiếu/sai size). `ImageAsset.width/height` tuỳ chọn (không cần migrate; renderer bỏ qua giá trị sai). `io/t17m.ts` giữ lại hai trường này khi lưu/mở.
+- Lõi: `core/image.ts` (`planImageResize`, `totalAssetBytes`…), `buildAddImagesToNodeCommand` trong `core/cardCommands.ts` (tạo card nếu chưa có + các `AddBlockCommand`, gộp bằng `CompositeCommand` = một bước hoàn tác).
+- UI: `ui/imageImport.ts` (giải mã bằng `createImageBitmap`, vẽ lại bằng canvas khi cần thu nhỏ/nén), `AppController.addImagesToNode` / `openNodeImages`, dán ảnh trong `onNativePaste`, kéo-thả trên canvas (`onFileDrop`), `showImageGallery` trong `ui/dialog.ts`, khối ảnh trong `CardSection.svelte` (giờ nhận thêm `controller`).
+- Canvas: `render/imageThumb.ts` (hình học thẻ ảnh — ảnh đầu tiên của card, huy hiệu "+N"; nằm trên thẻ bảng). `CanvasRenderer` cache bitmap thu nhỏ theo assetId, `onImageReady` báo `main.ts` vẽ lại (hoặc tính lại layout nếu trước đó chưa biết kích thước ảnh).
+- Ảnh co giãn theo node (yêu cầu thêm, 20/10): node đã kéo cỡ tay thì thẻ ảnh co/giãn cho vừa chỗ còn lại, giữ tỉ lệ (`fitImageLayout`); node có cả bảng thì ảnh chỉ co. Node chỉ đặt rộng tay thì ảnh co theo bề ngang ngay từ bước đo. Bitmap cache giữ tới 560px chiều cao cho ảnh giãn to vẫn nét.
+- Quyết định: clipboard có cả chữ lẫn ảnh thì **dán chữ** — Excel copy ô luôn kèm một ảnh PNG của vùng ô, nếu ưu tiên ảnh thì dán bảng từ Excel ra canvas sẽ thành ảnh.
+- Test: `core/image.test.ts`, `render/imageThumb.test.ts`, thêm round-trip kích thước ảnh trong `io/t17m.test.ts` (192 test / 18 file). Chạy thử trên Chromium: dán ảnh 3000×2000 → lưu 1920×1280; thả 2 ảnh → 3 khối, "+2" trên node; đổi cỡ Lớn; xem lớn ←/→; 4 lần Ctrl+Z về đúng trạng thái đầu.
+
+### Checklist kiểm thử tay — M3 (làm trước khi coi M3 là xong)
+
+- [ ] Chụp màn hình (Win+Shift+S), chọn một node, Ctrl+V — node có card mới (nếu chưa có) chứa khối ảnh, ảnh hiện trên node
+- [ ] Copy vùng ô trong Excel rồi Ctrl+V lên canvas — vẫn ra các node chữ như trước, KHÔNG thành ảnh
+- [ ] Kéo 2–3 file ảnh từ Explorer thả lên một node — thêm đủ ảnh, trên node hiện ảnh đầu + "+N"
+- [ ] Thả ảnh ra vùng trống — có thông báo "Thả ảnh lên đúng một node…"; thả file không phải ảnh — có thông báo
+- [ ] Mục Card → "+ Ảnh…" chọn nhiều file cùng lúc — thêm đủ
+- [ ] Đổi "Cỡ Nhỏ / Vừa / Lớn" — ảnh trên node đổi chiều cao, node tự co giãn, không đè node khác
+- [ ] Kéo tay nắm góc node nhỏ lại — ảnh co theo (giữ tỉ lệ); kéo to ra — ảnh to theo (node có cả bảng thì ảnh chỉ co, không to thêm); "Đặt lại kích thước tự động" — ảnh về cỡ đã chọn
+- [ ] Gõ chú thích → hiện dưới ảnh khi xem lớn
+- [ ] Bấm ảnh trên node (hoặc ảnh nhỏ trong panel) — xem lớn; ‹ › và phím ←/→ chuyển ảnh; Esc đóng; trong lúc xem, Delete không xoá node
+- [ ] Ảnh rất lớn (ảnh chụp điện thoại 4000px) — chèn xong vẫn mượt, file `.t17m` không phình quá
+- [ ] Node vừa có ảnh vừa có bảng và Tag — thứ tự từ trên xuống: chữ, ảnh, bảng, Tag; bấm ảnh mở xem lớn, bấm bảng mở trình sửa
+- [ ] Xoá khối ảnh → Ctrl+Z trả lại đúng ảnh
+- [ ] Dán/thả nhiều ảnh → Ctrl+Z **một lần** gỡ hết loạt ảnh đó
+- [ ] Lưu `.t17m`, mở lại — ảnh, chú thích, cỡ giữ nguyên; mở map cũ (trước M3) — không lỗi
+- [ ] "Chọn ảnh..." (ảnh nhúng kiểu cũ) với ảnh lớn — vẫn chạy, ảnh đã được thu nhỏ
+- [ ] `npm run check` chạy sạch — 0 lỗi, 0 cảnh báo
+

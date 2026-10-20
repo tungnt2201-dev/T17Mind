@@ -116,6 +116,14 @@ async function bootstrap(): Promise<void> {
     controller.draw();
   }
 
+  // M3 — ảnh trên node giải mã xong (bất đồng bộ): vẽ lại; nếu trước đó
+  // chưa biết kích thước ảnh thì tính lại layout (không cần tự lưu — dữ
+  // liệu tài liệu không đổi).
+  renderer.onImageReady = (relayout) => {
+    if (relayout) applyLayout(store.getMap(), renderer.getMeasurer(store.getMap()));
+    controller.draw();
+  };
+
   store.subscribe(fullRefresh);
   selection.subscribe(lightRefresh);
 

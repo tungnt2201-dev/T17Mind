@@ -424,6 +424,35 @@ function migrateV16toV17(raw: UnknownRecord): UnknownRecord {
   };
 }
 
+/**
+ * Phiên bản 17 -> 18: khối ảnh trong card có thêm `size` (M3 — cỡ hiển
+ * thị trên node), mặc định "medium". Các khối khác giữ nguyên.
+ */
+function migrateV17toV18(raw: UnknownRecord): UnknownRecord {
+  return { ...raw, schemaVersion: 18, cards: normalizeImageBlockSizes(raw.cards) };
+}
+
+const IMAGE_SIZES = new Set(["small", "medium", "large"]);
+
+/** Bảo đảm mọi khối ảnh có `size` hợp lệ (dùng cho migrate 17->18 và cho
+ *  bước chuẩn hoá cuối migrateToLatest — dữ liệu ghi "18" nhưng thiếu). */
+function normalizeImageBlockSizes(rawCards: unknown): UnknownRecord {
+  if (typeof rawCards !== "object" || rawCards === null || Array.isArray(rawCards)) return {};
+  const cards: UnknownRecord = {};
+  for (const [id, c] of Object.entries(rawCards as UnknownRecord)) {
+    const card = (c ?? {}) as UnknownRecord;
+    const blocks = Array.isArray(card.blocks)
+      ? card.blocks.map((b: unknown) => {
+          const block = (b ?? {}) as UnknownRecord;
+          if (block.type !== "image" || IMAGE_SIZES.has(block.size as string)) return block;
+          return { ...block, size: "medium" };
+        })
+      : card.blocks;
+    cards[id] = { ...card, blocks };
+  }
+  return cards;
+}
+
 const MIGRATIONS: Record<number, MigrationFn> = {
   0: migrateV0toV1,
   1: migrateV1toV2,
@@ -442,6 +471,7 @@ const MIGRATIONS: Record<number, MigrationFn> = {
   14: migrateV14toV15,
   15: migrateV15toV16,
   16: migrateV16toV17,
+  17: migrateV17toV18,
 };
 
 /**
@@ -493,7 +523,7 @@ export function migrateToLatest(raw: UnknownRecord): MindMap {
   if (!Array.isArray(safe.tags)) safe.tags = [];
   if (typeof safe.assets !== "object" || safe.assets === null) safe.assets = {};
   if (typeof safe.activeThemeId !== "string") safe.activeThemeId = null;
-  if (typeof safe.cards !== "object" || safe.cards === null || Array.isArray(safe.cards)) safe.cards = {};
+  safe.cards = normalizeImageBlockSizes(safe.cards);
 
   // Cùng lý do, cùng cách sửa — nhưng ở CẤP NODE: children/markers/
   // tagIds cũng là mảng, cũng có thể bị "rơi" giống hệt các mảng cấp
