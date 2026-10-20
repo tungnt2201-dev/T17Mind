@@ -1,0 +1,152 @@
+/**
+ * core/docModel.ts
+ * ---------------------------------------------------------------------
+ * M5 — mô hình "tài liệu" dùng chung cho xuất Markdown và Word: đi theo
+ * cây map (cả map hoặc một nhánh), node ở các cấp đầu thành TIÊU ĐỀ
+ * (H1…H6), sâu hơn thành DANH SÁCH; dưới mỗi node là ghi chú và nội dung
+ * card (đoạn văn, bảng, ảnh, biểu đồ) nếu được chọn. Hàm THUẦN, chỉ phụ
+ * thuộc core — io/markdownDoc.ts và io/docx.ts chuyển mô hình này thành
+ * file.
+ * ---------------------------------------------------------------------
+ */
+import type { MindMap, MindNode, TableAlign } from "./types";
+import { getRootIds } from "./tree";
+import { plainText } from "./links";
+
+export interface DocOptions {
+  /** "map" = cả map (kể cả nhánh trôi); "branch" = chỉ nhánh `branchRootId`. */
+  scope: "map" | "branch";
+  branchRootId?: string | null;
+  /** Số cấp đầu thành tiêu đề (0–6); 0 = mọi node là danh sách. */
+  headingDepth: number;
+  includeNotes: boolean;
+  includeCards: boolean;
+  includeImages: boolean;
+  toc: boolean;
+}
+
+export const DEFAULT_DOC_OPTIONS: DocOptions = {
+  scope: "map",
+  branchRootId: null,
+  headingDepth: 3,
+  includeNotes: true,
+  includeCards: true,
+  includeImages: true,
+  toc: false,
+};
+
+export type DocBlock =
+  | { kind: "heading"; level: number; text: string }
+  | { kind: "listItem"; depth: number; text: string; checked: boolean | null }
+  | { kind: "paragraph"; text: string; indent: number }
+  | {
+      kind: "table";
+      indent: number;
+      title: string;
+      headerRow: boolean;
+      align: TableAlign[];
+      colWidths: number[];
+      cells: string[][];
+    }
+  | { kind: "image"; indent: number; assetId: string; mimeType: string; dataBase64: string; caption: string; width: number | null; height: number | null }
+  | { kind: "toc" };
+
+export interface DocModel {
+  title: string;
+  blocks: DocBlock[];
+}
+
+/** Tách ghi chú/văn bản thành các đoạn (ngăn bằng dòng trống), giữ xuống dòng trong đoạn. */
+export function splitParagraphs(text: string): string[] {
+  return text
+    .replace(/\r\n?/g, "\n")
+    .split(/\n\s*\n/)
+    .map((p) => p.replace(/^\n+|\s+$/g, ""))
+    .filter((p) => p.trim().length > 0);
+}
+
+export function buildDocModel(map: MindMap, opts: DocOptions): DocModel {
+  const blocks: DocBlock[] = [];
+  const depthLimit = Math.max(0, Math.min(6, Math.floor(opts.headingDepth)));
+  const roots =
+    opts.scope === "branch" && opts.branchRootId && map.nodes[opts.branchRootId] ? [opts.branchRootId] : getRootIds(map);
+  const firstRoot = roots[0] ? map.nodes[roots[0]] : undefined;
+  if (opts.toc && depthLimit > 0) blocks.push({ kind: "toc" });
+
+  const emitContent = (node: MindNode, indent: number): void => {
+    if (opts.includeNotes && node.notes) {
+      for (const p of splitParagraphs(node.notes)) blocks.push({ kind: "paragraph", text: p, indent });
+    }
+    if (!opts.includeCards || !node.cardId) return;
+    const card = map.cards[node.cardId];
+    if (!card) return;
+    if (card.title && card.title.trim() !== node.text.trim()) {
+      blocks.push({ kind: "paragraph", text: card.title, indent });
+    }
+    for (const b of card.blocks) {
+      if (b.type === "text") {
+        for (const p of splitParagraphs(plainText(b.text, map))) blocks.push({ kind: "paragraph", text: p, indent });
+      } else if (b.type === "table") {
+        blocks.push({
+          kind: "table",
+          indent,
+          title: b.title,
+          headerRow: b.headerRow,
+          align: [...b.align],
+          colWidths: [...b.colWidths],
+          cells: b.cells.map((r) => [...r]),
+        });
+      } else if (b.type === "image") {
+        const asset = map.assets[b.assetId];
+        if (!opts.includeImages || !asset) continue;
+        blocks.push({
+          kind: "image",
+          indent,
+          assetId: b.assetId,
+          mimeType: asset.mimeType,
+          dataBase64: asset.dataBase64,
+          caption: b.caption,
+          width: typeof asset.width === "number" ? asset.width : null,
+          height: typeof asset.height === "number" ? asset.height : null,
+        });
+      } else if (b.type === "chart") {
+        blocks.push({ kind: "paragraph", text: `[Biểu đồ${b.title ? `: ${b.title}` : ""}]`, indent });
+      }
+    }
+  };
+
+  const walk = (id: string, depth: number): void => {
+    const node = map.nodes[id];
+    if (!node) return;
+    if (depth < depthLimit) {
+      blocks.push({ kind: "heading", level: depth + 1, text: node.text || "(không tên)" });
+      emitContent(node, 0);
+    } else {
+      const listDepth = depth - depthLimit;
+      blocks.push({ kind: "listItem", depth: listDepth, text: node.text || "(không tên)", checked: node.checked });
+      emitContent(node, listDepth + 1);
+    }
+    for (const c of node.children) walk(c, depth + 1);
+  };
+  for (const r of roots) walk(r, 0);
+
+  return { title: firstRoot?.text || "T17Mind", blocks };
+}
+
+/** Đếm nhanh nội dung (dùng cho test tự kiểm chứng sau khi xuất). */
+export function docStats(doc: DocModel): { headings: number; listItems: number; tables: number; tableRows: number; images: number } {
+  let headings = 0,
+    listItems = 0,
+    tables = 0,
+    tableRows = 0,
+    images = 0;
+  for (const b of doc.blocks) {
+    if (b.kind === "heading") headings++;
+    else if (b.kind === "listItem") listItems++;
+    else if (b.kind === "table") {
+      tables++;
+      tableRows += b.cells.length;
+    } else if (b.kind === "image") images++;
+  }
+  return { headings, listItems, tables, tableRows, images };
+}

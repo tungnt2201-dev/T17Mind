@@ -39,7 +39,7 @@
   import type { SelectionModel } from "../selection";
   import type { AppController } from "../appController";
   import { mapStore, selectionStore } from "../svelteBridge";
-  import { linkingModeStore, helpModalOpenStore, searchOpenStore, formatPainterModeStore, mapsModalOpenStore, explorerStore, minimapStore, hasLinkedFileStore, libraryStore } from "../uiStores";
+  import { linkingModeStore, helpModalOpenStore, searchOpenStore, formatPainterModeStore, mapsModalOpenStore, explorerStore, minimapStore, hasLinkedFileStore, libraryStore, exportDocStore } from "../uiStores";
   import { THEMES } from "../../core/theme";
   import { toggleShortcutsModal } from "../shortcutsModal";
   import Icon from "./Icon.svelte";
@@ -75,6 +75,7 @@
   let xlsxInput: HTMLInputElement;
   let xmindInput: HTMLInputElement;
   let opmlInput: HTMLInputElement;
+  let mdInput: HTMLInputElement;
   let t17mInput: HTMLInputElement;
 
   function onImportJsonChange(): void {
@@ -242,6 +243,9 @@
           <button class="menu-item" title="Nhập file .opml (Workflowy, Dynalist, OmniOutliner...) — thay thế map đang mở"
             on:click={() => runAndClose(() => void importVia("opml", opmlInput))}>
             <Icon name="list" />Nhập OPML</button>
+          <button class="menu-item" title="Nhập Markdown (.md): tiêu đề/danh sách thành node, đoạn văn thành ghi chú, bảng và ảnh nhúng thành card — thay thế map đang mở"
+            on:click={() => runAndClose(() => void importVia("md", mdInput))}>
+            <Icon name="doc-text" />Nhập Markdown</button>
           <div class="menu-sep"></div>
           <button class="menu-item" title="Xem quy tắc định dạng file JSON mà T17Mind hiểu được" id="btn-help"
             on:click={() => runAndClose(() => helpModalOpenStore.set(true))}>
@@ -265,9 +269,9 @@
           <button class="menu-item" title="Xuất outline chuẩn (.opml) — mở được bằng Workflowy/Dynalist/OmniOutliner... chỉ gồm cấu trúc/ghi chú/checkbox, không kèm màu sắc/Tag"
             on:click={() => runAndClose(() => void controller.exportAs("opml"))}>
             <Icon name="list" />OPML</button>
-          <button class="menu-item" title="Xuất dạng danh sách lồng nhau (.md) — chỉ gồm cấu trúc/checkbox/Tag/link, không kèm màu sắc hay dữ liệu khác"
-            on:click={() => runAndClose(() => void controller.exportAs("md"))}>
-            <Icon name="doc-text" />Markdown</button>
+          <button class="menu-item" title="Xuất thành tài liệu Word (.docx) hoặc Markdown (.md / .zip kèm ảnh): tiêu đề theo cấp, danh sách, ghi chú, nội dung card (văn bản, bảng, ảnh), mục lục"
+            on:click={() => runAndClose(() => exportDocStore.set({ scope: "map" }))}>
+            <Icon name="doc-text" />Tài liệu Word / Markdown…</button>
           <button class="menu-item" title="Xuất ảnh vector (.svg) — khung/màu/chữ/đường nối, không kèm Tag/checkbox/icon hay hiệu ứng Kiểu tự nhiên"
             on:click={() => runAndClose(() => void controller.exportAs("svg"))}>
             <Icon name="image" />SVG</button>
@@ -389,4 +393,5 @@
 <input bind:this={xlsxInput} type="file" accept=".xlsx,.xls" on:change={onImportXlsxChange} style="display:none" />
 <input bind:this={xmindInput} type="file" accept=".xmind" on:change={onImportXmindChange} style="display:none" />
 <input bind:this={opmlInput} type="file" accept=".opml,.xml" on:change={onImportOpmlChange} style="display:none" />
-<input bind:this={t17mInput} type="file" accept=".t17m,.json,.xlsx,.xls,.xmind,.opml,.xml" on:change={onImportT17mChange} style="display:none" />
+<input bind:this={t17mInput} type="file" accept=".t17m,.json,.xlsx,.xls,.xmind,.opml,.xml,.md,.markdown" on:change={onImportT17mChange} style="display:none" />
+<input bind:this={mdInput} type="file" accept=".md,.markdown,text/markdown" on:change={() => { const f = mdInput.files?.[0]; mdInput.value = ""; if (f) void controller.importMarkdownDoc(f); }} style="display:none" />

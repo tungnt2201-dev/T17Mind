@@ -98,12 +98,14 @@ import {
   tableEditorStore,
   contextMenuStore,
   cardPageStore,
+  exportDocStore,
 } from "./uiStores";
 import { parseJsonFile, exportFlatJson } from "../io/json";
 import { loadMap as loadMapFromStorage } from "../io/storage";
 // P1.16 (tối ưu bundle) — xlsx/xmind KHÔNG import tĩnh ở đây nữa, xem
 // ghi chú ngay trước từng phương thức dùng chúng bên dưới.
-import { exportMarkdown } from "../io/markdown";
+import { renderMarkdown } from "../io/markdownDoc";
+import { buildDocModel, DEFAULT_DOC_OPTIONS, type DocOptions } from "../core/docModel";
 import { exportSvg } from "../io/svg";
 import { exportOpml, parseOpmlFile } from "../io/opml";
 import { isFileSystemAccessSupported, pickSaveHandle, writeToHandle, pickOpenHandle } from "../io/fileSystemAccess";
@@ -145,6 +147,8 @@ export class AppController {
     | { kind: "path"; path: string; format: FileFormat }
     | { kind: "handle"; handle: FileSystemFileHandle; format: FileFormat }
     | null = null;
+  /** M5 — tuỳ chọn xuất tài liệu (.docx / .md / .zip) lần gần nhất. */
+  private docOptions: DocOptions = { ...DEFAULT_DOC_OPTIONS };
   /** Bản exe: thư mục mặc định của hộp thoại Lưu/Mở trong phiên này —
    *  ban đầu là thư mục chứa T17Mind.exe, đổi theo file vừa mở/nhập/lưu. */
   private lastDir: string | null = null;
@@ -610,6 +614,20 @@ export class AppController {
     this.resetView();
   }
 
+  /** M5 — nhập Markdown (tiêu đề/danh sách → node, đoạn văn → ghi chú,
+   *  bảng/ảnh nhúng → card), thay map đang mở (io/markdownImport.ts). */
+  async importMarkdownDoc(file: File): Promise<void> {
+    const { parseMarkdownDoc } = await import("../io/markdownImport");
+    const result = parseMarkdownDoc(await file.text(), file.name.replace(/\.[^.]+$/, ""));
+    if (!result.ok) {
+      showErrors("Lỗi trong file Markdown", result.errors);
+      return;
+    }
+    this.store.loadMap(result.map);
+    this.selection.resetToRoot(result.map.rootId);
+    this.resetView();
+  }
+
   async importOpml(file: File): Promise<void> {
     const text = await file.text();
     const result = parseOpmlFile(text);
@@ -671,8 +689,17 @@ export class AppController {
         return (await import("../io/xmind")).exportXmindFile(map);
       case "opml":
         return exportOpml(map);
-      case "md":
-        return exportMarkdown(map);
+      case "md": {
+        const doc = buildDocModel(map, this.docOptions);
+        return renderMarkdown(doc, this.docOptions.includeImages ? "embed" : "none").markdown;
+      }
+      case "zip":
+        return (await import("../io/markdownZip")).exportMarkdownZip(
+          buildDocModel(map, this.docOptions),
+          `${this.suggestedBase()}.md`
+        );
+      case "docx":
+        return (await import("../io/docx")).exportDocx(buildDocModel(map, this.docOptions));
       case "svg":
         return exportSvg(map);
       case "png":
@@ -728,6 +755,17 @@ export class AppController {
     } catch (err) {
       showErrors("Không lưu được file", [String((err as Error)?.message ?? err)]);
     }
+  }
+
+  /** M5 — tuỳ chọn xuất tài liệu đang dùng (hộp thoại Xuất tài liệu đọc để hiện lại lựa chọn cũ). */
+  getDocOptions(): DocOptions {
+    return { ...this.docOptions, branchRootId: this.selection.primary };
+  }
+
+  /** M5 — xuất tài liệu Word / Markdown theo tuỳ chọn, qua hộp thoại Lưu. */
+  exportDocument(opts: DocOptions, format: "docx" | "md" | "zip"): Promise<void> {
+    this.docOptions = { ...opts };
+    return this.exportAs(format);
   }
 
   /** "Xuất …" một định dạng: hộp thoại lưu (chọn sẵn định dạng đó). */
@@ -806,8 +844,11 @@ export class AppController {
       case "json":
         await this.importJson(file);
         break;
+      case "md":
+        await this.importMarkdownDoc(file);
+        break;
       default:
-        void showAlert(`Không mở được "${file.name}": T17Mind chỉ mở file .t17m, .json, .xlsx, .xmind, .opml.`);
+        void showAlert(`Không mở được "${file.name}": T17Mind chỉ mở file .t17m, .json, .xlsx, .xmind, .opml, .md.`);
         return false;
     }
     return this.store.getMap() !== before;
@@ -1487,6 +1528,9 @@ export class AppController {
         break;
       case "detachFloating":
         this.detachSelectionToFloating();
+        break;
+      case "exportBranch":
+        exportDocStore.set({ scope: "branch" });
         break;
       case "summary":
         this.createSummaryFromSelection();

@@ -3713,3 +3713,27 @@ Bước kế tiếp theo mục 5.5 ROADMAP. Không đổi schema: liên kết l�
 - [ ] "↗ Vẽ đường liên kết cho N nhắc tới" — xuất hiện đường nét đứt tới node được nhắc; Ctrl+Z gỡ cả loạt
 - [ ] Ghép thêm JSON chứa card có liên kết — liên kết trong phần ghép vẫn trỏ đúng
 
+---
+
+## M5 — Kết xuất tài liệu .md / .docx (20/10/2026)
+
+Bước kế tiếp theo mục 5.5 ROADMAP (sau H2). Không đổi schema. Thư viện mới: `docx` (9.x), nạp lười.
+
+- `core/docModel.ts` (thuần): `buildDocModel(map, options)` — cây map → khối tài liệu (tiêu đề theo cấp, mục danh sách, đoạn văn từ ghi chú và văn bản card — liên kết `[[…]]` thành tên, bảng, ảnh, biểu đồ tạm thành chữ, mục lục); `docStats` để đếm.
+- `io/markdownDoc.ts` (thuần): Markdown GFM, ảnh "embed"/"files"/"none", mục lục neo kiểu GitHub. `io/markdownZip.ts`: .zip = .md + assets/. `io/docx.ts`: Word với kiểu Heading chuẩn, danh sách, bảng thật, ảnh, TOC. `io/markdownImport.ts`: nhập Markdown → map.
+- UI: `components/ExportDocModal.svelte` (mở qua `exportDocStore`); mục Xuất "Tài liệu Word / Markdown…" thay mục "Markdown" cũ (dạng danh sách đơn giản — chọn "Số cấp làm tiêu đề = 0" ra kết quả tương tự); chuột phải node → "Xuất nhánh này thành tài liệu…"; Nhập → "Nhập Markdown". Định dạng mới trong hộp thoại Lưu: .docx, .zip; .md giờ mở được.
+- Lỗi bắt được nhờ test đọc lại document.xml: chữ thường bị ghi `<w:b w:val="false"/>` làm **tiêu đề mất in đậm** của kiểu Heading — giờ chỉ đặt `bold` khi true. Và tên bảng (`**Tên**`) bị nuốt vào ghi chú khi nhập lại Markdown.
+- Test: `io/docExport.test.ts` (241 test) — mô hình tài liệu, Markdown (bảng/ảnh/mục lục), zip đọc lại, docx giải nén đếm bảng/hàng/cột/tiêu đề/danh sách/ảnh/TOC, xuất rồi nhập lại Markdown giữ cây/checkbox/bảng/ảnh. Chạy thử trên Chromium (Neutralino giả lập): xuất .docx/.md/.zip qua hộp thoại Lưu, đọc lại file ghi ra; Mở… file .md vừa xuất → đúng 3 node.
+
+### Checklist kiểm thử tay — M5
+
+- [ ] Xuất → "Tài liệu Word / Markdown…" — hộp thoại hiện tuỳ chọn và dòng "Sẽ gồm: … tiêu đề · … bảng · … ảnh" đổi theo tuỳ chọn
+- [ ] Word (.docx): mở bằng Word — tiêu đề dùng kiểu Heading 1/2/3 (thấy trong Navigation Pane), node sâu hơn là gạch đầu dòng, ghi chú/văn bản card là đoạn văn, bảng là bảng Word thật (đúng cột, căn lề, hàng tiêu đề tô nền), ảnh hiện đúng, chú thích dưới ảnh
+- [ ] Bật "Có mục lục" → Word hỏi cập nhật trường khi mở → chọn Yes → mục lục có số trang, bấm được
+- [ ] Markdown (.md): mở bằng VS Code/Typora — bảng hiển thị đúng, ảnh hiện (nhúng sẵn)
+- [ ] Markdown + ảnh (.zip): giải nén — có file .md và thư mục assets/; mở .md thấy ảnh
+- [ ] "Chỉ nhánh đang chọn" (hoặc chuột phải node → "Xuất nhánh này thành tài liệu…") — chỉ có nhánh đó
+- [ ] Đổi "Số cấp đầu làm tiêu đề" (0…6) — cấu trúc tiêu đề/danh sách đổi đúng
+- [ ] Bỏ tick ghi chú / nội dung card / ảnh — phần tương ứng biến mất khỏi file
+- [ ] Tệp → Mở… (hoặc Nhập → Nhập Markdown) chọn file .md vừa xuất — map dựng lại đúng cây, checkbox, bảng (kể cả tên bảng), ảnh
+
