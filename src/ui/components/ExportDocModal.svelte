@@ -81,6 +81,7 @@
         </label>
         <p class="xd-hint">Node sâu hơn thành danh sách gạch đầu dòng lồng nhau.</p>
         <label><input type="checkbox" bind:checked={opts.toc} disabled={opts.headingDepth === 0} /> Có mục lục</label>
+        <label class:muted={format !== "docx"}><input type="checkbox" bind:checked={opts.indentByLevel} disabled={format !== "docx"} /> Thụt lề theo tầng (Word — tự co lại khi cây sâu)</label>
       </fieldset>
 
       <fieldset>

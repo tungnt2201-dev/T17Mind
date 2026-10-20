@@ -3737,3 +3737,16 @@ Bước kế tiếp theo mục 5.5 ROADMAP (sau H2). Không đổi schema. Thư 
 - [ ] Bỏ tick ghi chú / nội dung card / ảnh — phần tương ứng biến mất khỏi file
 - [ ] Tệp → Mở… (hoặc Nhập → Nhập Markdown) chọn file .md vừa xuất — map dựng lại đúng cây, checkbox, bảng (kể cả tên bảng), ảnh
 
+
+### M5.1 — Word: thụt lề theo tầng (20/10/2026)
+
+Phản hồi sau khi thử: file Word mọi tiêu đề/đoạn đều sát lề trái, khó nhìn ra tầng.
+
+- `DocBlock` thêm `outline` (node ở độ sâu d → d; ghi chú/nội dung card của nó → d + 1). Tuỳ chọn mới `indentByLevel` (mặc định bật), ô "Thụt lề theo tầng" trong hộp thoại (chỉ áp dụng cho .docx).
+- Bậc thụt tự co theo độ sâu tổng thể: `outlineIndentStep(maxOutline, bềRộngVùngChữ)` = 1 cm/tầng, nhưng tầng sâu nhất không thụt quá 30% bề rộng vùng chữ (≈ 4,9 cm); sàn 0,25 cm. Cây 3–4 tầng: 1 cm/tầng; cây 8 tầng: ≈ 0,62 cm/tầng.
+- Áp dụng cho tiêu đề, đoạn văn, tên bảng, bảng (thụt + thu hẹp theo phần còn lại), ảnh (giới hạn rộng theo phần còn lại), gạch đầu dòng (lề riêng ghi đè lề mặc định của mức danh sách, dấu • nằm ở mép thụt).
+- Test: 3 test mới (bậc co giãn, `outline` trong mô hình, đọc `w:ind`/`w:tblInd` trong document.xml; tắt thì không thụt).
+
+- [ ] Xuất Word cây 3–4 tầng — mỗi tầng thụt ≈ 1 cm, nội dung card nằm thụt dưới node của nó, bảng thụt theo
+- [ ] Xuất Word cây rất sâu (7–8 tầng) — vẫn thấy rõ tầng nhưng tầng sâu nhất không lùi quá 1/3 trang
+- [ ] Bỏ tick "Thụt lề theo tầng" — trở lại kiểu cũ (sát lề)

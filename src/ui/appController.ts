@@ -699,7 +699,7 @@ export class AppController {
           `${this.suggestedBase()}.md`
         );
       case "docx":
-        return (await import("../io/docx")).exportDocx(buildDocModel(map, this.docOptions));
+        return (await import("../io/docx")).exportDocx(buildDocModel(map, this.docOptions), this.docOptions.indentByLevel);
       case "svg":
         return exportSvg(map);
       case "png":

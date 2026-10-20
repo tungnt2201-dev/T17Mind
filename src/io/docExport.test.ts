@@ -4,7 +4,7 @@ import { Packer } from "docx";
 import { createEmptyMap, createNode } from "../core/tree";
 import { createCard, createTextBlock, createTableBlock, createImageBlock } from "../core/cards";
 import { makeLinkToken } from "../core/links";
-import { buildDocModel, docStats, splitParagraphs, DEFAULT_DOC_OPTIONS, type DocOptions } from "../core/docModel";
+import { buildDocModel, docStats, splitParagraphs, maxOutline, outlineIndentStep, OUTLINE_STEP_DXA, OUTLINE_STEP_MIN_DXA, DEFAULT_DOC_OPTIONS, type DocOptions } from "../core/docModel";
 import { renderMarkdown, headingSlug } from "./markdownDoc";
 import { buildMarkdownZip } from "./markdownZip";
 import { buildDocxDocument } from "./docx";
@@ -135,6 +135,45 @@ describe("M5 — Word .docx (tự kiểm chứng)", () => {
     expect(xml).toContain("Xem thêm Rủi ro.");
     const media = Object.keys(zip.files).filter((f) => f.startsWith("word/media/") && !f.endsWith("/"));
     expect(media).toHaveLength(1);
+  });
+});
+
+describe("M5 — Word: thụt lề theo tầng", () => {
+  it("bậc thụt tự co theo độ sâu tổng thể, có sàn tối thiểu", () => {
+    expect(outlineIndentStep(0, 9360)).toBe(OUTLINE_STEP_DXA);
+    expect(outlineIndentStep(3, 9360)).toBe(OUTLINE_STEP_DXA); // cây nông: 1 cm/tầng
+    expect(outlineIndentStep(10, 9360)).toBe(280); // 30% × 9360 / 10
+    expect(outlineIndentStep(10, 9360) * 10).toBeLessThanOrEqual(9360 * 0.3);
+    expect(outlineIndentStep(40, 9360)).toBe(OUTLINE_STEP_MIN_DXA);
+  });
+
+  it("mô hình ghi tầng: tiêu đề/mục = độ sâu node, nội dung = độ sâu + 1", () => {
+    const { map } = buildMap();
+    const doc = buildDocModel(map, opts({ headingDepth: 2 }));
+    const outline = (k: string, t: string) => doc.blocks.find((b) => b.kind === k && "text" in b && b.text === t)!;
+    expect(outline("heading", "Kế hoạch 2026")).toMatchObject({ outline: 0 });
+    expect(outline("heading", "Mục tiêu")).toMatchObject({ outline: 1 });
+    expect(outline("paragraph", "Đoạn ghi chú 1.")).toMatchObject({ outline: 2 });
+    expect(doc.blocks.find((b) => b.kind === "table")).toMatchObject({ outline: 2 });
+    expect(outline("listItem", "Ký 3 hợp đồng | lớn")).toMatchObject({ outline: 3 });
+    expect(maxOutline(doc)).toBe(3);
+  });
+
+  it("document.xml: tiêu đề, đoạn, bảng, danh sách thụt theo tầng; tắt thì không thụt", async () => {
+    const { map } = buildMap();
+    const doc = buildDocModel(map, opts({ headingDepth: 2 }));
+    const xmlOf = async (byLevel: boolean) =>
+      (await JSZip.loadAsync(await Packer.toBuffer(buildDocxDocument(doc, byLevel)))).file("word/document.xml")!.async("string");
+    const xml = await xmlOf(true);
+    const step = OUTLINE_STEP_DXA;
+    const para = (text: string) => xml.split("</w:p>").find((p) => p.includes(`>${text}<`))!;
+    expect(para("Kế hoạch 2026")).not.toContain("<w:ind");
+    expect(para("Mục tiêu")).toContain(`w:left="${step}"`);
+    expect(para("Đoạn ghi chú 1.")).toContain(`w:left="${2 * step}"`);
+    expect(xml).toContain(`<w:tblInd w:type="dxa" w:w="${2 * step}"/>`);
+    expect(para("☑ Ký 3 hợp đồng | lớn")).toMatch(new RegExp(`w:left="${3 * step + 283}"[^>]*w:hanging="283"|w:hanging="283"[^>]*w:left="${3 * step + 283}"`));
+    const flat = await xmlOf(false);
+    expect(flat).not.toContain("<w:tblInd");
   });
 });
 

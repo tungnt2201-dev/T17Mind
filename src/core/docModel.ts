@@ -23,6 +23,8 @@ export interface DocOptions {
   includeCards: boolean;
   includeImages: boolean;
   toc: boolean;
+  /** Word: thụt lề mỗi tầng một bậc, bậc tự co theo độ sâu tổng thể (xem outlineIndentStep). */
+  indentByLevel: boolean;
 }
 
 export const DEFAULT_DOC_OPTIONS: DocOptions = {
@@ -33,22 +35,29 @@ export const DEFAULT_DOC_OPTIONS: DocOptions = {
   includeCards: true,
   includeImages: true,
   toc: false,
+  indentByLevel: true,
 };
 
+/**
+ * `outline` = tầng của khối trong cây (node ở độ sâu d có outline d, nội dung
+ * ghi chú/card của nó có outline d + 1) — Word dùng để thụt lề theo tầng;
+ * `indent` = mức lồng trong danh sách (Markdown).
+ */
 export type DocBlock =
-  | { kind: "heading"; level: number; text: string }
-  | { kind: "listItem"; depth: number; text: string; checked: boolean | null }
-  | { kind: "paragraph"; text: string; indent: number }
+  | { kind: "heading"; level: number; text: string; outline: number }
+  | { kind: "listItem"; depth: number; text: string; checked: boolean | null; outline: number }
+  | { kind: "paragraph"; text: string; indent: number; outline: number }
   | {
       kind: "table";
       indent: number;
+      outline: number;
       title: string;
       headerRow: boolean;
       align: TableAlign[];
       colWidths: number[];
       cells: string[][];
     }
-  | { kind: "image"; indent: number; assetId: string; mimeType: string; dataBase64: string; caption: string; width: number | null; height: number | null }
+  | { kind: "image"; indent: number; outline: number; assetId: string; mimeType: string; dataBase64: string; caption: string; width: number | null; height: number | null }
   | { kind: "toc" };
 
 export interface DocModel {
@@ -73,23 +82,24 @@ export function buildDocModel(map: MindMap, opts: DocOptions): DocModel {
   const firstRoot = roots[0] ? map.nodes[roots[0]] : undefined;
   if (opts.toc && depthLimit > 0) blocks.push({ kind: "toc" });
 
-  const emitContent = (node: MindNode, indent: number): void => {
+  const emitContent = (node: MindNode, indent: number, outline: number): void => {
     if (opts.includeNotes && node.notes) {
-      for (const p of splitParagraphs(node.notes)) blocks.push({ kind: "paragraph", text: p, indent });
+      for (const p of splitParagraphs(node.notes)) blocks.push({ kind: "paragraph", text: p, indent, outline });
     }
     if (!opts.includeCards || !node.cardId) return;
     const card = map.cards[node.cardId];
     if (!card) return;
     if (card.title && card.title.trim() !== node.text.trim()) {
-      blocks.push({ kind: "paragraph", text: card.title, indent });
+      blocks.push({ kind: "paragraph", text: card.title, indent, outline });
     }
     for (const b of card.blocks) {
       if (b.type === "text") {
-        for (const p of splitParagraphs(plainText(b.text, map))) blocks.push({ kind: "paragraph", text: p, indent });
+        for (const p of splitParagraphs(plainText(b.text, map))) blocks.push({ kind: "paragraph", text: p, indent, outline });
       } else if (b.type === "table") {
         blocks.push({
           kind: "table",
           indent,
+          outline,
           title: b.title,
           headerRow: b.headerRow,
           align: [...b.align],
@@ -102,6 +112,7 @@ export function buildDocModel(map: MindMap, opts: DocOptions): DocModel {
         blocks.push({
           kind: "image",
           indent,
+          outline,
           assetId: b.assetId,
           mimeType: asset.mimeType,
           dataBase64: asset.dataBase64,
@@ -110,7 +121,7 @@ export function buildDocModel(map: MindMap, opts: DocOptions): DocModel {
           height: typeof asset.height === "number" ? asset.height : null,
         });
       } else if (b.type === "chart") {
-        blocks.push({ kind: "paragraph", text: `[Biểu đồ${b.title ? `: ${b.title}` : ""}]`, indent });
+        blocks.push({ kind: "paragraph", text: `[Biểu đồ${b.title ? `: ${b.title}` : ""}]`, indent, outline });
       }
     }
   };
@@ -119,18 +130,43 @@ export function buildDocModel(map: MindMap, opts: DocOptions): DocModel {
     const node = map.nodes[id];
     if (!node) return;
     if (depth < depthLimit) {
-      blocks.push({ kind: "heading", level: depth + 1, text: node.text || "(không tên)" });
-      emitContent(node, 0);
+      blocks.push({ kind: "heading", level: depth + 1, text: node.text || "(không tên)", outline: depth });
+      emitContent(node, 0, depth + 1);
     } else {
       const listDepth = depth - depthLimit;
-      blocks.push({ kind: "listItem", depth: listDepth, text: node.text || "(không tên)", checked: node.checked });
-      emitContent(node, listDepth + 1);
+      blocks.push({ kind: "listItem", depth: listDepth, text: node.text || "(không tên)", checked: node.checked, outline: depth });
+      emitContent(node, listDepth + 1, depth + 1);
     }
     for (const c of node.children) walk(c, depth + 1);
   };
   for (const r of roots) walk(r, 0);
 
   return { title: firstRoot?.text || "T17Mind", blocks };
+}
+
+/** Bậc thụt lề mong muốn mỗi tầng (≈ 1 cm, đơn vị dxa = 1/20 pt). */
+export const OUTLINE_STEP_DXA = 567;
+/** Bậc tối thiểu (≈ 0,25 cm) — cây rất sâu vẫn còn nhìn ra tầng. */
+export const OUTLINE_STEP_MIN_DXA = 142;
+/** Tổng thụt lề ở tầng sâu nhất không quá phần này của bề rộng vùng chữ. */
+export const OUTLINE_MAX_SHARE = 0.3;
+
+/** Tầng sâu nhất có trong tài liệu (0 nếu trống). */
+export function maxOutline(doc: DocModel): number {
+  let m = 0;
+  for (const b of doc.blocks) if (b.kind !== "toc" && b.outline > m) m = b.outline;
+  return m;
+}
+
+/**
+ * Bậc thụt lề mỗi tầng cho Word: mặc định ≈ 1 cm; khi cây sâu, co lại sao
+ * cho tầng sâu nhất thụt không quá OUTLINE_MAX_SHARE bề rộng vùng chữ (đỡ
+ * phí giấy), nhưng không nhỏ hơn OUTLINE_STEP_MIN_DXA.
+ */
+export function outlineIndentStep(deepest: number, textWidthDxa: number): number {
+  if (deepest <= 0) return OUTLINE_STEP_DXA;
+  const fit = Math.floor((textWidthDxa * OUTLINE_MAX_SHARE) / deepest);
+  return Math.max(OUTLINE_STEP_MIN_DXA, Math.min(OUTLINE_STEP_DXA, fit));
 }
 
 /** Đếm nhanh nội dung (dùng cho test tự kiểm chứng sau khi xuất). */
