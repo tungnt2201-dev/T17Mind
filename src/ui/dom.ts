@@ -26,7 +26,7 @@ export function downloadText(text: string, filename: string, mime: string): void
 /** P2.10 — đọc một File (ví dụ ảnh người dùng chọn) thành chuỗi base64
  *  THUẦN (không kèm tiền tố "data:...;base64,") — dùng để lưu vào
  *  MindMap.assets, xem core/types.ts#ImageAsset. */
-export function readFileAsBase64(file: File): Promise<string> {
+export function readFileAsBase64(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {

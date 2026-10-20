@@ -544,7 +544,7 @@
     </div>
     <div class="divider"></div>
 
-    <CardSection {store} nodeId={n.id} />
+    <CardSection {store} {controller} nodeId={n.id} />
     <div class="divider"></div>
 
     <button type="button" class="section-header" on:click={() => (sectionOpen.work = !sectionOpen.work)}>

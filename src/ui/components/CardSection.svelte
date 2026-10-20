@@ -7,11 +7,15 @@
    * khối (M3), biểu đồ (M4) sẽ bổ sung sau.
    * M2 — bảng: bấm bản xem trước hoặc "Sửa bảng…" mở TableEditorModal
    * (qua tableEditorStore); "Nhập CSV…" thêm một khối bảng từ file.
+   * M3 — ảnh: "+ Ảnh…" chọn nhiều file (tự thu nhỏ/nén, qua
+   * controller.addImagesToNode), chú thích, cỡ hiển thị trên node, bấm ảnh
+   * để xem lớn. Dán (Ctrl+V) / kéo-thả ảnh lên node cũng vào đây.
    * Quy tắc cũ vẫn giữ: mọi thay đổi chỉ qua Command (store.dispatch),
    * input dùng value + on:change một chiều, không dùng bind:value.
    * -------------------------------------------------------------------
    */
   import type { Store } from "../../core/store";
+  import type { AppController } from "../appController";
   import { mapStore } from "../svelteBridge";
   import { showAlert, showConfirm } from "../dialog";
   import { tableEditorStore } from "../uiStores";
@@ -29,10 +33,24 @@
     MoveBlockCommand,
   } from "../../core/cardCommands";
   import { createCard, createTextBlock, createTableBlock, summarizeBlock } from "../../core/cards";
-  import type { Block } from "../../core/types";
+  import type { Block, ImageDisplaySize } from "../../core/types";
 
   export let store: Store;
   export let nodeId: string;
+  export let controller: AppController;
+
+  const SIZE_LABEL: Record<ImageDisplaySize, string> = { small: "Nhỏ", medium: "Vừa", large: "Lớn" };
+  let imageInput: HTMLInputElement | undefined;
+  function addImages(e: Event): void {
+    const input = e.currentTarget as HTMLInputElement;
+    const files = Array.from(input.files ?? []);
+    input.value = "";
+    if (files.length > 0) void controller.addImagesToNode(nodeId, files);
+  }
+  function imageSrc(assetId: string): string {
+    const a = $map.assets[assetId];
+    return a ? `data:${a.mimeType};base64,${a.dataBase64}` : "";
+  }
 
   const map = mapStore(store);
 
@@ -155,6 +173,23 @@
               </tbody></table>
               <span class="muted">{summarizeBlock(b)} — bấm để sửa</span>
             </div>
+          {:else if b.type === "image"}
+            <div class="card-image">
+              <button type="button" class="card-image-thumb" title="Bấm để xem lớn"
+                on:click={() => controller.openNodeImages(nodeId, b.id)}>
+                <img src={imageSrc(b.assetId)} alt={b.caption || "Ảnh"} />
+              </button>
+              <div class="card-image-fields">
+                <input type="text" placeholder="Chú thích…" value={b.caption} aria-label="Chú thích ảnh"
+                  on:change={(e) => { if (e.currentTarget.value !== b.caption) store.dispatch(new ReplaceBlockCommand(card.id, { ...b, caption: e.currentTarget.value })); }} />
+                <select value={b.size} aria-label="Cỡ hiển thị trên node"
+                  on:change={(e) => store.dispatch(new ReplaceBlockCommand(card.id, { ...b, size: e.currentTarget.value as ImageDisplaySize }))}>
+                  {#each Object.entries(SIZE_LABEL) as [v, label] (v)}
+                    <option value={v}>Cỡ {label}</option>
+                  {/each}
+                </select>
+              </div>
+            </div>
           {:else}
             <div class="muted">{summarizeBlock(b)}</div>
           {/if}
@@ -169,6 +204,9 @@
         on:click={() => csvInput?.click()}>Nhập CSV…</button>
       <input bind:this={csvInput} type="file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values" hidden
         on:change={(e) => importCsv(card.id, e)} />
+      <button type="button" class="btn small-btn" title="Thêm một hoặc nhiều ảnh (cũng có thể dán Ctrl+V hoặc kéo-thả ảnh lên node)"
+        on:click={() => imageInput?.click()}>+ Ảnh…</button>
+      <input bind:this={imageInput} type="file" accept="image/*" multiple hidden on:change={addImages} />
     </div>
     <div class="card-add">
       <button type="button" class="btn small-btn" on:click={detach}>Gỡ khỏi node</button>

@@ -42,10 +42,10 @@ Mỗi giai đoạn = 1 milestone GitHub, chia thành các issue nhỏ, mỗi iss
 - [x] Hiển thị trên canvas: node hiện **thẻ thu nhỏ** của bảng đầu tiên trong card (tối đa 5×4 ô, phần còn lại "…"); bấm thẻ mở trình sửa. Node được kéo to tay thì thẻ lấp đầy chỗ trống (thêm hàng/cột, ô giãn rộng). *Chưa làm:* thẻ chưa có trong xuất SVG (node vẫn cao đúng nhưng phần thẻ để trống).
 - [x] Đo chiều cao node có tính khối (`render/tableThumb.ts` dùng chung cho đo/vẽ/dò bấm): ô thẻ có bề rộng cố định nên bước đo không phải đo chữ; chữ đã cắt cho vừa ô được cache theo object bảng (WeakMap, tự hết hạn khi Command thay bảng mới).
 
-### M3 — Hình ảnh (nâng cấp)
-- [ ] Nhiều ảnh mỗi node, chú thích (caption), đổi kích thước hiển thị.
-- [ ] Dán ảnh từ clipboard, kéo-thả file vào node; tự nén/đổi cỡ khi quá lớn (giới hạn dung lượng `.t17m`).
-- [ ] Cache bitmap thu nhỏ để vẽ canvas mượt (đừng decode lại mỗi khung hình).
+### M3 — Hình ảnh (nâng cấp) ✅ (hoàn thành 20/10/2026, còn các mục ghi chú bên dưới)
+- [x] Nhiều ảnh mỗi node (khối ảnh trong card), chú thích, đổi cỡ hiển thị Nhỏ/Vừa/Lớn (`ImageBlock.size`, **schema 17 → 18**). Xem lớn có ‹ › / phím ←/→ giữa các ảnh của card.
+- [x] Dán ảnh từ clipboard (Ctrl+V khi clipboard chỉ có ảnh — copy ô Excel kèm ảnh PNG vẫn dán chữ như cũ), kéo-thả file ảnh vào node, chọn nhiều file ở mục Card; node chưa có card thì tự tạo; cả loạt là một bước hoàn tác. Tự thu nhỏ về cạnh dài 1920px và nén (JPEG 0.85, giữ PNG nếu có nền trong suốt; GIF/SVG giữ nguyên); cảnh báo khi tổng ảnh của map vượt 25 MB. Ảnh nhúng kiểu cũ (`imageAssetId`) cũng được thu nhỏ khi chọn.
+- [x] Cache bitmap thu nhỏ (`CanvasRenderer.imageCache`, theo assetId) để vẽ canvas mượt; kích thước gốc lưu trong `ImageAsset.width/height` (tuỳ chọn, `.t17m` giữ lại) nên đo layout không phải chờ giải mã. *Chưa làm:* xuất SVG chưa có ảnh/bảng; xuất PNG chỉ có ảnh của node đã từng hiện trên màn hình (ảnh chưa giải mã ra ô giữ chỗ).
 
 ### M4 — Biểu đồ
 - [ ] Bộ vẽ biểu đồ **tự viết nhỏ gọn** (cột / đường / tròn) sinh ra **chuỗi SVG** — một đường code dùng chung cho canvas, xuất ảnh và docx. Không kéo thêm thư viện biểu đồ nặng.

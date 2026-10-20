@@ -69,6 +69,80 @@ export function showImagePreview(dataBase64: string, mimeType: string): Promise<
   });
 }
 
+export interface GalleryImage {
+  dataBase64: string;
+  mimeType: string;
+  caption: string;
+}
+
+/**
+ * M3 — xem lớn nhiều ảnh (các khối ảnh của một card): nút ‹ › hoặc phím
+ * ←/→ để chuyển, Esc/Đóng để thoát. Cùng khuôn overlay tự vẽ như
+ * showImagePreview ở trên.
+ */
+export function showImageGallery(images: GalleryImage[], startIndex = 0): Promise<void> {
+  if (images.length === 0) return Promise.resolve();
+  return new Promise((resolve) => {
+    let index = Math.max(0, Math.min(startIndex, images.length - 1));
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay open";
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:min(92vw,900px);max-height:92vh;display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;align-items:center;gap:8px;min-height:0;">
+          <button class="btn" id="dlg-prev" aria-label="Ảnh trước" style="width:auto;">‹</button>
+          <img id="dlg-img" alt="" style="flex:1;min-width:0;max-height:calc(92vh - 130px);object-fit:contain;border-radius:6px;" />
+          <button class="btn" id="dlg-next" aria-label="Ảnh sau" style="width:auto;">›</button>
+        </div>
+        <p id="dlg-cap" style="margin:0;text-align:center;font-size:13px;color:#374151;"></p>
+        <div class="close-row" style="margin-top:0;align-items:center;gap:8px;">
+          <span id="dlg-count" style="margin-right:auto;font-size:12px;color:#6b7280;"></span>
+          <button class="btn primary" id="dlg-ok">Đóng</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const img = overlay.querySelector<HTMLImageElement>("#dlg-img");
+    const cap = overlay.querySelector<HTMLElement>("#dlg-cap");
+    const count = overlay.querySelector<HTMLElement>("#dlg-count");
+    const prev = overlay.querySelector<HTMLButtonElement>("#dlg-prev");
+    const next = overlay.querySelector<HTMLButtonElement>("#dlg-next");
+    const show = (): void => {
+      const it = images[index]!;
+      if (img) {
+        img.src = `data:${it.mimeType};base64,${it.dataBase64}`;
+        img.alt = it.caption || "Ảnh";
+      }
+      if (cap) cap.textContent = it.caption;
+      if (count) count.textContent = images.length > 1 ? `${index + 1} / ${images.length}` : "";
+      if (prev) prev.style.visibility = images.length > 1 ? "visible" : "hidden";
+      if (next) next.style.visibility = images.length > 1 ? "visible" : "hidden";
+    };
+    const go = (delta: number): void => {
+      index = (index + delta + images.length) % images.length;
+      show();
+    };
+    const onKey = (e: KeyboardEvent): void => {
+      // Chặn ở pha capture để phím tắt canvas (Delete, mũi tên...) không chạy.
+      e.stopImmediatePropagation();
+      if (e.key === "ArrowLeft") go(-1);
+      else if (e.key === "ArrowRight") go(1);
+      else if (e.key === "Escape" || e.key === "Enter") cleanup();
+    };
+    const cleanup = (): void => {
+      window.removeEventListener("keydown", onKey, true);
+      overlay.remove();
+      resolve();
+    };
+    window.addEventListener("keydown", onKey, true);
+    prev?.addEventListener("click", () => go(-1));
+    next?.addEventListener("click", () => go(1));
+    overlay.querySelector("#dlg-ok")?.addEventListener("click", cleanup);
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) cleanup();
+    });
+    show();
+  });
+}
+
 export function showAlert(message: string): Promise<void> {
   return new Promise((resolve) => {
     const overlay = document.createElement("div");

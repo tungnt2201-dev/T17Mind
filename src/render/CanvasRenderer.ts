@@ -51,7 +51,17 @@ import {
   THUMB_FONT,
   type ThumbLayout,
 } from "./tableThumb";
-import type { TableBlock } from "../core/types";
+import type { ImageAsset, TableBlock } from "../core/types";
+import {
+  getNodeImageBlocks,
+  assetDims,
+  imageThumbLayout,
+  imageReservedHeight,
+  imageThumbRect,
+  IMAGE_THUMB_HEIGHT,
+  type ImageDims,
+  type ImageThumbLayout,
+} from "./imageThumb";
 
 export interface ViewTransform {
   offsetX: number;
@@ -226,6 +236,50 @@ export class CanvasRenderer {
     return { width, height };
   }
 
+  /** M3 — bitmap THU NHỎ của từng ảnh (theo assetId — asset không bao
+   *  giờ bị sửa tại chỗ, ảnh mới luôn có id mới), để mỗi khung hình chỉ
+   *  drawImage một canvas nhỏ thay vì giải mã lại ảnh gốc. */
+  private imageCache = new Map<string, { state: "loading" | "ready" | "error"; bitmap?: HTMLCanvasElement; dims?: ImageDims }>();
+
+  /** main.ts gắn vào: gọi khi một ảnh giải mã xong. `relayout` = true nếu
+   *  trước đó chưa biết kích thước ảnh (cần tính lại layout). */
+  onImageReady: ((relayout: boolean) => void) | null = null;
+
+  private imageDims(assetId: string, asset: ImageAsset | undefined): ImageDims | null {
+    return assetDims(asset) ?? this.imageCache.get(assetId)?.dims ?? null;
+  }
+
+  private ensureImageBitmap(assetId: string, asset: ImageAsset): void {
+    if (this.imageCache.has(assetId) || typeof Image === "undefined") return;
+    this.imageCache.set(assetId, { state: "loading" });
+    const hadDims = assetDims(asset) !== null;
+    const img = new Image();
+    img.onload = () => {
+      const maxH = IMAGE_THUMB_HEIGHT.large * 2; // đủ nét cho cỡ Lớn trên màn hình mật độ điểm ảnh cao
+      const scale = Math.min(1, maxH / img.naturalHeight, (maxH * 3) / img.naturalWidth);
+      const c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round(img.naturalWidth * scale));
+      c.height = Math.max(1, Math.round(img.naturalHeight * scale));
+      c.getContext("2d")?.drawImage(img, 0, 0, c.width, c.height);
+      this.imageCache.set(assetId, { state: "ready", bitmap: c, dims: { width: img.naturalWidth, height: img.naturalHeight } });
+      this.onImageReady?.(!hadDims);
+    };
+    img.onerror = () => this.imageCache.set(assetId, { state: "error" });
+    img.src = `data:${asset.mimeType};base64,${asset.dataBase64}`;
+  }
+
+  /** Bỏ bitmap của ảnh không còn trong map (gọi mỗi lần đo lại layout). */
+  private pruneImageCache(map: MindMap): void {
+    for (const id of this.imageCache.keys()) if (!map.assets[id]) this.imageCache.delete(id);
+  }
+
+  private imageLayoutForNode(map: MindMap, node: MindNode): ImageThumbLayout | null {
+    const images = getNodeImageBlocks(map, node);
+    const first = images[0];
+    if (!first) return null;
+    return imageThumbLayout(images, this.imageDims(first.assetId, map.assets[first.assetId]));
+  }
+
   /** M2 — bố cục thẻ bảng theo khoảng trống THẬT của node lúc vẽ/dò bấm
    *  (node kéo to ra thì thẻ hiện thêm hàng/cột, ô giãn rộng). Chỗ cho
    *  chữ giữ đúng như lúc đo; phần còn lại (trừ hàng Tag) là của thẻ. */
@@ -238,7 +292,7 @@ export class CanvasRenderer {
     const tagRow = node.tagIds.length > 0 ? LABEL_ROW_HEIGHT : 0;
     const box = {
       width: node.width - THUMB_PAD * 2,
-      height: node.height - tagRow - THUMB_PAD - textHeight,
+      height: node.height - tagRow - THUMB_PAD - textHeight - imageReservedHeight(this.imageLayoutForNode(map, node)),
     };
     const manual = node.manualWidth != null || node.manualHeight != null;
     return thumbLayoutForTable(table, box, !manual);
@@ -250,6 +304,7 @@ export class CanvasRenderer {
    *  node.labels tự nó đã là chữ, giờ chỉ là id, cần tra ngược). */
   getMeasurer(map: MindMap): NodeMeasurer {
     const tagNameById = new Map(map.tags.map((t) => [t.id, t.name]));
+    this.pruneImageCache(map);
     return (node: MindNode, isRoot: boolean) => {
       let { width, height } = this.measureTextBox(node, isRoot);
 
@@ -271,6 +326,12 @@ export class CanvasRenderer {
       if (thumb) {
         width = Math.max(width, thumb.width + THUMB_PAD * 2);
         height += thumbReservedHeight(thumb);
+      }
+      // M3 — thẻ ảnh (render/imageThumb.ts), nằm trên thẻ bảng.
+      const image = this.imageLayoutForNode(map, node);
+      if (image) {
+        width = Math.max(width, image.width + THUMB_PAD * 2);
+        height += imageReservedHeight(image);
       }
 
       return { width, height };
@@ -1124,7 +1185,8 @@ export class CanvasRenderer {
     // M2 — thẻ bảng (nếu có) nằm ngay trên hàng Tag, cũng bị trừ ra.
     const tagRowHeight = node.tagIds.length > 0 ? LABEL_ROW_HEIGHT : 0;
     const thumb = this.thumbLayoutForNode(map, node);
-    const textAreaHeight = node.height - tagRowHeight - thumbReservedHeight(thumb);
+    const image = this.imageLayoutForNode(map, node);
+    const textAreaHeight = node.height - tagRowHeight - thumbReservedHeight(thumb) - imageReservedHeight(image);
     // P2.3 — chừa chỗ cho CẢ HAI icon góc (ghi chú bên trái, link bên
     // phải) nếu có, để chữ chính không đè lên chúng khi node hẹp.
     // P2.7f — chừa thêm chỗ cho checkbox hoàn thành (nếu có) — checkbox
@@ -1292,6 +1354,50 @@ export class CanvasRenderer {
     this.drawMarkers(node);
     this.drawLabelPills(map, node);
     if (thumb) this.drawTableThumb(node, thumb, tagRowHeight, isRoot);
+    if (image) this.drawImageThumb(map, node, image, tagRowHeight + thumbReservedHeight(thumb), isRoot);
+  }
+
+  /** M3 — vẽ thẻ ảnh (ảnh đầu tiên của card + huy hiệu "+N"). Ảnh chưa
+   *  giải mã xong thì vẽ ô giữ chỗ; xong sẽ tự vẽ lại qua onImageReady. */
+  private drawImageThumb(map: MindMap, node: MindNode, layout: ImageThumbLayout, belowReserved: number, isRoot: boolean): void {
+    const ctx = this.ctx;
+    const r = imageThumbRect(node, layout, belowReserved);
+    const asset = map.assets[layout.block.assetId];
+    if (asset) this.ensureImageBitmap(layout.block.assetId, asset);
+    const entry = this.imageCache.get(layout.block.assetId);
+    ctx.save();
+    ctx.beginPath();
+    this.roundRectPath(r.x, r.y, r.width, r.height, 4);
+    if (entry?.state === "ready" && entry.bitmap) {
+      ctx.clip();
+      ctx.drawImage(entry.bitmap, r.x, r.y, r.width, r.height);
+    } else {
+      ctx.fillStyle = isRoot ? "rgba(255,255,255,0.18)" : "rgba(31,41,51,0.08)";
+      ctx.fill();
+      ctx.font = "14px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = isRoot ? "#ffffff" : "#6b7280";
+      ctx.fillText(entry?.state === "error" ? "⚠" : "🖼", r.x + r.width / 2, r.y + r.height / 2);
+    }
+    ctx.restore();
+    if (layout.more > 0) {
+      const label = `+${layout.more}`;
+      ctx.save();
+      ctx.font = "600 10px -apple-system, Segoe UI, sans-serif";
+      const w = ctx.measureText(label).width + 8;
+      const bx = r.x + r.width - w - 3;
+      const by = r.y + 3;
+      ctx.beginPath();
+      this.roundRectPath(bx, by, w, 14, 7);
+      ctx.fillStyle = "rgba(17,24,39,0.72)";
+      ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label, bx + w / 2, by + 7.5);
+      ctx.restore();
+    }
   }
 
   /** M2 — chữ đã cắt cho vừa ô của từng bảng, cache theo object bảng
@@ -1643,6 +1749,17 @@ export class CanvasRenderer {
     return inside ? layout.table.id : null;
   }
 
+  /** M3 — bấm trúng thẻ ảnh thì trả về id khối ảnh đang hiện, không thì null. */
+  hitTestImageThumb(map: MindMap, node: MindNode, screenX: number, screenY: number, view: ViewTransform): string | null {
+    const layout = this.imageLayoutForNode(map, node);
+    if (!layout) return null;
+    const { x: wx, y: wy } = this.toWorld(screenX, screenY, view);
+    const below = (node.tagIds.length > 0 ? LABEL_ROW_HEIGHT : 0) + thumbReservedHeight(this.thumbLayoutForNode(map, node));
+    const r = imageThumbRect(node, layout, below);
+    const inside = wx >= r.x && wx <= r.x + r.width && wy >= r.y && wy <= r.y + r.height;
+    return inside ? layout.block.id : null;
+  }
+
   /**
    * P2.10 — vùng bấm icon 🖼 (ảnh nhúng). Khớp ĐÚNG vị trí đã vẽ ở
    * drawNode(): cùng phía với 🔗 nhưng lùi thêm 14px nếu link cũng có
@@ -1674,7 +1791,8 @@ export class CanvasRenderer {
     if (node.checked === null) return false;
     const { x: wx, y: wy } = this.toWorld(screenX, screenY, view);
     const textAreaHeight =
-      node.height - (node.tagIds.length > 0 ? LABEL_ROW_HEIGHT : 0) - thumbReservedHeight(this.thumbLayoutForNode(map, node));
+      node.height - (node.tagIds.length > 0 ? LABEL_ROW_HEIGHT : 0) - thumbReservedHeight(this.thumbLayoutForNode(map, node)) -
+      imageReservedHeight(this.imageLayoutForNode(map, node));
     const CHECKBOX_SIZE = 14;
     const TEXT_PADDING_X = 10;
     const cbX = node.x + TEXT_PADDING_X;
