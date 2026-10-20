@@ -176,3 +176,7 @@ export const libraryStore = writable<LibraryState>({ open: false, query: "", fil
 /** Card đang mở dạng trang tài liệu (CardPageModal), null = đóng.
  *  `focusBlockId` = khối cần cuộn tới khi mở (ví dụ bấm biểu tượng bảng). */
 export const cardPageStore = writable<{ cardId: string; focusBlockId: string | null } | null>(null);
+
+/** M5 — hộp thoại "Xuất tài liệu" (.docx / .md / .zip): null = đóng;
+ *  `scope` = phạm vi chọn sẵn khi mở (menu chuột phải "Xuất nhánh này"). */
+export const exportDocStore = writable<{ scope: "map" | "branch" } | null>(null);

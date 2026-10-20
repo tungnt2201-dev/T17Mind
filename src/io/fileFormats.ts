@@ -8,7 +8,7 @@
  * ---------------------------------------------------------------------
  */
 
-export type FileFormat = "t17m" | "json" | "xlsx" | "xmind" | "opml" | "md" | "svg" | "png";
+export type FileFormat = "t17m" | "json" | "xlsx" | "xmind" | "opml" | "docx" | "md" | "zip" | "svg" | "png";
 
 export interface FormatInfo {
   format: FileFormat;
@@ -32,7 +32,15 @@ export const FORMATS: Record<FileFormat, FormatInfo> = {
   },
   xmind: { format: "xmind", label: "XMind (.xmind)", ext: "xmind", mime: "application/zip", openable: true },
   opml: { format: "opml", label: "OPML (.opml)", ext: "opml", mime: "text/x-opml", openable: true },
-  md: { format: "md", label: "Markdown (.md)", ext: "md", mime: "text/markdown", openable: false },
+  docx: {
+    format: "docx",
+    label: "Word (.docx)",
+    ext: "docx",
+    mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    openable: false,
+  },
+  md: { format: "md", label: "Markdown (.md)", ext: "md", mime: "text/markdown", openable: true },
+  zip: { format: "zip", label: "Markdown + thư mục ảnh (.zip)", ext: "zip", mime: "application/zip", openable: false },
   svg: { format: "svg", label: "Ảnh vector SVG (.svg)", ext: "svg", mime: "image/svg+xml", openable: false },
   png: { format: "png", label: "Ảnh PNG (.png)", ext: "png", mime: "image/png", openable: false },
 };

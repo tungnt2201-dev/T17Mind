@@ -47,6 +47,7 @@ export type MenuAction =
   | "addImages"
   | "startLink"
   | "detachFloating"
+  | "exportBranch"
   | "summary"
   | "boundary"
   | "editLabel"
@@ -90,6 +91,7 @@ export function buildMenu(t: MenuTarget): MenuEntry[] {
         ...(t.imageCount > 0 ? [item("viewImages", t.imageCount > 1 ? `Xem ${t.imageCount} ảnh` : "Xem ảnh")] : []),
         item("startLink", "Tạo liên kết từ node này"),
         item("detachFloating", "Tách thành nhánh trôi", undefined, { disabled: t.isRoot }),
+        item("exportBranch", "Xuất nhánh này thành tài liệu…"),
         SEP,
         item("delete", "Xoá", "Del", { disabled: t.isRoot, danger: true }),
       ];

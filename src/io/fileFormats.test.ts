@@ -41,6 +41,8 @@ describe("Định dạng & đường dẫn file", () => {
     const all = formatOrder("png");
     expect(all[0]).toBe("png");
     expect(new Set(all).size).toBe(Object.keys(FORMATS).length);
-    expect(formatOrder("json", true)).toEqual(["json", "t17m", "xlsx", "xmind", "opml"]);
+    expect(formatOrder("json", true)).toEqual(["json", "t17m", "xlsx", "xmind", "opml", "md"]);
+    expect(formatFromPath("Báo cáo.DOCX")).toBe("docx");
+    expect(formatFromPath("tai lieu.zip")).toBe("zip");
   });
 });

@@ -53,13 +53,13 @@ Mỗi giai đoạn = 1 milestone GitHub, chia thành các issue nhỏ, mỗi iss
 - [ ] Trình sửa: chọn bảng nguồn, cột nhãn, cột số liệu, loại biểu đồ, bảng màu theo theme.
 - [ ] Hiển thị thẻ thu nhỏ trên node; bấm để xem lớn.
 
-### M5 — Kết xuất tài liệu (.md và .docx)
-Mô hình chung (một lần, dùng cho cả hai định dạng): **cây map → "tài liệu"** gồm tiêu đề / đoạn / danh sách / bảng / ảnh.
-- [ ] Hộp thoại tuỳ chọn: xuất cả map hay chỉ nhánh đang chọn; độ sâu → cấp tiêu đề (H1…H6, sâu hơn thì thành danh sách); có kèm ghi chú / bảng / ảnh / biểu đồ hay không; có mục lục.
-- [ ] **Markdown**: bảng → bảng GFM; ảnh & biểu đồ → thư mục `assets/` đóng zip (hoặc tuỳ chọn nhúng base64 vào một file).
-- [ ] **DOCX**: thư viện `docx` (tải lười như `xlsx` để không phình bundle chính); bảng Word thật, ảnh/biểu đồ (SVG → PNG), mục lục, kiểu tiêu đề chuẩn Word.
-- [ ] Test "tự kiểm chứng": xuất rồi giải nén/đọc lại, so khớp số hàng/cột/ảnh với map gốc.
-- [ ] Sau cùng (tuỳ chọn): **nhập Markdown** → map (tiêu đề/danh sách thành node) để đi hai chiều.
+### M5 — Kết xuất tài liệu (.md và .docx) ✅ (hoàn thành 20/10/2026)
+Mô hình chung (một lần, dùng cho cả hai định dạng): **cây map → "tài liệu"** gồm tiêu đề / đoạn / danh sách / bảng / ảnh (`core/docModel.ts`).
+- [x] Hộp thoại tuỳ chọn (Xuất → "Tài liệu Word / Markdown…", hoặc chuột phải node → "Xuất nhánh này thành tài liệu…"): cả map hay chỉ nhánh đang chọn; số cấp đầu → tiêu đề (H1…H6, sâu hơn thành danh sách); kèm ghi chú / nội dung card / ảnh; mục lục; dòng "Sẽ gồm…" đếm trước nội dung. Biểu đồ (M4 chưa làm) xuất tạm thành dòng "[Biểu đồ: …]".
+- [x] **Markdown**: bảng → bảng GFM (căn lề, thoát `|`, xuống dòng → `<br>`); ảnh → nhúng base64 trong một file `.md`, hoặc **.zip** gồm `.md` + thư mục `assets/`; mục lục có liên kết neo.
+- [x] **DOCX**: thư viện `docx` (nạp lười — bản PWA tách chunk riêng ~122 KB gzip; bản một file/exe tăng ~440 KB vì phải gộp hết); kiểu tiêu đề chuẩn Word, danh sách gạch đầu dòng lồng nhau, bảng Word thật (độ rộng cột theo tỉ lệ, căn lề, hàng tiêu đề tô nền), ảnh thật (PNG/JPEG/GIF/BMP; WebP/SVG thành dòng chú thích), mục lục (trường TOC — Word hỏi cập nhật khi mở). Ảnh biểu đồ SVG → PNG để dành cho M4.
+- [x] Test "tự kiểm chứng": xuất rồi giải nén/đọc lại (document.xml, zip), so khớp số tiêu đề/hàng/cột/ảnh với map gốc.
+- [x] **Nhập Markdown** → map (tiêu đề/danh sách → node, đoạn văn → ghi chú, bảng GFM và ảnh nhúng → card) — Tệp → Mở… hoặc Nhập → Nhập Markdown.
 
 ### M6 — Hoàn thiện
 - [ ] Hiệu năng với map lớn có nhiều khối (culling cũng áp dụng cho thẻ khối).
@@ -90,6 +90,8 @@ Mô hình chung (một lần, dùng cho cả hai định dạng): **cây map →
 3. `notes` hiện tại **giữ nguyên** ở M1 (không migrate ngay, tránh vỡ tìm kiếm/xuất file/icon ghi chú); sẽ gộp vào card ở một bước riêng sau khi card ổn định.
 
 ## 5. Định hướng kế thừa Heptabase
+
+> **Cập nhật 20/10/2026:** đánh giá khả thi bộ prompt "Knowledge Workspace" (G1–G8) và lộ trình KW0–KW10 nằm ở [`KNOWLEDGE_WORKSPACE_PLAN.md`](KNOWLEDGE_WORKSPACE_PLAN.md).
 
 Nguồn tham khảo: video *Heptabase Fundamentals 101: Sense-making with whiteboards* (kênh Heptabase) và wiki công khai của Heptabase (Fundamental Elements, User Interface Logic, Mindmap, Heptabase 1.0, Public Roadmap). Lưu ý: không lấy được phụ đề video; nội dung video được hiểu qua các chương (tạo card trên whiteboard, thư viện card, trích ghi chú từ sách, trích từ PDF, **tổng hợp kiến thức từ nhiều nguồn bằng mindmap**, "giá trị cốt lõi") và đối chiếu với wiki. Cần xem lại video để bổ sung chi tiết thao tác.
 

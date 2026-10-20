@@ -3713,3 +3713,44 @@ Bước kế tiếp theo mục 5.5 ROADMAP. Không đổi schema: liên kết l�
 - [ ] "↗ Vẽ đường liên kết cho N nhắc tới" — xuất hiện đường nét đứt tới node được nhắc; Ctrl+Z gỡ cả loạt
 - [ ] Ghép thêm JSON chứa card có liên kết — liên kết trong phần ghép vẫn trỏ đúng
 
+---
+
+## M5 — Kết xuất tài liệu .md / .docx (20/10/2026)
+
+Bước kế tiếp theo mục 5.5 ROADMAP (sau H2). Không đổi schema. Thư viện mới: `docx` (9.x), nạp lười.
+
+- `core/docModel.ts` (thuần): `buildDocModel(map, options)` — cây map → khối tài liệu (tiêu đề theo cấp, mục danh sách, đoạn văn từ ghi chú và văn bản card — liên kết `[[…]]` thành tên, bảng, ảnh, biểu đồ tạm thành chữ, mục lục); `docStats` để đếm.
+- `io/markdownDoc.ts` (thuần): Markdown GFM, ảnh "embed"/"files"/"none", mục lục neo kiểu GitHub. `io/markdownZip.ts`: .zip = .md + assets/. `io/docx.ts`: Word với kiểu Heading chuẩn, danh sách, bảng thật, ảnh, TOC. `io/markdownImport.ts`: nhập Markdown → map.
+- UI: `components/ExportDocModal.svelte` (mở qua `exportDocStore`); mục Xuất "Tài liệu Word / Markdown…" thay mục "Markdown" cũ (dạng danh sách đơn giản — chọn "Số cấp làm tiêu đề = 0" ra kết quả tương tự); chuột phải node → "Xuất nhánh này thành tài liệu…"; Nhập → "Nhập Markdown". Định dạng mới trong hộp thoại Lưu: .docx, .zip; .md giờ mở được.
+- Lỗi bắt được nhờ test đọc lại document.xml: chữ thường bị ghi `<w:b w:val="false"/>` làm **tiêu đề mất in đậm** của kiểu Heading — giờ chỉ đặt `bold` khi true. Và tên bảng (`**Tên**`) bị nuốt vào ghi chú khi nhập lại Markdown.
+- Test: `io/docExport.test.ts` (241 test) — mô hình tài liệu, Markdown (bảng/ảnh/mục lục), zip đọc lại, docx giải nén đếm bảng/hàng/cột/tiêu đề/danh sách/ảnh/TOC, xuất rồi nhập lại Markdown giữ cây/checkbox/bảng/ảnh. Chạy thử trên Chromium (Neutralino giả lập): xuất .docx/.md/.zip qua hộp thoại Lưu, đọc lại file ghi ra; Mở… file .md vừa xuất → đúng 3 node.
+
+### Checklist kiểm thử tay — M5
+
+- [ ] Xuất → "Tài liệu Word / Markdown…" — hộp thoại hiện tuỳ chọn và dòng "Sẽ gồm: … tiêu đề · … bảng · … ảnh" đổi theo tuỳ chọn
+- [ ] Word (.docx): mở bằng Word — tiêu đề dùng kiểu Heading 1/2/3 (thấy trong Navigation Pane), node sâu hơn là gạch đầu dòng, ghi chú/văn bản card là đoạn văn, bảng là bảng Word thật (đúng cột, căn lề, hàng tiêu đề tô nền), ảnh hiện đúng, chú thích dưới ảnh
+- [ ] Bật "Có mục lục" → Word hỏi cập nhật trường khi mở → chọn Yes → mục lục có số trang, bấm được
+- [ ] Markdown (.md): mở bằng VS Code/Typora — bảng hiển thị đúng, ảnh hiện (nhúng sẵn)
+- [ ] Markdown + ảnh (.zip): giải nén — có file .md và thư mục assets/; mở .md thấy ảnh
+- [ ] "Chỉ nhánh đang chọn" (hoặc chuột phải node → "Xuất nhánh này thành tài liệu…") — chỉ có nhánh đó
+- [ ] Đổi "Số cấp đầu làm tiêu đề" (0…6) — cấu trúc tiêu đề/danh sách đổi đúng
+- [ ] Bỏ tick ghi chú / nội dung card / ảnh — phần tương ứng biến mất khỏi file
+- [ ] Tệp → Mở… (hoặc Nhập → Nhập Markdown) chọn file .md vừa xuất — map dựng lại đúng cây, checkbox, bảng (kể cả tên bảng), ảnh
+
+
+### M5.1 — Word: thụt lề theo tầng (20/10/2026)
+
+Phản hồi sau khi thử: file Word mọi tiêu đề/đoạn đều sát lề trái, khó nhìn ra tầng.
+
+- `DocBlock` thêm `outline` (node ở độ sâu d → d; ghi chú/nội dung card của nó → d + 1). Tuỳ chọn mới `indentByLevel` (mặc định bật), ô "Thụt lề theo tầng" trong hộp thoại (chỉ áp dụng cho .docx).
+- Bậc thụt tự co theo độ sâu tổng thể: `outlineIndentStep(maxOutline, bềRộngVùngChữ)` = 1 cm/tầng, nhưng tầng sâu nhất không thụt quá 30% bề rộng vùng chữ (≈ 4,9 cm); sàn 0,25 cm. Cây 3–4 tầng: 1 cm/tầng; cây 8 tầng: ≈ 0,62 cm/tầng.
+- Áp dụng cho tiêu đề, đoạn văn, tên bảng, bảng (thụt + thu hẹp theo phần còn lại), ảnh (giới hạn rộng theo phần còn lại), gạch đầu dòng (lề riêng ghi đè lề mặc định của mức danh sách, dấu • nằm ở mép thụt).
+- Test: 3 test mới (bậc co giãn, `outline` trong mô hình, đọc `w:ind`/`w:tblInd` trong document.xml; tắt thì không thụt).
+
+- [ ] Xuất Word cây 3–4 tầng — mỗi tầng thụt ≈ 1 cm, nội dung card nằm thụt dưới node của nó, bảng thụt theo
+- [ ] Xuất Word cây rất sâu (7–8 tầng) — vẫn thấy rõ tầng nhưng tầng sâu nhất không lùi quá 1/3 trang
+- [ ] Bỏ tick "Thụt lề theo tầng" — trở lại kiểu cũ (sát lề)
+
+### File demo trình diễn (20/10/2026)
+
+`docs/demo/T17Mind-demo.t17m` — map "Gió Sớm Coffee — Kế hoạch mở quán" (dữ liệu giả định, chủ đề thương mại trung tính) gom các tính năng tới M5: 63 node, 2 nhánh trôi ("Ý tưởng mở rộng" và "🧭 Tham quan T17Mind" — 12 bước, mỗi bước một card lời dẫn có liên kết `[[node:…]]`/`[[card:…]]` nhảy tới chỗ minh hoạ), layout hai bên, theme Branch Colors, tag, biểu tượng, ưu tiên, tiến độ, checkbox, nhãn đường nối, liên kết URL, quan hệ, tóm tắt, khoanh vùng, 2 ghi chú dán, ảnh trên node; card văn bản/bảng (độ rộng cột riêng)/ảnh 3 cỡ/biểu đồ (chờ M4), 1 card dùng chung 2 node, 3 card Inbox; node thu nhỏ hết cỡ (biểu tượng đính kèm) và node phóng to. Kịch bản lời dẫn cho người trình bày: `docs/demo/KICH-BAN-DEMO.md`. Test `io/demoFile.test.ts` bảo đảm file luôn mở được và xuất Word được.
