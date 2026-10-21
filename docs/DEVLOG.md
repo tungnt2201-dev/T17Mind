@@ -3847,3 +3847,14 @@ Nhánh `docs/huong-dan` (xếp chồng trên `docs/test-pack`). Bộ hướng d�
 - Ảnh chụp từ chính ứng dụng (Chromium, có đánh số/khung đỏ chú thích), dựng lại được bằng kịch bản.
 - Sửa nhỏ kèm theo: đường dẫn Workspace mặc định ghép đúng kiểu gạch của thư mục exe (`D:\\T17Mind-Test\\T17Mind-Workspace`, trước đây lẫn `\\` và `/`).
 - **Lộ trình:** 1 Làm quen & dựng khung ✅ · 2 Theo dõi tiến độ, thủ tục và quan hệ · 3 Hồ sơ trong node: Card, bảng, ảnh · 4 Lưu trữ, chia sẻ, báo cáo · 5 Quy trình trọn vẹn và mẹo nâng cao.
+
+---
+
+## Hướng dẫn sử dụng (Word) — Chương 2 (21/10/2026)
+
+Nhánh `docs/huong-dan-c2` (xếp chồng trên `docs/huong-dan`). Chương 2: **Theo dõi tiến độ, thủ tục và quan hệ** — bà Lan chuẩn bị họp hội đồng quản trị ngày 15/12.
+
+- `docs/huong-dan/HDSD-Chuong-2-Theo-doi-tien-do-thu-tuc-quan-he.docx` (16 trang, 16 hình): chọn node và khung Định dạng, độ ưu tiên/tiến độ/checkbox, biểu tượng, Tag, ghi chú node, lọc Tag bằng Explorer, liên kết chéo, tóm tắt, khoanh vùng, ghi chú dán, nhánh trôi, menu Hiển thị; bài tập 5 câu, xử lý sự cố, bảng quy ước dự án, phím tắt.
+- `docs/huong-dan/demo/NMDMT-C2-theo-doi.t17m`: bản đồ kết quả (53 node; 5 Tag, 4 liên kết chéo, 1 tóm tắt, 1 khoanh vùng, 1 ghi chú dán, 1 nhánh trôi; ưu tiên/tiến độ/biểu tượng/ghi chú điền sẵn ở các nhánh, riêng nhánh Tiến độ & Rủi ro để trống làm chỗ thực hành). Test `io/huongDan.test.ts` giữ file đúng như tài liệu nói (kể cả đáp án bài tập 5).
+- Ảnh chụp bằng Chromium từ chính ứng dụng, có đánh số/khung đỏ; hiệu chỉnh vị trí node bằng cách dò hình chữ nhật node gốc (thành phần liên thông lớn nhất cùng màu).
+
