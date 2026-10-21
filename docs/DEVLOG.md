@@ -3835,3 +3835,15 @@ Nhánh `feat/kw1-card-registry` (xếp chồng trên `feat/icons-themes` → KW0
 Nhánh `docs/test-pack` (xếp chồng trên KW1). `docs/testing/KIEM-THU.docx` (và bản `.md` cùng nội dung): 180 phép thử chia 18 mục A–R (khởi động, sơ đồ cơ bản, card, bảng, ảnh, hiển thị card, menu chuột phải, Thư viện, liên kết, lưu/mở, nhập, xuất tài liệu, biểu tượng & theme, Workspace, card dùng chung, hiệu năng, file lỗi/cũ, demo); 35 phép thử ★ bắt buộc đạt. `docs/testing/mau/`: 48 file mẫu (ảnh đủ loại, bảng TSV/CSV/XLSX, JSON/XLSX/XMind/OPML/Markdown/.t17m, file lỗi và file cũ schema 16/19, theme, Workspace mẫu 2 map dùng chung 1 card, map lớn 1500 node). Test `io/testPack.test.ts` + `testPack.dom.test.ts` bảo đảm mọi file mẫu đúng như hướng dẫn nói (số node, số bảng, thông báo lỗi…) — sửa app mà lệch là test đỏ.
 
 - **Lỗi bắt được khi làm bộ mẫu và đã sửa:** map chép tay vào `maps/` bị ghi giờ sửa = 0 nên "Map gần đây" hiện ngày 01/01/1970 — giờ ghi giờ lúc phát hiện.
+
+---
+
+## Hướng dẫn sử dụng (Word) — Chương 1 (21/10/2026)
+
+Nhánh `docs/huong-dan` (xếp chồng trên `docs/test-pack`). Bộ hướng dẫn 5 chương, mỗi lần làm một chương ra một file Word, có ảnh chụp màn hình các bước, xoay quanh một ví dụ xuyên suốt: **Nhà máy điện mặt trời Ninh Sơn 1 — 50 MWp** (xin phép, quan hệ các bên, kỹ thuật, pháp lý, khách hàng, doanh thu, lợi nhuận; toàn bộ số liệu giả định).
+
+- `docs/huong-dan/HDSD-Chuong-1-Lam-quen-va-dung-khung.docx` (15 trang, 16 hình): giới thiệu, phát biểu vấn đề, giao diện, tạo/sửa/di chuyển/xoá/hoàn tác node, thu gọn, bố cục, zoom, tìm kiếm, lưu và Workspace, bài tập, xử lý sự cố, phím tắt, lộ trình 5 chương.
+- `docs/huong-dan/demo/NMDMT-C1-khung-du-an.t17m`: bản đồ kết quả chương 1 (49 node, 8 nhánh, bố cục hai bên). Test `io/huongDan.test.ts` bảo đảm file đúng như tài liệu nói (số node, nhánh, vị trí node cho bài tập, kết quả tìm "epc").
+- Ảnh chụp từ chính ứng dụng (Chromium, có đánh số/khung đỏ chú thích), dựng lại được bằng kịch bản.
+- Sửa nhỏ kèm theo: đường dẫn Workspace mặc định ghép đúng kiểu gạch của thư mục exe (`D:\\T17Mind-Test\\T17Mind-Workspace`, trước đây lẫn `\\` và `/`).
+- **Lộ trình:** 1 Làm quen & dựng khung ✅ · 2 Theo dõi tiến độ, thủ tục và quan hệ · 3 Hồ sơ trong node: Card, bảng, ảnh · 4 Lưu trữ, chia sẻ, báo cáo · 5 Quy trình trọn vẹn và mẹo nâng cao.

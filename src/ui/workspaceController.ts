@@ -37,6 +37,7 @@ import {
   type WorkspaceFs,
 } from "../io/workspaceFs";
 import { appDir, isDesktopApp } from "../io/nativeFs";
+import { joinPath } from "../io/fileFormats";
 import { workspaceStore } from "./uiStores";
 import { loadUserLibrary } from "./userLibrary";
 
@@ -52,7 +53,7 @@ const neu = (): NeutralinoUi | null => (globalThis as unknown as { Neutralino?: 
 
 export function defaultNativeWorkspacePath(): string {
   const dir = appDir().replace(/[\\/]+$/, "");
-  return dir ? `${dir}/${DEFAULT_WORKSPACE_DIR_NAME}` : DEFAULT_WORKSPACE_DIR_NAME;
+  return dir ? joinPath(dir, DEFAULT_WORKSPACE_DIR_NAME) : DEFAULT_WORKSPACE_DIR_NAME; // đúng kiểu gạch của thư mục exe (Windows: \)
 }
 
 async function attach(fs: WorkspaceFs): Promise<WorkspaceRepo> {
