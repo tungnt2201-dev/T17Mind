@@ -71,10 +71,11 @@ export class WorkspaceRepo {
     const rec = reconcileManifest(manifest, files);
     manifest = rec.manifest;
     dirty ||= rec.changed;
+    // File .t17m mới chép vào maps/: chưa biết giờ sửa → coi là vừa thêm (không để 1970 trong "Map gần đây").
     for (const mapId of rec.unknownMapIds) {
       const map = await readMapFile(fs, mapId);
       if (!map || map.mapId !== mapId) continue;
-      manifest = upsertMapEntry(manifest, { mapId, title: mapDisplayTitle(map), updatedAt: 0, cardIds: Object.keys(map.cards) }, now());
+      manifest = upsertMapEntry(manifest, { mapId, title: mapDisplayTitle(map), updatedAt: now(), cardIds: Object.keys(map.cards) }, now());
       dirty = true;
     }
     // KW1 — đối chiếu kho card: bỏ mục mất file, nhận file card chép tay vào.

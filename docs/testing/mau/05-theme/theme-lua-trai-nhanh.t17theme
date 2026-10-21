@@ -1,0 +1,22 @@
+{
+  "format": "t17mind-theme",
+  "version": 1,
+  "theme": {
+    "id": "mau_lua",
+    "name": "Lửa trại — mỗi nhánh một màu (mẫu)",
+    "perBranch": true,
+    "levels": [],
+    "palette": [
+      "#dc2626",
+      "#ea580c",
+      "#d97706",
+      "#65a30d",
+      "#0d9488",
+      "#7c3aed"
+    ],
+    "rootStyle": {
+      "fill": "#292524",
+      "color": "#fafaf9"
+    }
+  }
+}
