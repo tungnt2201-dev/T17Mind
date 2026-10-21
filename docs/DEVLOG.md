@@ -3827,3 +3827,11 @@ Nhánh `feat/kw1-card-registry` (xếp chồng trên `feat/icons-themes` → KW0
 - [ ] Xoá card khỏi mọi map → trong "Toàn Workspace" card hiện "Không map nào dùng" → "Xoá khỏi Workspace" → file vào `.trash/`
 - [ ] "Mở map: …" trong chi tiết card → chuyển sang đúng map
 - [ ] Trình duyệt chưa chọn thư mục: tab "Toàn Workspace" hiện hướng dẫn chọn thư mục
+
+---
+
+## Bộ kiểm thử tay + file mẫu (21/10/2026)
+
+Nhánh `docs/test-pack` (xếp chồng trên KW1). `docs/testing/KIEM-THU.docx` (và bản `.md` cùng nội dung): 180 phép thử chia 18 mục A–R (khởi động, sơ đồ cơ bản, card, bảng, ảnh, hiển thị card, menu chuột phải, Thư viện, liên kết, lưu/mở, nhập, xuất tài liệu, biểu tượng & theme, Workspace, card dùng chung, hiệu năng, file lỗi/cũ, demo); 35 phép thử ★ bắt buộc đạt. `docs/testing/mau/`: 48 file mẫu (ảnh đủ loại, bảng TSV/CSV/XLSX, JSON/XLSX/XMind/OPML/Markdown/.t17m, file lỗi và file cũ schema 16/19, theme, Workspace mẫu 2 map dùng chung 1 card, map lớn 1500 node). Test `io/testPack.test.ts` + `testPack.dom.test.ts` bảo đảm mọi file mẫu đúng như hướng dẫn nói (số node, số bảng, thông báo lỗi…) — sửa app mà lệch là test đỏ.
+
+- **Lỗi bắt được khi làm bộ mẫu và đã sửa:** map chép tay vào `maps/` bị ghi giờ sửa = 0 nên "Map gần đây" hiện ngày 01/01/1970 — giờ ghi giờ lúc phát hiện.

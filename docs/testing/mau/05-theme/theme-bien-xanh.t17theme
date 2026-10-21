@@ -1,0 +1,27 @@
+{
+  "format": "t17mind-theme",
+  "version": 1,
+  "theme": {
+    "id": "mau_bien",
+    "name": "Biển xanh (mẫu)",
+    "levels": [
+      {
+        "fill": "#0c4a6e",
+        "color": "#ffffff"
+      },
+      {
+        "fill": "#0369a1",
+        "color": "#ffffff"
+      },
+      {
+        "fill": "#bae6fd",
+        "color": "#0c4a6e"
+      },
+      {
+        "fill": "#f0f9ff",
+        "color": "#0c4a6e"
+      }
+    ],
+    "hueDrift": true
+  }
+}

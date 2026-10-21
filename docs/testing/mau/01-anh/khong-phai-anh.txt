@@ -1,0 +1,1 @@
+Đây là file chữ, KHÔNG phải ảnh — dùng để thử kéo thả file sai loại lên node.

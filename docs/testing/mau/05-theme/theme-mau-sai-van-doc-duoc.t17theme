@@ -1,0 +1,19 @@
+{
+  "format": "t17mind-theme",
+  "version": 1,
+  "theme": {
+    "id": "mau_sai",
+    "name": "Có màu sai (màu hỏng bị bỏ qua)",
+    "levels": [
+      {
+        "fill": "#7c2d12"
+      },
+      {
+        "fill": "đỏ tươi"
+      },
+      {
+        "fill": "#fed7aa"
+      }
+    ]
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "text": "Dự án nhỏ (JSON dạng cây)",
+  "children": [
+    {
+      "text": "Việc 1",
+      "fill": "#2f6fed",
+      "color": "#ffffff",
+      "children": [
+        {
+          "text": "Việc 1.1"
+        },
+        {
+          "text": "Việc 1.2",
+          "checked": true
+        }
+      ]
+    },
+    {
+      "text": "Việc 2",
+      "borderStyle": "dashed",
+      "link": "https://example.com",
+      "notes": "Ghi chú của việc 2"
+    },
+    {
+      "text": "Việc 3",
+      "labels": [
+        "Gấp",
+        "Quan trọng"
+      ],
+      "children": [
+        {
+          "text": "Việc 3.1",
+          "textBold": true
+        }
+      ]
+    }
+  ]
+}

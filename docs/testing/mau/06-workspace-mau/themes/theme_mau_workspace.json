@@ -1,0 +1,23 @@
+{
+  "id": "theme_mau_workspace",
+  "name": "Theme có sẵn trong Workspace mẫu",
+  "levels": [
+    {
+      "fill": "#4c1d95",
+      "color": "#ffffff"
+    },
+    {
+      "fill": "#7c3aed",
+      "color": "#ffffff"
+    },
+    {
+      "fill": "#ddd6fe",
+      "color": "#2e1065"
+    },
+    {
+      "fill": "#f5f3ff",
+      "color": "#2e1065"
+    }
+  ],
+  "hueDrift": true
+}

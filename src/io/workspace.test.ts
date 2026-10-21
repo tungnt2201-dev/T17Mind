@@ -141,6 +141,7 @@ describe("KW0 — WorkspaceRepo trên thư mục (bộ nhớ)", () => {
     fs.files.set("maps/m_broken.t17m", textBytes("không phải zip"));
     const r2 = await WorkspaceRepo.open(fs, opts());
     expect(r2.listMaps().map((e) => e.title).sort()).toEqual(["A", "C"]);
+    expect(r2.listMaps().every((e) => e.updatedAt > 0)).toBe(true); // map chép tay không bị ghi giờ 1970
   });
 
   it("xoá map: chuyển vào .trash/, bỏ khỏi danh mục", async () => {

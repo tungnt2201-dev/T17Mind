@@ -1,0 +1,20 @@
+{
+  "text": "Nhóm Marketing (để GHÉP THÊM vào map đang mở)",
+  "children": [
+    {
+      "text": "Chiến dịch email",
+      "children": [
+        {
+          "text": "Soạn nội dung"
+        },
+        {
+          "text": "Gửi thử"
+        }
+      ]
+    },
+    {
+      "text": "Chiến dịch mạng xã hội",
+      "notes": "Ghép thêm xong phải Ctrl+Z gỡ được cả nhóm."
+    }
+  ]
+}
