@@ -39,7 +39,7 @@
   import type { SelectionModel } from "../selection";
   import type { AppController } from "../appController";
   import { mapStore, selectionStore } from "../svelteBridge";
-  import { linkingModeStore, helpModalOpenStore, searchOpenStore, formatPainterModeStore, mapsModalOpenStore, explorerStore, minimapStore, hasLinkedFileStore, libraryStore, exportDocStore } from "../uiStores";
+  import { linkingModeStore, helpModalOpenStore, searchOpenStore, formatPainterModeStore, mapsModalOpenStore, explorerStore, minimapStore, hasLinkedFileStore, libraryStore, exportDocStore, paletteOpenStore } from "../uiStores";
   import { THEMES } from "../../core/theme";
   import { customThemesStore } from "../userLibrary";
   import { themeEditorStore } from "../uiStores";
@@ -206,7 +206,9 @@
 
     <span class="tbar-sep"></span>
 
-    <button class="tbar-btn" id="btn-search" title="Tìm kiếm (Ctrl+F)" on:click={() => searchOpenStore.set(true)}>
+    <button class="tbar-btn" id="btn-palette" title="Tìm toàn Workspace và lệnh (Ctrl+K)" on:click={() => paletteOpenStore.set(true)}>
+      <Icon name="command" /><span class="label">Tìm toàn bộ</span></button>
+    <button class="tbar-btn" id="btn-search" title="Tìm kiếm trong map đang mở (Ctrl+F)" on:click={() => searchOpenStore.set(true)}>
       <Icon name="search" /><span class="label">Tìm kiếm</span></button>
     <button class="tbar-btn" id="btn-maps" title="Xem/mở/đổi tên/xoá các map đã lưu" on:click={() => mapsModalOpenStore.set(true)}>
       <Icon name="folder" /><span class="label">Map gần đây</span></button>

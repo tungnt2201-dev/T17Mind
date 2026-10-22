@@ -249,6 +249,22 @@ export async function loadMap(mapId: string): Promise<MindMap | null> {
   return map;
 }
 
+/**
+ * KW2 — đọc map CHỈ ĐỂ LẬP CHỈ MỤC: không kéo card mới từ kho chung, không
+ * ghi bù, không đổi map đang mở. Cùng quy tắc chọn bản mới nhất như loadMap().
+ */
+export async function loadMapReadOnly(mapId: string): Promise<MindMap | null> {
+  const r = repo;
+  if (!r) return loadIdbMap(mapId);
+  const entry = r.getEntry(mapId);
+  const idbEntry = await idbIndexEntry(mapId);
+  if (idbEntry && (!entry || idbEntry.updatedAt > entry.updatedAt)) {
+    const fromIdb = await loadIdbMap(mapId);
+    if (fromIdb) return fromIdb;
+  }
+  return entry ? r.readMap(mapId) : null;
+}
+
 let cardsPulledListener: ((titles: string[]) => void) | null = null;
 /** KW1 — báo cho giao diện khi mở map có card được cập nhật từ map khác. */
 export function onCardsPulled(fn: ((titles: string[]) => void) | null): void {

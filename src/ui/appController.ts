@@ -96,6 +96,7 @@ import { toSafeUrl } from "../core/safeUrl";
 import { toggleShortcutsModal } from "./shortcutsModal";
 import {
   searchOpenStore,
+  paletteOpenStore,
   formatPainterModeStore,
   hasLinkedFileStore,
   tableEditorStore,
@@ -334,6 +335,23 @@ export class AppController {
     // P1.12 — file cũ (nếu có) liên kết với map TRƯỚC đó, không phải
     // map vừa chuyển sang từ "Map gần đây".
     this.setLinkedFile(null);
+    return true;
+  }
+
+  /**
+   * KW2 — nhảy tới một kết quả của chỉ mục toàn Workspace: chuyển sang map
+   * chứa nó (nếu khác map đang mở), rồi chọn node hoặc mở trang card (cuộn
+   * tới đúng khối nếu là liên kết khối). Trả về false nếu không mở được map.
+   */
+  async goToKnowledgeTarget(t: { mapId: string; kind: "node" | "card" | "block"; id: string; cardId: string | null; blockId: string | null }): Promise<boolean> {
+    if (t.mapId !== this.store.getMap().mapId && !(await this.openMap(t.mapId))) return false;
+    if (t.kind === "node") {
+      this.revealNode(t.id);
+      return true;
+    }
+    const cardId = t.cardId ?? t.id;
+    if (!this.store.getMap().cards[cardId]) return false;
+    this.openCardPage(cardId, t.kind === "block" ? t.blockId : null);
     return true;
   }
 
@@ -2514,6 +2532,13 @@ export class AppController {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
       e.preventDefault();
       searchOpenStore.set(true);
+      return;
+    }
+    // KW2 — Ctrl+K: bảng tìm toàn Workspace + lệnh (trình duyệt dùng Ctrl+K
+    // cho thanh địa chỉ/tìm kiếm nên phải chặn mặc định).
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      paletteOpenStore.update((open) => !open);
       return;
     }
     // P1.12 — Ctrl+S phải luôn "Lưu" vào file thật (nếu trình duyệt hỗ
