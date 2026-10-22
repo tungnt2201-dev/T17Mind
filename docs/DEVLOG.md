@@ -3855,3 +3855,21 @@ Nhánh `feat/kw2-knowledge-index` (xếp chồng trên `feat/kw1-card-registry`)
 - [ ] Đổi tên card đích → nhãn liên kết đổi theo; xoá khối đích → liên kết hiện gạch ngang
 - [ ] Card dùng chung 2 map: ở map B có đoạn trỏ tới card → mở card đó ở map A thấy "Được nhắc tới ở map khác"
 - [ ] Workspace ~20 map: lần mở bảng đầu có "Đang lập chỉ mục n/m", lần sau gần như tức thì
+
+---
+
+## Alt + kéo: phóng vào vùng (22/10/2026)
+
+Nhánh `feat/zoom-to-rect`. Giữ **Alt** rồi nhấn chuột trái kéo một hình chữ nhật trên sơ đồ → khung nhìn zoom sao cho đúng vùng đó choán cả canvas, canh giữa (khác kéo thường = chọn nhiều node). Khung kéo màu cam để phân biệt với khung chọn màu xanh. Alt bắt trước mọi hit-test nên bắt đầu kéo ngay trên node hay ghi chú dán cũng không kéo nhầm node. Esc khi đang kéo thì huỷ; kéo cạnh dưới 12 px (Alt + click lỡ tay) thì bỏ qua. Mức zoom bị chặn 15%–300% như lăn chuột/"Vừa khung": vùng quá nhỏ chỉ phóng tới 300%, tâm vùng vẫn về giữa. Không đổi dữ liệu nên không tạo Command và không vào lịch sử hoàn tác (giống mọi thao tác di chuyển camera).
+
+- Phần tính thuần ở `ui/viewLogic.ts` (`zoomToRectView`), 6 test: vừa khít/tâm, kéo ngược chiều, khác tỉ lệ, khi đã zoom sẵn, giới hạn zoom, vùng quá nhỏ.
+- Nuốt lần nhả Alt kế tiếp để Windows không nhảy lên thanh menu của trình duyệt (exe không bị).
+- Bảng phím tắt (`?`) có dòng mới. Đã chạy thật trên Chromium: kéo thường chọn nhiều và không đổi zoom, Alt + kéo 33% → 225%, Esc huỷ, Alt + click không đổi.
+
+### Checklist kiểm thử tay
+- [ ] Giữ Alt, kéo khung quanh vài node → vùng đó choán cả màn hình; khung kéo màu cam
+- [ ] Kéo thường (không Alt) vẫn chọn nhiều node; Ctrl/Shift + kéo vẫn thêm vào vùng chọn
+- [ ] Bắt đầu kéo Alt ngay trên một node: node không bị kéo đi
+- [ ] Đang kéo Alt bấm Esc: không zoom; Alt + click không kéo: không đổi gì
+- [ ] Kéo một vùng rất nhỏ: dừng ở 300%; kéo vùng cực lớn: thu nhỏ, không dưới 15%
+- [ ] Sau khi zoom, bấm F vẫn vừa khung bình thường; minimap theo khung nhìn mới

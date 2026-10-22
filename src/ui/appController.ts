@@ -12,6 +12,7 @@
  * được lưu xuống file hay có trong lịch sử hoàn tác.
  * ---------------------------------------------------------------------
  */
+import { zoomToRectView } from "./viewLogic";
 import type { ImageAsset, MindNode, MindMap } from "../core/types";
 import { isVerticalLayout } from "../core/types";
 import type { NodeStylePatch } from "../core/commands";
@@ -133,6 +134,7 @@ type DragMode =
   | "node-drag"
   | "resize"
   | "marquee"
+  | "zoom-rect"
   | "rel-bend"
   | "sticky-drag-pending"
   | "sticky-drag"
@@ -192,6 +194,8 @@ export class AppController {
 
   // marquee (chọn vùng)
   private marqueeAdditive = false;
+  /** Vừa dùng Alt + kéo để zoom: nuốt lần nhả Alt kế tiếp (Windows sẽ nhảy lên thanh menu của trình duyệt). */
+  private altZoomUsed = false;
   private marqueeCurrentScreen = { x: 0, y: 0 };
 
   // chế độ tạo liên kết
@@ -1400,6 +1404,12 @@ export class AppController {
     window.addEventListener("keydown", (e) => this.onSpaceKeyDown(e));
     window.addEventListener("keyup", (e) => this.onSpaceKeyUp(e));
     window.addEventListener("keydown", (e) => this.onActionKeyDown(e));
+    window.addEventListener("keyup", (e) => {
+      if (e.key === "Alt" && this.altZoomUsed) {
+        this.altZoomUsed = false;
+        e.preventDefault();
+      }
+    });
     document.addEventListener("paste", (e) => this.onNativePaste(e));
     // M3 — kéo-thả file ảnh vào node.
     // H1 — kéo card từ khung Thư viện thả vào map (CARD_DRAG_TYPE).
@@ -1750,6 +1760,20 @@ export class AppController {
       return;
     }
 
+    // Giữ Alt rồi kéo = "phóng vào vùng": hình chữ nhật kéo ra sẽ choán
+    // cả khung nhìn (khác kéo thường là chọn nhiều node). Bắt TRƯỚC mọi
+    // hit-test để bắt đầu kéo trên node/ghi chú cũng không bị kéo nhầm node.
+    if (e.altKey) {
+      this.dragMode = "zoom-rect";
+      this.marqueeCurrentScreen = { x, y };
+      this.canvas.style.cursor = "zoom-in";
+      this.altZoomUsed = true;
+      this.marqueeBox.classList.add("zoom");
+      this.showMarqueeBox(x, y, x, y);
+      e.preventDefault();
+      return;
+    }
+
     // P2.5b — ghi chú dán vẽ ĐÈ LÊN TRÊN mọi thứ khác (xem draw() trong
     // CanvasRenderer), nên cũng phải được ưu tiên bắt TRƯỚC mọi hit-test
     // khác — nếu không, một ghi chú dán nằm chồng lên node sẽ không bao
@@ -1911,6 +1935,7 @@ export class AppController {
         this.updateRelBend(x, y);
         break;
       case "marquee":
+      case "zoom-rect":
         this.marqueeCurrentScreen = { x, y };
         this.updateMarqueeBox(this.dragStartScreen.x, this.dragStartScreen.y, x, y);
         break;
@@ -1945,6 +1970,11 @@ export class AppController {
       case "marquee":
         this.finalizeMarquee();
         this.hideMarqueeBox();
+        break;
+      case "zoom-rect":
+        this.finalizeZoomRect();
+        this.hideMarqueeBox();
+        this.canvas.style.cursor = this.spaceDown ? "grab" : "default";
         break;
       case "pan":
         this.canvas.style.cursor = this.spaceDown ? "grab" : "default";
@@ -2485,6 +2515,7 @@ export class AppController {
   }
   private hideMarqueeBox(): void {
     this.marqueeBox.style.display = "none";
+    this.marqueeBox.classList.remove("zoom");
   }
 
   private finalizeMarquee(): void {
@@ -2508,6 +2539,22 @@ export class AppController {
       }
     }
     this.selection.applyMarqueeResult(found, this.marqueeAdditive, map.rootId);
+  }
+
+  /** Alt + kéo xong: zoom khung nhìn vào đúng hình chữ nhật vừa kéo (không đổi vùng chọn, không tạo Command). */
+  private finalizeZoomRect(): void {
+    const rect = this.canvas.getBoundingClientRect();
+    const next = zoomToRectView(
+      { x1: this.dragStartScreen.x, y1: this.dragStartScreen.y, x2: this.marqueeCurrentScreen.x, y2: this.marqueeCurrentScreen.y },
+      this.view,
+      rect.width,
+      rect.height,
+    );
+    if (!next) return;
+    this.view.scale = next.scale;
+    this.view.offsetX = next.offsetX;
+    this.view.offsetY = next.offsetY;
+    this.onViewChange?.();
   }
 
   // --- bàn phím ------------------------------------------------------------
@@ -2559,6 +2606,12 @@ export class AppController {
     if (e.code === "Space") return; // đã xử lý ở onSpaceKeyDown
 
     if (e.key === "Escape") {
+      if (this.dragMode === "zoom-rect") {
+        this.hideMarqueeBox();
+        this.dragMode = null;
+        this.canvas.style.cursor = "default";
+        return;
+      }
       if (this.searchIsOpen) {
         searchOpenStore.set(false);
         return;

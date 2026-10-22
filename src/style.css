@@ -404,6 +404,11 @@ input[type="file"] {
   border-radius: 2px;
 }
 
+#marquee-box.zoom {
+  border: 2px solid #e8873a;
+  background: rgba(232, 135, 58, 0.12);
+}
+
 #status {
   position: absolute;
   left: 12px;
