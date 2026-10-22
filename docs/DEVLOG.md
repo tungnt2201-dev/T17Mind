@@ -3858,3 +3858,15 @@ Nhánh `docs/huong-dan-c2` (xếp chồng trên `docs/huong-dan`). Chương 2: *
 - `docs/huong-dan/demo/NMDMT-C2-theo-doi.t17m`: bản đồ kết quả (53 node; 5 Tag, 4 liên kết chéo, 1 tóm tắt, 1 khoanh vùng, 1 ghi chú dán, 1 nhánh trôi; ưu tiên/tiến độ/biểu tượng/ghi chú điền sẵn ở các nhánh, riêng nhánh Tiến độ & Rủi ro để trống làm chỗ thực hành). Test `io/huongDan.test.ts` giữ file đúng như tài liệu nói (kể cả đáp án bài tập 5).
 - Ảnh chụp bằng Chromium từ chính ứng dụng, có đánh số/khung đỏ; hiệu chỉnh vị trí node bằng cách dò hình chữ nhật node gốc (thành phần liên thông lớn nhất cùng màu).
 
+---
+
+## Hướng dẫn sử dụng (Word) — Chương 3 (22/10/2026)
+
+Nhánh `docs/huong-dan-c3` (xếp chồng trên `docs/huong-dan-c2`). Chương 3: **Hồ sơ trong từng node: Card, bảng và ảnh**.
+
+- `docs/huong-dan/HDSD-Chuong-3-Ho-so-card-bang-anh.docx` (16 trang, 11 hình/cặp hình): card khác ghi chú ở đâu, tạo card, trang card, trình sửa bảng, dán từ Excel, nhập/xuất CSV, ảnh (dán, kéo thả, cỡ hiển thị, xem lớn), card hiện trên sơ đồ, liên kết `@` và "được nhắc tới ở", vẽ đường liên kết, Thư viện + Inbox, gắn/gỡ/xoá card, menu chuột phải; bài tập 5 câu, xử lý sự cố, phụ lục.
+- `docs/huong-dan/demo/NMDMT-C3-ho-so.t17m`: bản đồ kết quả (53 node, 5 card: 3 bảng, 1 ảnh, 1 card trong Inbox, 2 liên kết giữa card).
+- `docs/huong-dan/demo/mau-c3/`: 4 file thực hành (2 ảnh minh hoạ vẽ bằng Pillow, 1 CSV, 1 TSV; toàn bộ số liệu giả định).
+- Test `io/huongDan.test.ts` giữ file demo đúng như tài liệu nói (kích thước bảng dán/nhập, backlink, đáp án bài tập 5).
+- Ảnh chụp bằng Chromium từ chính ứng dụng (dán TSV qua sự kiện paste, nhập CSV/ảnh qua ô chọn file).
+
