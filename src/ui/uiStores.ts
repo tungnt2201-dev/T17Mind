@@ -30,6 +30,9 @@ export const helpModalOpenStore = writable(false);
  *  xem AppController), bằng nút ×, hoặc bấm lại Ctrl+F. */
 export const searchOpenStore = writable(false);
 
+/** KW2 — bảng Ctrl+K (tìm toàn Workspace + lệnh). */
+export const paletteOpenStore = writable(false);
+
 /** P2.6 — true khi đang ở chế độ "sao chép định dạng" (đã bấm nguồn,
  *  đang chờ bấm đích — GIỮ CHẾ ĐỘ, bấm được nhiều đích liên tiếp, Esc
  *  để tắt). Cùng khuôn mẫu với linkingModeStore ở trên. */

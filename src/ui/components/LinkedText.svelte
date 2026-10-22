@@ -15,14 +15,18 @@
   export let map: MindMap;
   export let text: string;
 
-  const dispatch = createEventDispatcher<{ open: { type: LinkType; id: string } }>();
+  const dispatch = createEventDispatcher<{ open: { type: LinkType; id: string; blockId: string | null } }>();
 
   $: segments = parseSegments(text);
 
-  function preview(type: LinkType, id: string): string {
+  function preview(type: LinkType, id: string, blockId: string | null): string {
     if (type === "card") {
       const c = map.cards[id];
       if (!c) return "Card này đã bị xoá";
+      if (blockId) {
+        const b = c.blocks.find((x) => x.id === blockId);
+        return b ? "Một khối trong card — bấm để mở đúng khối đó" : "Khối này đã bị xoá khỏi card";
+      }
       const snip = cardSnippet(c, 160);
       return `Card · ${describeCounts(blockCounts(c))}${snip ? `\n${snip}` : ""}`;
     }
@@ -33,9 +37,9 @@
   }
 </script>
 
-{#each segments as s, i (i)}{#if s.kind === "text"}{s.text}{:else}{@const name = resolveLinkLabel(map, s.type, s.id)}<button
-  type="button" class="lk" class:lk-node={s.type === "node"} class:lk-broken={!name} title={preview(s.type, s.id)}
-  on:click|stopPropagation={() => name && dispatch("open", { type: s.type, id: s.id })}>{name ?? (s.label || "liên kết hỏng")}</button>{/if}{/each}
+{#each segments as s, i (i)}{#if s.kind === "text"}{s.text}{:else}{@const name = resolveLinkLabel(map, s.type, s.id, s.blockId)}<button
+  type="button" class="lk" class:lk-node={s.type === "node"} class:lk-broken={!name} title={preview(s.type, s.id, s.blockId)}
+  on:click|stopPropagation={() => name && dispatch("open", { type: s.type, id: s.id, blockId: s.blockId })}>{name ?? (s.label || "liên kết hỏng")}</button>{/if}{/each}
 
 <style>
   .lk {

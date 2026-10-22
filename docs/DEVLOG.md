@@ -3827,3 +3827,31 @@ Nhánh `feat/kw1-card-registry` (xếp chồng trên `feat/icons-themes` → KW0
 - [ ] Xoá card khỏi mọi map → trong "Toàn Workspace" card hiện "Không map nào dùng" → "Xoá khỏi Workspace" → file vào `.trash/`
 - [ ] "Mở map: …" trong chi tiết card → chuyển sang đúng map
 - [ ] Trình duyệt chưa chọn thư mục: tab "Toàn Workspace" hiện hướng dẫn chọn thư mục
+
+---
+
+## KW2 — Knowledge Index: tìm toàn Workspace, bảng lệnh, liên kết khối (22/10/2026)
+
+Nhánh `feat/kw2-knowledge-index` (xếp chồng trên `feat/kw1-card-registry`).
+
+**Ctrl+K — một ô gõ cho cả hai việc.** Gõ chữ → tìm trong **mọi map** của Workspace: node (chữ + ghi chú), card (tên) và **từng khối** của card (đoạn văn, ô bảng, chú thích ảnh, tên biểu đồ). Không dấu ("ca phe" ra "Cà phê"), mọi từ phải có mặt, tên xếp trước nội dung, khớp được tô sáng. Enter/bấm → nhảy tới đúng chỗ, **tự chuyển map** nếu kết quả ở map khác (node: chọn + bung nhánh; card/khối: mở trang card, cuộn và nháy đúng khối). Bộ lọc Tất cả · Node · Card · Nội dung (phím Tab đổi). Gõ `>` đầu dòng (hoặc để trống) → danh sách 27 lệnh của ứng dụng (thêm node, map mới, lưu, hoàn tác, bố cục, xuất Word, bật/tắt Explorer/Thư viện/Minimap…). Card dùng chung nhiều map chỉ hiện một lần, kèm "Dùng ở N map: …". Có nút "Tìm toàn bộ" trên thanh công cụ; Ctrl+F vẫn là tìm trong map đang mở.
+
+**Liên kết cấp khối.** Token mới `[[card:<id>#<blockId>|Nhãn]]` (liên kết cũ không đổi, không đổi schema). Nút 🔗 trên thanh công cụ của mỗi khối trong trang card chép liên kết; dán vào đoạn văn của card khác. Bấm liên kết → mở trang card đích, cuộn và nháy đúng khối. Nhãn luôn theo tên **hiện tại** ("Tên card › Đoạn: …"), đổi tên card thì mọi liên kết đổi nhãn; khối bị xoá → liên kết hỏng (gạch ngang). Ghép map giữ nguyên khối khi đổi id card.
+
+**Liên kết ngược xuyên map.** Trang card có thêm mục "Được nhắc tới ở map khác": các khối văn bản ở map khác trỏ tới card này (bỏ những card đã có trong map đang mở); bấm để mở map đó đúng đoạn.
+
+**Kỹ thuật.** `core/knowledgeIndex.ts` (thuần: dựng mục, tìm/xếp hạng, gộp card dùng chung, backlink xuyên map, tô sáng — ánh xạ vị trí sau khi bỏ dấu), `core/commandPalette.ts` (danh sách lệnh + lọc, chạy qua cổng hẹp `CommandHost`), `ui/knowledgeController.ts` (chỉ mục trong bộ nhớ: map đang mở dựng từ bản trực tiếp, map khác đọc **chỉ-đọc** `loadMapReadOnly` — không kéo card, không ghi bù — và chỉ dựng lại khi mốc cập nhật đổi; map đã xoá bị bỏ; flush bản ghi chờ trước khi so mốc). Chưa lưu bền chỉ mục (KW10). Chưa làm đồ thị liên kết (mục tuỳ chọn của KW2).
+
+**Test:** 3 file mới + mở rộng `links.test.ts` (309 test đạt, `npm run check` sạch). Đã chạy thật trên Chromium: mở demo, tạo map mới, Ctrl+K "ca phe" thấy kết quả ở map demo, Enter chuyển map và mở đúng card; `>bo cuc` đổi bố cục; Esc đóng.
+
+### Checklist kiểm thử tay — KW2
+
+- [ ] Ctrl+K mở bảng, Esc/Ctrl+K đóng; nút "Tìm toàn bộ" cũng mở
+- [ ] Có ≥ 2 map: gõ từ có ở map kia → thấy kết quả kèm tên map; Enter → chuyển map đúng chỗ (node được chọn / card mở)
+- [ ] Gõ không dấu và hoa thường lẫn lộn đều ra; chữ khớp được tô vàng
+- [ ] Tab đổi bộ lọc Node/Card/Nội dung; `>` hiện lệnh, chọn "Bố cục: Tree Down" thì đổi bố cục
+- [ ] Sửa chữ ở map đang mở (chưa lưu) rồi Ctrl+K → thấy chữ mới; sửa map khác rồi quay lại → kết quả cập nhật
+- [ ] Trang card → 🔗 trên một khối → dán vào đoạn văn card khác → hiện viên liên kết; bấm → nhảy đúng khối (nháy vàng)
+- [ ] Đổi tên card đích → nhãn liên kết đổi theo; xoá khối đích → liên kết hiện gạch ngang
+- [ ] Card dùng chung 2 map: ở map B có đoạn trỏ tới card → mở card đó ở map A thấy "Được nhắc tới ở map khác"
+- [ ] Workspace ~20 map: lần mở bảng đầu có "Đang lập chỉ mục n/m", lần sau gần như tức thì

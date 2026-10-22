@@ -37,6 +37,7 @@ import { showNotice } from "./ui/uiStores";
 import { initWorkspace } from "./ui/workspaceController";
 import ToolbarComponent from "./ui/components/Toolbar.svelte";
 import SearchBarComponent from "./ui/components/SearchBar.svelte";
+import CommandPaletteComponent from "./ui/components/CommandPalette.svelte";
 import MapsModalComponent from "./ui/components/MapsModal.svelte";
 import SidePanelComponent from "./ui/components/SidePanel.svelte";
 import HelpModalComponent from "./ui/components/HelpModal.svelte";
@@ -92,6 +93,7 @@ async function bootstrap(): Promise<void> {
   // các lớp vanilla cũ.
   mount(ToolbarComponent, { target: byId("toolbar-root"), props: { store, selection, controller } });
   mount(SearchBarComponent, { target: byId("search-bar-root"), props: { store, controller } });
+  mount(CommandPaletteComponent, { target: byId("palette-root"), props: { store, controller } });
   mount(MapsModalComponent, { target: byId("maps-modal-root"), props: { store, controller } });
   mount(SidePanelComponent, { target: byId("side-panel-root"), props: { store, selection, controller } });
   mount(HelpModalComponent, { target: byId("help-modal-root"), props: {} });
