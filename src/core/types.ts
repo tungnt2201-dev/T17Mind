@@ -13,7 +13,7 @@ import type { Theme } from "./theme";
 
 /** Phiên bản cấu trúc dữ liệu hiện tại. Tăng số này mỗi khi đổi hình
  *  dạng MindNode/MindMap, và viết hàm di trú tương ứng trong migrate.ts */
-export const CURRENT_SCHEMA_VERSION = 21;
+export const CURRENT_SCHEMA_VERSION = 22;
 
 export type BorderStyle = "solid" | "dashed" | "dotted" | "none";
 export type EdgeShape = "curve" | "straight";
@@ -395,6 +395,26 @@ export interface MindMap {
    *  cho map, để map tự chứa đủ: mở ở máy khác (không có theme đó trong
    *  thư viện) vẫn đúng màu, node mới vẫn tô đúng. null = đang dùng theme
    *  có sẵn hoặc không dùng theme. Xem core/theme.ts#findTheme. */
+  customTheme: Theme | null;
+
+  /** Schema 22 — cài đặt riêng của từng NHÁNH TRÔI, tra theo id node gốc của nhánh
+   *  (xem TreeSettings). Cây chính không có ở đây — dùng các trường trên map. */
+  treeSettings: Record<string, TreeSettings>;
+}
+
+/**
+ * Schema 22 — kiểu bố cục, theme và "kiểu cây tự nhiên" áp dụng RIÊNG cho từng
+ * cây (cây chính và mỗi nhánh trôi), không còn dùng chung cho cả map.
+ * Cây chính (map.rootId) giữ các trường cũ ngay trên map (layoutType,
+ * organicEdges, activeThemeId, customTheme). Mỗi nhánh trôi có thể có bản ghi
+ * riêng trong `map.treeSettings[rootId]`; nhánh trôi CHƯA có bản ghi thì dùng
+ * theo cây chính — cho tới lúc cây chính hoặc chính nhánh đó bị đổi (khi đó bản
+ * ghi được "chốt" lại, xem core/treeSettings.ts).
+ */
+export interface TreeSettings {
+  layoutType: LayoutType;
+  organicEdges: boolean;
+  activeThemeId: string | null;
   customTheme: Theme | null;
 }
 

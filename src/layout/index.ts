@@ -21,6 +21,7 @@
  */
 import type { MindMap, MindNode, LayoutType } from "../core/types";
 import { requireNode, getRootIds } from "../core/tree";
+import { settingsOfRoot } from "../core/treeSettings";
 import { layoutLogicRight } from "./logicRight";
 import { layoutLogicLeft } from "./logicLeft";
 import { layoutLogicBoth } from "./logicBoth";
@@ -34,7 +35,7 @@ export type NodeMeasurer = (
   isRoot: boolean
 ) => { width: number; height: number };
 
-const LAYOUTS: Record<LayoutType, (map: MindMap) => void> = {
+const LAYOUTS: Record<LayoutType, (map: MindMap, rootIds: string[]) => void> = {
   logicRight: layoutLogicRight,
   logicLeft: layoutLogicLeft,
   logicBoth: layoutLogicBoth,
@@ -51,15 +52,22 @@ const LAYOUTS: Record<LayoutType, (map: MindMap) => void> = {
  * thủ công), chạy thuật toán layout để tính baseX/baseY, rồi cộng dồn
  * offset thủ công để ra toạ độ x/y cuối cùng.
  *
- * P2.7a — layoutType giờ ĐỌC TỪ CHÍNH map.layoutType (thuộc tính lưu
- * trong tài liệu), không còn nhận qua tham số riêng — layout là một
- * lựa chọn của TÀI LIỆU (lưu lại, xuất/nhập theo file), không phải
- * một tuỳ chọn tạm thời mỗi lần gọi applyLayout.
+ * P2.7a — bố cục là thuộc tính lưu trong tài liệu (không phải tham số tạm).
+ * Schema 22 — bố cục tính RIÊNG cho từng cây: cây chính theo map.layoutType,
+ * mỗi nhánh trôi theo map.treeSettings[gốc] (chưa có thì theo cây chính).
  */
 export function applyLayout(map: MindMap, measure: NodeMeasurer): void {
   sizeAllNodes(map, measure);
-  const layoutFn = LAYOUTS[map.layoutType] ?? layoutLogicRight;
-  layoutFn(map);
+  // Mỗi cây (cây chính, mỗi nhánh trôi) xếp theo bố cục RIÊNG của nó: gom các
+  // cây cùng bố cục lại, gọi thuật toán tương ứng một lần cho mỗi nhóm.
+  const byLayout = new Map<LayoutType, string[]>();
+  for (const rootId of getRootIds(map)) {
+    const type = settingsOfRoot(map, rootId).layoutType;
+    const list = byLayout.get(type) ?? [];
+    list.push(rootId);
+    byLayout.set(type, list);
+  }
+  for (const [type, rootIds] of byLayout) (LAYOUTS[type] ?? layoutLogicRight)(map, rootIds);
   applyAllOffsets(map);
 }
 

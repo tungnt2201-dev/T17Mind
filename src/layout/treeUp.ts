@@ -25,8 +25,9 @@ import { requireNode, getRootIds } from "../core/tree";
 const V_GAP = 60;
 const H_GAP = 16;
 
-export function layoutTreeUp(map: MindMap): void {
-  for (const rootId of getRootIds(map)) {
+/** `rootIds`: các cây cần xếp (mặc định mọi cây) — applyLayout gọi riêng cho từng nhóm cây cùng bố cục. */
+export function layoutTreeUp(map: MindMap, rootIds: string[] = getRootIds(map)): void {
+  for (const rootId of rootIds) {
     layoutSubtreeUp(map, rootId, 0, 0);
   }
 }

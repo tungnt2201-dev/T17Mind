@@ -23,6 +23,7 @@
  */
 import type { MindMap } from "../core/types";
 import { isVerticalLayout } from "../core/types";
+import { layoutOfNode } from "../core/treeSettings";
 import { collectVisibleNodeIds } from "../core/tree";
 import { parentChildEdgeAnchors, computeEdgeWidth } from "../render/geometry";
 
@@ -85,15 +86,16 @@ export function exportSvg(map: MindMap): string {
       const color = node.edgeColor || "#9aa3ad";
       const dash = node.edgeDash ? ` stroke-dasharray="6,4"` : "";
 
+      const layoutType = layoutOfNode(map, node.id);
       let d: string;
       if (node.edgeShape === "straight") {
         d = `M ${x1} ${y1} L ${x2} ${y2}`;
-      } else if (map.layoutType === "orgChart") {
+      } else if (layoutType === "orgChart") {
         // Giống hệt Organization Chart trên canvas — LUÔN góc vuông
         // kiểu T, bỏ qua edgeShape riêng từng node.
         const my = y1 + (y2 - y1) / 2;
         d = `M ${x1} ${y1} L ${x1} ${my} L ${x2} ${my} L ${x2} ${y2}`;
-      } else if (isVerticalLayout(map.layoutType)) {
+      } else if (isVerticalLayout(layoutType)) {
         const my = (y1 + y2) / 2;
         d = `M ${x1} ${y1} C ${x1} ${my}, ${x2} ${my}, ${x2} ${y2}`;
       } else {

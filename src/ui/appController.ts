@@ -14,6 +14,7 @@
  */
 import type { ImageAsset, MindNode, MindMap } from "../core/types";
 import { isVerticalLayout } from "../core/types";
+import { layoutOfNode, rootIdOf, settingsOfRoot } from "../core/treeSettings";
 import type { NodeStylePatch } from "../core/commands";
 import type { MapDisplayFlag } from "../core/commands";
 import type { LayoutType } from "../core/types";
@@ -55,6 +56,7 @@ import {
   SetStickyNotePositionCommand,
   ApplyThemeCommand,
   ToggleMapDisplayFlagCommand,
+  ToggleOrganicEdgesCommand,
   SetLayoutTypeCommand,
   extractFormatPatch,
   UpdateNodeStyleCommand,
@@ -1159,10 +1161,30 @@ export class AppController {
   // P2.6 — Theme + sao chép định dạng
   // -------------------------------------------------------------
 
-  /** Áp một bộ theme cho toàn map (mọi cây độc lập, kể cả nhánh trôi —
-   *  xem ApplyThemeCommand). Gộp thành đúng 1 bước hoàn tác. */
+  /**
+   * Cây (cây chính hoặc một nhánh trôi) mà các nút Bố cục / Theme / Tự nhiên đang
+   * áp dụng: cây chứa node đang chọn; không chọn node nào thì là cây chính.
+   * Schema 22 — mỗi cây có cài đặt riêng, đổi ở cây này không ảnh hưởng cây khác.
+   */
+  activeTreeRootId(): string {
+    const map = this.store.getMap();
+    const id = this.selection.primary;
+    return id && map.nodes[id] ? rootIdOf(map, id) : map.rootId;
+  }
+
+  /** Áp một bộ theme cho CÂY đang chọn (xem activeTreeRootId) — các cây khác giữ
+   *  nguyên màu và theme. Gộp thành đúng 1 bước hoàn tác. */
   applyTheme(themeId: string, theme: Theme | null = null): void {
-    this.store.dispatch(new ApplyThemeCommand(themeId, theme));
+    const map = this.store.getMap();
+    const rootId = this.activeTreeRootId();
+    this.store.dispatch(new ApplyThemeCommand(themeId, theme, rootId === map.rootId ? null : rootId));
+  }
+
+  /** "Kiểu cây tự nhiên" bật/tắt riêng cho cây đang chọn. */
+  toggleOrganicEdges(): void {
+    const map = this.store.getMap();
+    const rootId = this.activeTreeRootId();
+    this.store.dispatch(new ToggleOrganicEdgesCommand(rootId === map.rootId ? null : rootId));
   }
 
   /** P2.6b-2 — bật/tắt 1 trong 3 công tắc hiển thị mức tài liệu
@@ -1171,11 +1193,13 @@ export class AppController {
     this.store.dispatch(new ToggleMapDisplayFlagCommand(flag));
   }
 
-  /** P2.7a — đổi bố cục cho toàn map. Việc tính lại toạ độ mọi node
-   *  xảy ra tự động qua fullRefresh() trong main.ts sau dispatch. */
+  /** P2.7a — đổi bố cục cho CÂY đang chọn (cây chính hoặc một nhánh trôi). Việc
+   *  tính lại toạ độ xảy ra tự động qua fullRefresh() trong main.ts sau dispatch. */
   setLayoutType(layoutType: LayoutType): void {
-    if (this.store.getMap().layoutType === layoutType) return;
-    this.store.dispatch(new SetLayoutTypeCommand(layoutType));
+    const map = this.store.getMap();
+    const rootId = this.activeTreeRootId();
+    if (settingsOfRoot(map, rootId).layoutType === layoutType) return;
+    this.store.dispatch(new SetLayoutTypeCommand(layoutType, rootId === map.rootId ? null : rootId));
   }
 
   /** P2.14 — "Sắp xếp lại": xem giải thích đầy đủ ở
@@ -2190,7 +2214,7 @@ export class AppController {
     // Lên/Xuống mới là "vào con/về cha", còn Trái/Phải mới là "tìm
     // anh em cùng hàng". Với mọi layout khác (logicRight/Left/Both),
     // giữ nguyên như trước: Trái/Phải là cha/con, Lên/Xuống tìm hàng.
-    const isVertical = isVerticalLayout(map.layoutType);
+    const isVertical = isVerticalLayout(layoutOfNode(map, currentNode.id));
     const isDepthKey = isVertical ? direction === "up" || direction === "down" : direction === "left" || direction === "right";
 
     let targetId: string | null = null;

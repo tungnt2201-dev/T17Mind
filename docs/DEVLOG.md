@@ -3855,3 +3855,28 @@ Nhánh `feat/kw2-knowledge-index` (xếp chồng trên `feat/kw1-card-registry`)
 - [ ] Đổi tên card đích → nhãn liên kết đổi theo; xoá khối đích → liên kết hiện gạch ngang
 - [ ] Card dùng chung 2 map: ở map B có đoạn trỏ tới card → mở card đó ở map A thấy "Được nhắc tới ở map khác"
 - [ ] Workspace ~20 map: lần mở bảng đầu có "Đang lập chỉ mục n/m", lần sau gần như tức thì
+
+---
+
+## Bố cục / Theme / Kiểu cây tự nhiên áp dụng RIÊNG cho từng cây (22/10/2026)
+
+Nhánh `feat/per-tree-settings`, **schema 22**. Trước đây ba thứ này là cài đặt của cả map, nên đổi ở cây chính là nhánh trôi đổi theo. Giờ mỗi cây — cây chính và từng nhánh trôi — có cài đặt riêng:
+
+- **Nút trên thanh công cụ áp dụng cho cây đang chọn** (cây chứa node đang chọn; không chọn node nào thì là cây chính). Có chip ở đầu cụm nút: "⛭ Cây chính" (xanh) hoặc "⛭ Nhánh trôi “…”" (cam) để biết đang chỉnh cây nào. Ô bố cục, nút Tự nhiên và ô theme hiện giá trị của đúng cây đó.
+- **Lưu trữ:** cây chính giữ nguyên các trường cũ trên map (`layoutType`, `organicEdges`, `activeThemeId`, `customTheme`) nên file cũ không đổi gì. Nhánh trôi có thể có bản ghi riêng ở `map.treeSettings[gốc]`. Nhánh trôi **chưa có bản ghi thì theo cây chính**; để đổi cây chính không kéo nhánh trôi theo, mỗi lần ghi cài đặt cây chính, các nhánh trôi chưa có bản ghi được "chốt" với giá trị cũ (cùng một bước hoàn tác). Migration 21→22 chỉ thêm `treeSettings: {}`.
+- **Tính toán theo cây:** `applyLayout` gom các cây cùng bố cục rồi xếp từng nhóm (các hàm layout nhận thêm danh sách gốc); đường nối cha-con, nhãn trên đường nối, kéo-thả vào khe, phím mũi tên, chấm thu gọn/icon và xuất SVG đều tra bố cục theo cây chứa node. Đường nối "tự nhiên" theo cờ của cây.
+- **Theme theo cây:** `ApplyThemeCommand` chỉ tô lại node của cây được chọn và ghi theme vào cài đặt cây đó; node mới (thêm con, dán, nhánh trôi mới) tô theo theme của cây chứa nó.
+- **Ghép map (Nhập → Ghép JSON):** mỗi cây ghép vào giữ bố cục/theme/tự nhiên của chính nó (trước đây bị ép theo cây chính).
+- **Việc dùng cũ:** `ToggleMapDisplayFlagCommand` không còn xử lý `organicEdges` (đã có `ToggleOrganicEdgesCommand`).
+- Lõi ở `core/treeSettings.ts`; 11 test mới ở `core/treeSettings.test.ts` (tra cứu, đổi riêng từng cây + undo/redo, xếp chỗ hai bố cục cùng lúc, đường nối, tự nhiên, theme, ghép map, migration, làm sạch dữ liệu). Đã chạy thật trên Chromium: nhánh trôi Logic Left + tự nhiên + Rainbow trong khi cây chính Tree Down / Logic Both.
+- **Chưa làm:** xuất/nhập JSON phẳng vẫn chỉ mang cài đặt của cây chính (file `.t17m` mang đủ).
+
+### Checklist kiểm thử tay
+- [ ] Có nhánh trôi: chọn node ở nhánh trôi → chip cam "Nhánh trôi"; đổi bố cục/Tự nhiên/Theme → chỉ nhánh đó đổi
+- [ ] Chọn node ở cây chính → chip xanh; đổi bố cục → nhánh trôi KHÔNG đổi theo; Theme cũng vậy
+- [ ] Bấm vào nền trống (không chọn node) rồi đổi bố cục → áp cho cây chính
+- [ ] Thêm node con ở nhánh trôi có theme riêng → màu theo theme nhánh đó; ở cây chính → theo theme cây chính
+- [ ] Ctrl+Z / Ctrl+Shift+Z từng thay đổi trên từng cây
+- [ ] Lưu `.t17m`, mở lại → mỗi cây giữ đúng bố cục/theme/tự nhiên; mở file cũ → nhánh trôi vẫn giống cây chính
+- [ ] Nhập → Ghép JSON một map có bố cục khác → cây ghép vào giữ bố cục của nó
+- [ ] Xuất SVG/PNG: mỗi cây vẽ đúng kiểu đường nối

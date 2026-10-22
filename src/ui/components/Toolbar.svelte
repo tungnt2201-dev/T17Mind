@@ -42,6 +42,7 @@
   import { linkingModeStore, helpModalOpenStore, searchOpenStore, formatPainterModeStore, mapsModalOpenStore, explorerStore, minimapStore, hasLinkedFileStore, libraryStore, exportDocStore, paletteOpenStore } from "../uiStores";
   import { THEMES } from "../../core/theme";
   import { customThemesStore } from "../userLibrary";
+  import { settingsOfRoot } from "../../core/treeSettings";
   import { themeEditorStore } from "../uiStores";
   import { toggleShortcutsModal } from "../shortcutsModal";
   import Icon from "./Icon.svelte";
@@ -70,12 +71,23 @@
   // phạm vi khi chọn node khác), khác các can* phía trên chỉ cần $sel.
   $: canAutoArrange = $map && $sel ? controller.canAutoArrange() : false;
 
+  // Schema 22 — Bố cục / Theme / Tự nhiên áp dụng cho CÂY chứa node đang chọn (không chọn
+  // node nào: cây chính). Mỗi cây (cây chính, mỗi nhánh trôi) có cài đặt riêng.
+  $: treeRootId = $map && $sel ? controller.activeTreeRootId() : $map.rootId;
+  $: treeSettings = settingsOfRoot($map, treeRootId);
+  $: treeIsMain = treeRootId === $map.rootId;
+  $: treeName = treeIsMain ? "Cây chính" : `Nhánh trôi “${clip($map.nodes[treeRootId]?.text || "(trống)")}”`;
+  const clip = (t: string): string => (t.length > 18 ? `${t.slice(0, 17)}…` : t);
+
   let selectedThemeId = THEMES[0]!.id;
-  // Ô chọn theme theo theme map đang dùng (mở map khác, áp theme riêng từ trình sửa…).
-  let lastActiveThemeId: string | null | undefined = undefined;
-  $: if ($map.activeThemeId !== lastActiveThemeId) {
-    lastActiveThemeId = $map.activeThemeId;
-    if (lastActiveThemeId) selectedThemeId = lastActiveThemeId;
+  // Ô chọn theme theo theme của cây đang chọn (đổi cây, mở map khác, áp theme riêng từ trình sửa…).
+  let lastThemeKey: string | undefined = undefined;
+  $: {
+    const key = `${treeRootId}|${treeSettings.activeThemeId ?? ""}`;
+    if (key !== lastThemeKey) {
+      lastThemeKey = key;
+      if (treeSettings.activeThemeId) selectedThemeId = treeSettings.activeThemeId;
+    }
   }
 
   let jsonInput: HTMLInputElement;
@@ -319,7 +331,9 @@
 
     <span class="tbar-sep"></span>
 
-    <select id="layout-select" value={$map.layoutType} title="Chọn kiểu bố cục cho toàn map" class="tbar-select"
+    <span class="tbar-tree" class:floating={!treeIsMain}
+      title="Bố cục, Tự nhiên và Theme bên cạnh áp dụng cho cây này — chọn node ở cây khác (cây chính hoặc một nhánh trôi) để chỉnh cây đó. Mỗi cây có cài đặt riêng.">⛭ {treeName}</span>
+    <select id="layout-select" value={treeSettings.layoutType} title="Chọn kiểu bố cục cho cây đang chọn ({treeName})" class="tbar-select"
       on:change={(e) => controller.setLayoutType(e.currentTarget.value as "logicRight" | "logicLeft" | "logicBoth" | "treeDown" | "orgChart" | "treeUp")}>
       <option value="logicRight">Logic Right</option>
       <option value="logicLeft">Logic Left</option>
@@ -332,9 +346,9 @@
       title="Đưa các node đã bị kéo tay lệch khỏi vị trí bố cục tự động về lại đúng chỗ — có chọn node/nhánh nào thì chỉ gọn lại nhánh đó, không chọn gì thì gọn lại toàn bộ map. Giữ nguyên vị trí tổng thể của node gốc và mọi nhánh trôi trên canvas."
       on:click={() => controller.autoArrange()}>
       <Icon name="wand" /><span class="label">Sắp xếp lại</span></button>
-    <button class="tbar-btn" class:active={$map.organicEdges}
-      title="Đường nối dạng dải băng thon dần (dày gần trung tâm, mỏng dần ra xa) thay vì nét đều một độ dày — không áp dụng cho Organization Chart (mặc định tắt)"
-      on:click={() => controller.toggleDisplayFlag("organicEdges")}><Icon name="leaf" /><span class="label">Tự nhiên</span></button>
+    <button class="tbar-btn" class:active={treeSettings.organicEdges}
+      title="Đường nối dạng dải băng thon dần (dày gần trung tâm, mỏng dần ra xa) thay vì nét đều một độ dày — chỉ áp cho cây đang chọn ({treeName}); không áp dụng cho Organization Chart (mặc định tắt)"
+      on:click={() => controller.toggleOrganicEdges()}><Icon name="leaf" /><span class="label">Tự nhiên</span></button>
 
     <span class="tbar-sep"></span>
 
@@ -351,13 +365,13 @@
           {/each}
         </optgroup>
       {/if}
-      {#if $map.customTheme && !$customThemesStore.some((t) => t.id === $map.customTheme?.id)}
+      {#if treeSettings.customTheme && !$customThemesStore.some((t) => t.id === treeSettings.customTheme?.id)}
         <optgroup label="Lưu trong map này">
-          <option value={$map.customTheme.id}>{$map.customTheme.name}</option>
+          <option value={treeSettings.customTheme.id}>{treeSettings.customTheme.name}</option>
         </optgroup>
       {/if}
     </select>
-    <button class="tbar-btn" title="Áp bộ theme đã chọn cho toàn bộ map"
+    <button class="tbar-btn" title="Áp bộ theme đã chọn cho cây đang chọn ({treeName}) — các cây khác giữ nguyên"
       on:click={() => controller.applyTheme(selectedThemeId)}><Icon name="check" /><span class="label">Áp dụng</span></button>
     <button class="tbar-btn" title="Tạo / sửa theme riêng, nhập/xuất file theme"
       on:click={() => themeEditorStore.set({ baseThemeId: selectedThemeId })}>🎨<span class="label">Theme riêng</span></button>

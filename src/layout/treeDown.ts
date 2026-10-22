@@ -21,8 +21,9 @@ import { requireNode, getRootIds } from "../core/tree";
 const V_GAP = 60; // khoảng cách giữa các TẦNG (vai trò của H_GAP ở logicRight)
 const H_GAP = 16; // khoảng cách giữa các ANH EM cùng tầng (vai trò của V_GAP ở logicRight)
 
-export function layoutTreeDown(map: MindMap): void {
-  for (const rootId of getRootIds(map)) {
+/** `rootIds`: các cây cần xếp (mặc định mọi cây) — applyLayout gọi riêng cho từng nhóm cây cùng bố cục. */
+export function layoutTreeDown(map: MindMap, rootIds: string[] = getRootIds(map)): void {
+  for (const rootId of rootIds) {
     layoutSubtreeDown(map, rootId, 0, 0);
   }
 }

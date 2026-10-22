@@ -37,6 +37,7 @@ import {
 import type { MindMap, MindNode, StickyNote, TagDef } from "../core/types";
 import { lightenHex } from "../core/theme";
 import { isVerticalLayout } from "../core/types";
+import { layoutOfNode, settingsOfNode } from "../core/treeSettings";
 import { getRootIds } from "../core/tree";
 import type { NodeMeasurer } from "../layout";
 import { THUMB_ROW_H, THUMB_MORE_W, THUMB_FONT, type ThumbLayout } from "./tableThumb";
@@ -480,6 +481,9 @@ export class CanvasRenderer {
   private drawEdges(map: MindMap, nodeId: string): void {
     const node = map.nodes[nodeId];
     if (!node || node.collapsed) return;
+    // Bố cục và "kiểu tự nhiên" theo CÂY chứa node (cây chính hoặc nhánh trôi).
+    const treeSettings = settingsOfNode(map, nodeId);
+    const layoutType = treeSettings.layoutType;
 
     for (const childId of node.children) {
       const child = map.nodes[childId];
@@ -533,10 +537,10 @@ export class CanvasRenderer {
         // edgeShape="straight" đều có hình dạng riêng (góc vuông/thẳng
         // tuyệt đối), thon dần không hợp lý cho chúng.
         const useOrganic =
-          map.organicEdges &&
-          map.layoutType !== "orgChart" &&
+          treeSettings.organicEdges &&
+          layoutType !== "orgChart" &&
           node.edgeShape !== "straight";
-        if (map.layoutType === "orgChart") {
+        if (layoutType === "orgChart") {
           // P2.7c — Organization Chart LUÔN vẽ góc vuông kiểu T, BỎ QUA
           // edgeShape riêng của từng node (đặt nhánh này TRƯỚC kiểm tra
           // edgeShape ở dưới) — đúng bản chất "sơ đồ tổ chức" là nhất
@@ -554,7 +558,7 @@ export class CanvasRenderer {
           ctx.moveTo(sx, sy);
           ctx.lineTo(ex, ey);
           ctx.stroke();
-        } else if (isVerticalLayout(map.layoutType)) {
+        } else if (isVerticalLayout(layoutType)) {
           // P2.7c — đường cong DỌC: điểm điều khiển lấy mốc giữa theo
           // TRỤC Y (không phải X như mọi layout ngang khác), để đường
           // cong đổ xuống/lên mượt mà thay vì "cong ngang" sai hướng.
@@ -608,6 +612,7 @@ export class CanvasRenderer {
   private drawEdgeLabels(map: MindMap, nodeId: string): void {
     const node = map.nodes[nodeId];
     if (!node || node.collapsed) return;
+    const layoutType = layoutOfNode(map, nodeId);
     const ctx = this.ctx;
 
     for (const childId of node.children) {
@@ -620,7 +625,7 @@ export class CanvasRenderer {
 
         let mid: Point;
         let angle: number;
-        if (map.layoutType === "orgChart") {
+        if (layoutType === "orgChart") {
           // P2.7c — nhãn đặt tại ĐOẠN NGANG GIỮA của đường góc vuông
           // (khớp đúng vị trí "my" trong drawEdges), KHÔNG XOAY — chữ
           // luôn nằm ngang, đúng quy ước sơ đồ tổ chức thật (không có
@@ -631,7 +636,7 @@ export class CanvasRenderer {
         } else if (node.edgeShape === "straight") {
           mid = { x: (p0.x + p3.x) / 2, y: (p0.y + p3.y) / 2 };
           angle = Math.atan2(p3.y - p0.y, p3.x - p0.x);
-        } else if (isVerticalLayout(map.layoutType)) {
+        } else if (isVerticalLayout(layoutType)) {
           // P2.7c — điểm điều khiển theo TRỤC Y (khớp đúng cách vẽ
           // đường cong dọc trong drawEdges).
           const my = (p0.y + p3.y) / 2;
@@ -1695,7 +1700,7 @@ export class CanvasRenderer {
     }
     // Không có cha (gốc, hoặc nhánh trôi) — không có gì để so sánh vị
     // trí, dùng layoutType làm tín hiệu duy nhất còn lại.
-    return map.layoutType === "logicLeft";
+    return layoutOfNode(map, node.id) === "logicLeft";
   }
 
   private drawCollapsedMarker(map: MindMap, node: MindNode): void {
