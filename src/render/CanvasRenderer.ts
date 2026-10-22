@@ -1073,7 +1073,7 @@ export class CanvasRenderer {
       const selected = sel.selectedSummaryId === s.id;
       const color = s.color || "#14162b";
       const { braceX, minY, maxY, tipX, tipY } = g;
-      const out = 16;
+      const out = g.side === "left" ? -16 : 16; // chiều phình của ngoặc: ra ngoài, xa các node
 
       ctx.save();
       ctx.strokeStyle = selected ? "#2f6fed" : color;
@@ -1088,7 +1088,7 @@ export class CanvasRenderer {
       ctx.stroke();
       ctx.beginPath();
       ctx.moveTo(tipX, tipY);
-      ctx.lineTo(g.labelX, tipY);
+      ctx.lineTo(g.side === "left" ? g.labelX + g.labelW : g.labelX, tipY);
       ctx.stroke();
       ctx.restore();
 

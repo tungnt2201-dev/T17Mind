@@ -3855,3 +3855,15 @@ Nhánh `feat/kw2-knowledge-index` (xếp chồng trên `feat/kw1-card-registry`)
 - [ ] Đổi tên card đích → nhãn liên kết đổi theo; xoá khối đích → liên kết hiện gạch ngang
 - [ ] Card dùng chung 2 map: ở map B có đoạn trỏ tới card → mở card đó ở map A thấy "Được nhắc tới ở map khác"
 - [ ] Workspace ~20 map: lần mở bảng đầu có "Đang lập chỉ mục n/m", lần sau gần như tức thì
+
+---
+
+## Sửa: ngoặc tóm tắt ra phía ngoài ở cây hai bên (22/10/2026)
+
+Nhánh `fix/summary-side`. Trước đây ngoặc `{ }` và hộp nhãn của **Tóm tắt** luôn vẽ bên phải các node được tóm tắt; ở bố cục Logic Both Sides (nửa trái) và Logic Left, ngoặc đè lên phía node cha. Giờ `summaryGeometry` (`render/geometry.ts`) xét các node thành viên: nếu phần lớn nằm hẳn bên trái cha của chúng thì ngoặc, mũi nhọn và hộp nhãn nằm bên **trái** (đối xứng), ngược lại giữ nguyên như cũ. `SummaryGeometry` có thêm trường `side`; bộ vẽ đảo chiều phình của ngoặc và điểm nối nhãn; xuất ảnh PNG tính thêm phần nhãn lòi ra bên trái. Có 3 test mới trong `render/geometry.test.ts`; đã chụp thử thật với cây hai bên.
+
+### Checklist kiểm thử tay
+- [ ] Logic Both Sides: tóm tắt vài node ở nửa trái → ngoặc và nhãn nằm bên trái; nửa phải → bên phải
+- [ ] Logic Left: ngoặc luôn bên trái; Logic Right: bên phải như cũ
+- [ ] Bấm vào ngoặc/nhãn ở bên trái vẫn chọn được; bấm đúp sửa nhãn mở đúng chỗ
+- [ ] Xuất PNG: hộp nhãn bên trái không bị cắt
