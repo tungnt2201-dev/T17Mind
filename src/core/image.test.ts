@@ -148,7 +148,7 @@ describe("Schema 17 → 18: cỡ hiển thị của khối ảnh (M3)", () => {
 
   it("validateCard báo lỗi cỡ ảnh không hợp lệ", () => {
     const b = { ...createImageBlock("a1"), size: "huge" as never };
-    const errors = validateCard({ id: "c", title: "", blocks: [b] }, { a1: asset() });
+    const errors = validateCard({ id: "c", title: "", blocks: [b], createdAt: 0, updatedAt: 0, rev: 0 }, { a1: asset() });
     expect(errors.some((e) => e.includes("cỡ ảnh"))).toBe(true);
   });
 });

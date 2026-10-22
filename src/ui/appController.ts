@@ -63,6 +63,7 @@ import {
   DuplicateNodeCommand,
   PasteSubtreeCommand,
   CompositeCommand,
+  type Command,
   SetNodeImageCommand,
 } from "../core/commands";
 import {
@@ -82,6 +83,8 @@ import {
   buildAddImagesToCardCommand,
   CreateCardForNodeCommand,
   CreateNodeWithCardCommand,
+  ImportCardCommand,
+  AttachCardToNodeCommand,
 } from "../core/cardCommands";
 import { createCard } from "../core/cards";
 import { buildMenu, type MenuAction, type MenuTarget } from "./contextMenuModel";
@@ -93,6 +96,7 @@ import { toSafeUrl } from "../core/safeUrl";
 import { toggleShortcutsModal } from "./shortcutsModal";
 import {
   searchOpenStore,
+  paletteOpenStore,
   formatPainterModeStore,
   hasLinkedFileStore,
   tableEditorStore,
@@ -101,10 +105,11 @@ import {
   exportDocStore,
 } from "./uiStores";
 import { parseJsonFile, exportFlatJson } from "../io/json";
-import { loadMap as loadMapFromStorage } from "../io/storage";
+import { loadMap as loadMapFromStorage, getWorkspaceRepo } from "../io/storage";
 // P1.16 (tối ưu bundle) — xlsx/xmind KHÔNG import tĩnh ở đây nữa, xem
 // ghi chú ngay trước từng phương thức dùng chúng bên dưới.
 import { renderMarkdown } from "../io/markdownDoc";
+import type { Theme } from "../core/theme";
 import { buildDocModel, DEFAULT_DOC_OPTIONS, type DocOptions } from "../core/docModel";
 import { exportSvg } from "../io/svg";
 import { exportOpml, parseOpmlFile } from "../io/opml";
@@ -299,7 +304,7 @@ export class AppController {
 
   async newMap(): Promise<void> {
     const ok = await showConfirm(
-      "Tạo mindmap mới? Dữ liệu hiện tại sẽ bị thay thế (dữ liệu chưa xuất file sẽ mất).",
+      "Tạo mindmap mới? Map đang mở vẫn được lưu — mở lại bất cứ lúc nào trong \"Map gần đây\".",
       "Tạo mới",
       "Huỷ"
     );
@@ -330,6 +335,23 @@ export class AppController {
     // P1.12 — file cũ (nếu có) liên kết với map TRƯỚC đó, không phải
     // map vừa chuyển sang từ "Map gần đây".
     this.setLinkedFile(null);
+    return true;
+  }
+
+  /**
+   * KW2 — nhảy tới một kết quả của chỉ mục toàn Workspace: chuyển sang map
+   * chứa nó (nếu khác map đang mở), rồi chọn node hoặc mở trang card (cuộn
+   * tới đúng khối nếu là liên kết khối). Trả về false nếu không mở được map.
+   */
+  async goToKnowledgeTarget(t: { mapId: string; kind: "node" | "card" | "block"; id: string; cardId: string | null; blockId: string | null }): Promise<boolean> {
+    if (t.mapId !== this.store.getMap().mapId && !(await this.openMap(t.mapId))) return false;
+    if (t.kind === "node") {
+      this.revealNode(t.id);
+      return true;
+    }
+    const cardId = t.cardId ?? t.id;
+    if (!this.store.getMap().cards[cardId]) return false;
+    this.openCardPage(cardId, t.kind === "block" ? t.blockId : null);
     return true;
   }
 
@@ -1139,8 +1161,8 @@ export class AppController {
 
   /** Áp một bộ theme cho toàn map (mọi cây độc lập, kể cả nhánh trôi —
    *  xem ApplyThemeCommand). Gộp thành đúng 1 bước hoàn tác. */
-  applyTheme(themeId: string): void {
-    this.store.dispatch(new ApplyThemeCommand(themeId));
+  applyTheme(themeId: string, theme: Theme | null = null): void {
+    this.store.dispatch(new ApplyThemeCommand(themeId, theme));
   }
 
   /** P2.6b-2 — bật/tắt 1 trong 3 công tắc hiển thị mức tài liệu
@@ -1583,12 +1605,59 @@ export class AppController {
   placeCardAt(cardId: string, x: number, y: number): void {
     const map = this.store.getMap();
     const card = map.cards[cardId];
-    if (!card) return;
+    if (!card) {
+      // KW1 — card kéo từ phạm vi "Toàn Workspace" (chưa có trong map này).
+      void this.importRegistryCard(cardId, { kind: "at", x, y });
+      return;
+    }
     const hit = this.renderer.hitTestNode(map, x, y, this.view);
     const w = this.renderer.toWorld(x, y, this.view);
     const cmd = new CreateNodeWithCardCommand(cardId, card.title || "Card", hit, hit ? null : { x: w.x, y: w.y - 18 });
     this.store.dispatch(cmd);
     this.selection.selectSingleNode(cmd.newNodeId);
+  }
+
+  /**
+   * KW1 — đưa card từ kho card chung của Workspace vào map đang mở (giữ
+   * nguyên id — cùng một card, sửa ở đâu cũng cập nhật sang map kia):
+   *  - "child": thành nhánh con của node đang chọn (không chọn: của gốc);
+   *  - "attach": gắn vào node đang chọn;
+   *  - "at": thả ở điểm màn hình (trúng node → nhánh con, trống → nhánh trôi).
+   * Một bước hoàn tác. Trả về false nếu không làm được.
+   */
+  async importRegistryCard(cardId: string, target: { kind: "child" } | { kind: "attach" } | { kind: "at"; x: number; y: number }): Promise<boolean> {
+    const map = this.store.getMap();
+    const cmds: Command[] = [];
+    let title = map.cards[cardId]?.title ?? "";
+    if (!map.cards[cardId]) {
+      const file = await getWorkspaceRepo()?.readCard(cardId);
+      if (!file) {
+        void showAlert("Không đọc được card này trong thư mục Workspace.");
+        return false;
+      }
+      cmds.push(new ImportCardCommand(file.card, file.assets));
+      title = file.card.title;
+    }
+    let reveal: (() => string) | null = null;
+    if (target.kind === "attach") {
+      const nodeId = this.selection.primary;
+      if (!nodeId || !map.nodes[nodeId]) return false;
+      cmds.push(new AttachCardToNodeCommand(nodeId, cardId));
+    } else if (target.kind === "child") {
+      const parentId = this.selection.primary && map.nodes[this.selection.primary] ? this.selection.primary : map.rootId;
+      const c = new CreateNodeWithCardCommand(cardId, title || "Card", parentId);
+      cmds.push(c);
+      reveal = () => c.newNodeId;
+    } else {
+      const hit = this.renderer.hitTestNode(map, target.x, target.y, this.view);
+      const w = this.renderer.toWorld(target.x, target.y, this.view);
+      const c = new CreateNodeWithCardCommand(cardId, title || "Card", hit, hit ? null : { x: w.x, y: w.y - 18 });
+      cmds.push(c);
+      reveal = () => c.newNodeId;
+    }
+    this.store.dispatch(new CompositeCommand(cmds, "Thêm card từ Workspace"));
+    if (reveal) this.revealNode(reveal());
+    return true;
   }
 
   /** H1 — thêm card thành nhánh con của node đang chọn (nút trong Thư viện,
@@ -2463,6 +2532,13 @@ export class AppController {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
       e.preventDefault();
       searchOpenStore.set(true);
+      return;
+    }
+    // KW2 — Ctrl+K: bảng tìm toàn Workspace + lệnh (trình duyệt dùng Ctrl+K
+    // cho thanh địa chỉ/tìm kiếm nên phải chặn mặc định).
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      paletteOpenStore.update((open) => !open);
       return;
     }
     // P1.12 — Ctrl+S phải luôn "Lưu" vào file thật (nếu trình duyệt hỗ

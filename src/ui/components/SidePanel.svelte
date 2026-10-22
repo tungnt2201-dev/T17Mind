@@ -18,6 +18,7 @@
    * vệ xuyên suốt dự án (xem cảnh báo trong svelteBridge.ts).
    * -------------------------------------------------------------------
    */
+  import MarkerPicker from "./MarkerPicker.svelte";
   import type { Store } from "../../core/store";
   import type { SelectionModel } from "../selection";
   import type { AppController } from "../appController";
@@ -216,7 +217,6 @@
   // P2.2 — bảng biểu tượng cố định, đủ dùng cho phần lớn nhu cầu đánh
   // dấu nhanh, không làm bảng chọn emoji đầy đủ (không cần thiết, xem
   // ghi chú "bảng chọn biểu tượng" trong bản kế hoạch gốc).
-  const MARKER_OPTIONS = ["⭐", "✅", "❗", "⚠️", "🚀", "🔥", "📌", "💡", "🐛", "❓"];
 
   // P2.6e — danh mục font phổ biến, có sẵn trên Windows và hiển thị
   // đúng dấu tiếng Việt — sửa lỗi ô nhập tự do trước đó bắt người dùng
@@ -292,13 +292,6 @@
     if (!ok) return;
     store.dispatch(new DeleteTagCommand(tagId));
   }
-  function toggleMarker(nodeId: string, currentMarkers: string[], icon: string): void {
-    const next = currentMarkers.includes(icon)
-      ? currentMarkers.filter((m) => m !== icon)
-      : [...currentMarkers, icon];
-    patchNode(nodeId, { markers: next });
-  }
-
   function patchRelationship(relId: string, patch: RelationshipPatch): void {
     store.dispatch(new UpdateRelationshipCommand(relId, patch));
   }
@@ -636,12 +629,7 @@
 
       <div class="row" style="align-items:flex-start; margin-top:9px;">
         <span id="p-marker-label">Biểu tượng</span>
-        <div class="marker-grid" role="group" aria-labelledby="p-marker-label">
-          {#each MARKER_OPTIONS as icon (icon)}
-            <button type="button" class="marker-btn" class:active={n.markers.includes(icon)}
-              on:click={() => toggleMarker(n.id, n.markers, icon)}>{icon}</button>
-          {/each}
-        </div>
+        <MarkerPicker markers={n.markers} on:change={(e) => patchNode(n.id, { markers: e.detail })} />
       </div>
     {/if}
     <div class="divider"></div>
@@ -1088,28 +1076,5 @@
     display: flex;
     gap: 4px;
     flex-wrap: wrap;
-  }
-  .marker-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    max-width: 150px;
-  }
-  .marker-btn {
-    width: 26px;
-    height: 26px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: #fff;
-    cursor: pointer;
-    font-size: 13px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-  }
-  .marker-btn.active {
-    border-color: var(--accent);
-    background: var(--accent-soft);
   }
 </style>

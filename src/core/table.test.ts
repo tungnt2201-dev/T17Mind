@@ -171,7 +171,7 @@ describe("Dán từ Excel/Google Sheets (TSV) và CSV (M2)", () => {
       ["c", ""],
     ]);
     expect(tableFromGrid("t2", []).cells).toEqual([[""]]);
-    const card: Card = { id: "c", title: "", blocks: [t] };
+    const card: Card = { id: "c", title: "", blocks: [t], createdAt: 0, updatedAt: 0, rev: 0 };
     expect(validateCard(card, {})).toEqual([]);
 
     const src = filled(2, 3);
@@ -264,7 +264,7 @@ describe("Đổi cỡ cột/hàng (schema 19)", () => {
     d = replaceWithGrid(d, [["x", "y"]]);
     expect(d.table.colWidths).toEqual([TABLE_DEFAULT_COL_W, 300]);
     expect(d.table.rowHeights).toEqual([TABLE_DEFAULT_ROW_H]);
-    const card: Card = { id: "c", title: "", blocks: [d.table] };
+    const card: Card = { id: "c", title: "", blocks: [d.table], createdAt: 0, updatedAt: 0, rev: 0 };
     expect(validateCard(card, {})).toEqual([]);
   });
 
@@ -280,7 +280,7 @@ describe("Đổi cỡ cột/hàng (schema 19)", () => {
 
   it("validateCard báo lỗi khi colWidths/rowHeights lệch độ dài hoặc không phải số dương", () => {
     const t = { ...createTableBlock(2, 2), colWidths: [100], rowHeights: [28, -1] };
-    const errors = validateCard({ id: "c", title: "", blocks: [t] }, {});
+    const errors = validateCard({ id: "c", title: "", blocks: [t], createdAt: 0, updatedAt: 0, rev: 0 }, {});
     expect(errors.some((e) => e.includes("colWidths"))).toBe(true);
     expect(errors.some((e) => e.includes("rowHeights"))).toBe(true);
   });

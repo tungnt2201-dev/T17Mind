@@ -30,6 +30,9 @@ export const helpModalOpenStore = writable(false);
  *  xem AppController), bằng nút ×, hoặc bấm lại Ctrl+F. */
 export const searchOpenStore = writable(false);
 
+/** KW2 — bảng Ctrl+K (tìm toàn Workspace + lệnh). */
+export const paletteOpenStore = writable(false);
+
 /** P2.6 — true khi đang ở chế độ "sao chép định dạng" (đã bấm nguồn,
  *  đang chờ bấm đích — GIỮ CHẾ ĐỘ, bấm được nhiều đích liên tiếp, Esc
  *  để tắt). Cùng khuôn mẫu với linkingModeStore ở trên. */
@@ -170,8 +173,10 @@ export interface LibraryState {
   tagId: string | null;
   /** Card đang mở rộng để xem/sửa trong khung. */
   expandedCardId: string | null;
+  /** KW1 — "map": card của map đang mở; "workspace": kho card chung. */
+  scope: "map" | "workspace";
 }
-export const libraryStore = writable<LibraryState>({ open: false, query: "", filter: "all", tagId: null, expandedCardId: null });
+export const libraryStore = writable<LibraryState>({ open: false, query: "", filter: "all", tagId: null, expandedCardId: null, scope: "map" });
 
 /** Card đang mở dạng trang tài liệu (CardPageModal), null = đóng.
  *  `focusBlockId` = khối cần cuộn tới khi mở (ví dụ bấm biểu tượng bảng). */
@@ -180,3 +185,38 @@ export const cardPageStore = writable<{ cardId: string; focusBlockId: string | n
 /** M5 — hộp thoại "Xuất tài liệu" (.docx / .md / .zip): null = đóng;
  *  `scope` = phạm vi chọn sẵn khi mở (menu chuột phải "Xuất nhánh này"). */
 export const exportDocStore = writable<{ scope: "map" | "branch" } | null>(null);
+
+/** KW0 — nơi lưu hiện tại (thư mục Workspace hay bộ nhớ trình duyệt), cho
+ *  khung "Map gần đây" và dòng trạng thái. Do ui/workspaceController.ts cập nhật. */
+export interface WorkspaceUiState {
+  /** "idb" = chỉ bộ nhớ trình duyệt (chưa gắn thư mục). */
+  kind: "idb" | "native" | "browser";
+  /** Đường dẫn / tên thư mục; "" khi kind = "idb". */
+  label: string;
+  /** Có thể chọn thư mục không (exe, hoặc Chrome/Edge). */
+  folderSupported: boolean;
+  /** Trình duyệt: đã nhớ thư mục nhưng cần bấm để cấp lại quyền. */
+  needsPermission: string | null;
+  lastSavedAt: number;
+  pending: boolean;
+  error: string | null;
+}
+export const workspaceStore = writable<WorkspaceUiState>({
+  kind: "idb",
+  label: "",
+  folderSupported: false,
+  needsPermission: null,
+  lastSavedAt: 0,
+  pending: false,
+  error: null,
+});
+
+/** Trình quản lý theme riêng (ThemeEditorModal) — null = đóng. */
+export const themeEditorStore = writable<{ baseThemeId: string | null } | null>(null);
+
+/** Thông báo ngắn tự ẩn (components/Toast.svelte). */
+export const noticeStore = writable<{ text: string; id: number } | null>(null);
+let noticeSeq = 0;
+export function showNotice(text: string): void {
+  noticeStore.set({ text, id: ++noticeSeq });
+}

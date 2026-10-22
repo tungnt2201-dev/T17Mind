@@ -10,8 +10,8 @@ import type { Block, Card, ChartBlock, ImageBlock, ImageDisplaySize, MindMap, Ta
 import { generateBlockId, generateCardId } from "./tree";
 import { TABLE_DEFAULT_COL_W, TABLE_DEFAULT_ROW_H } from "./table";
 
-export function createCard(title = ""): Card {
-  return { id: generateCardId(), title, blocks: [] };
+export function createCard(title = "", now: number = Date.now()): Card {
+  return { id: generateCardId(), title, blocks: [], createdAt: now, updatedAt: now, rev: 1 };
 }
 
 export function createTextBlock(text = ""): TextBlock {

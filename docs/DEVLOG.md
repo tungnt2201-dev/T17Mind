@@ -3754,3 +3754,104 @@ Phản hồi sau khi thử: file Word mọi tiêu đề/đoạn đều sát lề
 ### File demo trình diễn (20/10/2026)
 
 `docs/demo/T17Mind-demo.t17m` — map "Gió Sớm Coffee — Kế hoạch mở quán" (dữ liệu giả định, chủ đề thương mại trung tính) gom các tính năng tới M5: 63 node, 2 nhánh trôi ("Ý tưởng mở rộng" và "🧭 Tham quan T17Mind" — 12 bước, mỗi bước một card lời dẫn có liên kết `[[node:…]]`/`[[card:…]]` nhảy tới chỗ minh hoạ), layout hai bên, theme Branch Colors, tag, biểu tượng, ưu tiên, tiến độ, checkbox, nhãn đường nối, liên kết URL, quan hệ, tóm tắt, khoanh vùng, 2 ghi chú dán, ảnh trên node; card văn bản/bảng (độ rộng cột riêng)/ảnh 3 cỡ/biểu đồ (chờ M4), 1 card dùng chung 2 node, 3 card Inbox; node thu nhỏ hết cỡ (biểu tượng đính kèm) và node phóng to. Kịch bản lời dẫn cho người trình bày: `docs/demo/KICH-BAN-DEMO.md`. Test `io/demoFile.test.ts` bảo đảm file luôn mở được và xuất Word được.
+
+---
+
+## KW0 — Nền móng Knowledge Workspace (20/10/2026)
+
+Nhánh `feat/kw0-foundation` (tách từ `main` sau khi merge PR #1–#9). Lộ trình và kiến trúc: `docs/KNOWLEDGE_WORKSPACE_PLAN.md`.
+
+- **Thư mục Workspace là nơi lưu chuẩn** (quyết định 3): `workspace.json` + `maps/<mapId>.t17m` + `.trash/`. Exe mặc định `T17Mind-Workspace` cạnh file exe; Chrome/Edge chọn thư mục; trình duyệt khác giữ IndexedDB. IndexedDB vẫn ghi ngay làm bản dự phòng, thư mục ghi sau 0,8 giây ngừng sửa; bản nào mới hơn thắng khi mở. Exe chặn đóng cửa sổ để ghi nốt (`exitProcessOnClose: false` + sự kiện `windowClose`, tối đa 5 giây).
+- **Schema 20:** `Card.createdAt/updatedAt/rev`; `touchCard` ở apply và revert của mọi Command sửa nội dung card.
+- Neutralino allow-list thêm: `os.showFolderDialog`, `filesystem.readDirectory/createDirectory/getStats/move/remove`, `app.exit`.
+- Giao diện: khung "Map gần đây" có mục **Nơi lưu** (đường dẫn, Mở thư mục, Đổi thư mục…, Về mặc định / Cấp quyền / Thôi dùng thư mục, trạng thái "Đã lưu …", nút "Đưa vào Workspace").
+- Test mới: `io/workspace.test.ts` (danh mục, đối chiếu file, dựng lại khi hỏng, .trash, ghi đồng thời), `io/storage.workspace.test.ts` (dùng `fake-indexeddb`: ghi trễ, tắt đột ngột rồi khôi phục, thư mục mới hơn, mang sang máy khác, xoá), test schema 20 trong `core/cardCommands.test.ts`. Chạy thử trên Chromium với Neutralino giả lập: tạo Workspace, ghi file, xoá IndexedDB rồi tải lại vẫn mở đúng map, bấm đóng thì ghi nốt rồi thoát.
+- **Chưa làm / chưa kiểm:** chưa chạy trên Windows thật; chưa thử hộp chọn thư mục thật của Chrome/Edge (chỉ kiểm qua lớp giả lập); đo hiệu năng cơ sở dời sang KW10; tên file map theo id (chưa theo tên map).
+
+### Checklist kiểm thử tay — KW0
+
+- [ ] Exe lần đầu chạy: cạnh file exe xuất hiện thư mục `T17Mind-Workspace` có `workspace.json` và `maps/…t17m`; các map cũ (đã có trong app trước đây) được chép vào
+- [ ] Sửa map, chờ 1 giây: "Map gần đây" → mục Nơi lưu hiện "Đã lưu hôm nay hh:mm"; file `.t17m` trong `maps/` đổi giờ sửa
+- [ ] Sửa rồi bấm ✕ đóng ngay: mở lại app thấy thay đổi cuối cùng
+- [ ] Chép cả thư mục exe sang máy khác (hoặc đổi tên thư mục người dùng): mở exe thấy đúng các map và đúng map đang làm dở
+- [ ] "Đổi thư mục…" sang một thư mục trống: map hiện tại được chép sang; "Về mặc định" quay lại thư mục cạnh exe
+- [ ] Xoá một map: file chuyển vào `T17Mind-Workspace/.trash/`
+- [ ] Mở trực tiếp `maps/<id>.t17m` bằng Tệp → Mở…: đọc được
+- [ ] Chrome/Edge (bản web/PWA): "Chọn thư mục Workspace…" → chọn thư mục → map được ghi thành file; đóng trình duyệt mở lại → nút "Cấp quyền" → bấm là dùng tiếp
+- [ ] Firefox: hiện ghi chú "không cho chọn thư mục", app vẫn lưu như cũ
+
+---
+
+## Biểu tượng & Theme riêng (20/10/2026)
+
+Nhánh `feat/icons-themes` (xếp chồng trên KW0 vì lưu vào thư mục Workspace). Theo phản hồi: demo có nhiều biểu tượng mà giao diện chỉ cho chọn 10 cái cố định; theme cũng chỉ chọn được bộ có sẵn.
+
+- **Kho biểu tượng** `core/emojiCatalog.ts`: 14 nhóm, hơn 200 emoji, từ khoá tiếng Việt tìm không dấu ("tien" → 💰💵💳…); dán/gõ emoji bất kỳ (lấy đúng một grapheme — 👨‍💻, 🇻🇳, 1️⃣ vẫn là một); "Dùng gần đây" (theo máy, localStorage).
+- **Khung chọn** `components/MarkerPicker.svelte` thay hàng 10 nút trong khung Định dạng: biểu tượng đang gắn (bấm × gỡ), hàng ghim, nút ＋ mở kho (tìm, gần đây, các nhóm), chế độ "Sửa hàng ghim" + "Khôi phục mặc định". Hàng ghim lưu trong `workspace.json#pinnedMarkers` (chưa có thư mục: IndexedDB). Thay đổi trên node vẫn qua `UpdateNodeStyleCommand` (hoàn tác được).
+- **Theme riêng** `components/ThemeEditorModal.svelte` (nút 🎨 "Theme riêng" cạnh ô chọn theme): tạo từ theme có sẵn, kiểu theo cấp (màu nền từng cấp, màu chữ tự động hoặc chọn tay, đổi sắc ở cấp sâu) hoặc mỗi nhánh một màu (màu gốc + bảng màu nhánh 1–16 màu); xem trước; Lưu / Lưu & áp dụng / Xoá; Xuất – Nhập file `.t17theme` (JSON). Lưu ở `themes/<id>.json` trong Workspace (chưa có thư mục: IndexedDB). Ô chọn theme có nhóm "Theme của tôi" và "Lưu trong map này"; tự hiện theme map đang dùng.
+- **Schema 21:** `MindMap.customTheme` — áp theme riêng thì nhúng bản sao vào map (ApplyThemeCommand, hoàn tác trả lại), nên mở map ở máy không có theme đó vẫn đúng màu và node mới vẫn tô đúng. `findTheme`: có sẵn → nhúng trong map → thư viện. `sanitizeTheme` làm sạch theme đọc từ file/map.
+- **Sửa lỗi:** hàng biểu tượng vẽ trên mép node đè lên node anh em phía trên — bố cục logic phải/trái/hai bên chừa thêm 14 px cho node có biểu tượng (`layout/spacing.ts`).
+- Test: `core/iconsThemes.test.ts` (tìm emoji, dán emoji, theme riêng áp/hoàn tác/nhúng/máy khác, migrate 20→21, bố cục), thêm vào `io/workspace.test.ts` (ghim + theme trong thư mục), `ui/userLibrary.test.ts` (file .t17theme). 280 test. Chạy thử Chromium (exe giả lập và web thường): gắn biểu tượng qua tìm kiếm và dán, ghim, tạo theme theo nhánh, áp dụng, tải lại vẫn còn.
+
+### Checklist kiểm thử tay — Biểu tượng & Theme
+
+- [ ] Chọn node → Định dạng → Biểu tượng: bấm ＋ → gõ "tien" → bấm 💰 → node có 💰; bấm 💰× ở hàng trên để gỡ; Ctrl+Z trả lại
+- [ ] Gõ Win + . chọn một emoji bất kỳ vào ô tìm → hiện "Emoji vừa dán" → bấm để gắn
+- [ ] Tick "Sửa hàng ghim" → bấm vài biểu tượng → hàng ghim đổi; đóng mở lại app vẫn còn; "Khôi phục mặc định" trả về 10 cái cũ
+- [ ] Node có biểu tượng không còn bị biểu tượng đè lên node phía trên
+- [ ] 🎨 Theme riêng → chọn "Rainbow" → + Tạo mới → đổi tên, đổi màu nhánh → xem trước đổi theo → "Lưu & áp dụng cho map" → map đổi màu; Ctrl+Z trả lại
+- [ ] Ô chọn theme có nhóm "Theme của tôi"; mở lại app vẫn còn; trong thư mục Workspace có `themes/…json`
+- [ ] Xuất file… → được file `.t17theme`; xoá theme → Nhập file .t17theme… → Lưu → theme trở lại
+- [ ] Gửi file `.t17m` của map dùng theme riêng sang máy khác (không có theme đó) → mở ra đúng màu; thêm nhánh mới vẫn tô đúng màu theme; ô chọn có nhóm "Lưu trong map này"
+
+---
+
+## KW1 — Card dùng chung giữa nhiều map (20/10/2026)
+
+Nhánh `feat/kw1-card-registry` (xếp chồng trên `feat/icons-themes` → KW0). Lộ trình: `docs/KNOWLEDGE_WORKSPACE_PLAN.md`.
+
+- **Kho card chung** trong thư mục Workspace: `cards/<cardId>.json` (card + ảnh nó dùng, `core/cardRegistry.ts`). `workspace.json` ghi phiên bản từng card (`cards`) và map nào dùng card nào (`maps[].cardIds`). Mỗi map VẪN giữ bản sao card — file `.t17m` gửi đi vẫn tự chứa đủ.
+- **Đồng bộ "bản mới hơn thắng"** (so `updatedAt` rồi `rev`, cả hai chỉ tăng kể cả khi hoàn tác — KW0): lưu map → card trong map mới hơn bản chuẩn thì ghi đè bản chuẩn; mở map → ghi nốt các thay đổi đang chờ trước, rồi card nào có bản chuẩn mới hơn thì thay vào map (không vào lịch sử hoàn tác, map được lưu lại ngay) và hiện thông báo "Đã cập nhật N card từ map khác".
+- **Thư viện → "Toàn Workspace"** (`components/WorkspaceCards.svelte`): mọi card của mọi map, "Dùng ở: …", lọc Tất cả / Chưa có ở map này / Không map nào dùng, tìm không dấu; kéo thả vào canvas hoặc "＋ Thêm làm nhánh con" / "Gắn vào node đang chọn" (`ImportCardCommand` + node/gắn trong một CompositeCommand — một bước hoàn tác, giữ nguyên id, mang theo ảnh); "Mở map: …"; "Xoá khỏi Workspace" cho card không map nào dùng (vào `.trash/`). Chưa chọn thư mục Workspace: hiện hướng dẫn.
+- Thông báo ngắn tự ẩn (`components/Toast.svelte`, `showNotice`). Sửa câu hỏi "Tạo mới" (map cũ vẫn được lưu, không mất).
+- Test: `io/cardRegistry.test.ts` (so phiên bản, file card, thay card + dọn ảnh, lưu → kho, sửa ở A → mở B thấy mới, bản cũ không ghi đè bản mới, hoàn tác lan sang map khác, xoá khỏi kho, nhận file chép tay, ImportCardCommand + hoàn tác, storage: mở B khi A còn đang chờ ghi). 289 test. Chạy thử Chromium (exe giả lập): tạo card ở map A → map mới B → Thư viện "Toàn Workspace" → thêm vào B → sửa ở B → mở lại A thấy thông báo và nội dung mới.
+- **Giới hạn:** hai máy cùng sửa một card khi chưa đồng bộ thư mục → bản sửa sau (theo giờ máy) thắng, chưa có hộp thoại gộp xung đột. Liên kết "Được nhắc tới ở" xuyên map để KW2.
+
+### Checklist kiểm thử tay — KW1
+
+- [ ] Map A: tạo card có văn bản + ảnh, chờ 1 giây → trong thư mục Workspace có `cards/<id>.json`
+- [ ] "Map gần đây"/Tệp → Mới tạo map B → Thư viện → tab "Toàn Workspace" → thấy card của A ("Dùng ở: …") → "＋ Thêm làm nhánh con" (hoặc kéo thả vào canvas) → node mới mang đúng card, có ảnh; Ctrl+Z gỡ hẳn
+- [ ] Sửa card đó ở B (đổi chữ, thêm khối) → mở lại map A → thông báo "Đã cập nhật 1 card từ map khác" → nội dung mới
+- [ ] Ở A bấm Ctrl+Z một thay đổi của card → mở B → B cũng trở lại
+- [ ] Lọc "Chưa có ở map này" / "Không map nào dùng"; tìm không dấu
+- [ ] Xoá card khỏi mọi map → trong "Toàn Workspace" card hiện "Không map nào dùng" → "Xoá khỏi Workspace" → file vào `.trash/`
+- [ ] "Mở map: …" trong chi tiết card → chuyển sang đúng map
+- [ ] Trình duyệt chưa chọn thư mục: tab "Toàn Workspace" hiện hướng dẫn chọn thư mục
+
+---
+
+## KW2 — Knowledge Index: tìm toàn Workspace, bảng lệnh, liên kết khối (22/10/2026)
+
+Nhánh `feat/kw2-knowledge-index` (xếp chồng trên `feat/kw1-card-registry`).
+
+**Ctrl+K — một ô gõ cho cả hai việc.** Gõ chữ → tìm trong **mọi map** của Workspace: node (chữ + ghi chú), card (tên) và **từng khối** của card (đoạn văn, ô bảng, chú thích ảnh, tên biểu đồ). Không dấu ("ca phe" ra "Cà phê"), mọi từ phải có mặt, tên xếp trước nội dung, khớp được tô sáng. Enter/bấm → nhảy tới đúng chỗ, **tự chuyển map** nếu kết quả ở map khác (node: chọn + bung nhánh; card/khối: mở trang card, cuộn và nháy đúng khối). Bộ lọc Tất cả · Node · Card · Nội dung (phím Tab đổi). Gõ `>` đầu dòng (hoặc để trống) → danh sách 27 lệnh của ứng dụng (thêm node, map mới, lưu, hoàn tác, bố cục, xuất Word, bật/tắt Explorer/Thư viện/Minimap…). Card dùng chung nhiều map chỉ hiện một lần, kèm "Dùng ở N map: …". Có nút "Tìm toàn bộ" trên thanh công cụ; Ctrl+F vẫn là tìm trong map đang mở.
+
+**Liên kết cấp khối.** Token mới `[[card:<id>#<blockId>|Nhãn]]` (liên kết cũ không đổi, không đổi schema). Nút 🔗 trên thanh công cụ của mỗi khối trong trang card chép liên kết; dán vào đoạn văn của card khác. Bấm liên kết → mở trang card đích, cuộn và nháy đúng khối. Nhãn luôn theo tên **hiện tại** ("Tên card › Đoạn: …"), đổi tên card thì mọi liên kết đổi nhãn; khối bị xoá → liên kết hỏng (gạch ngang). Ghép map giữ nguyên khối khi đổi id card.
+
+**Liên kết ngược xuyên map.** Trang card có thêm mục "Được nhắc tới ở map khác": các khối văn bản ở map khác trỏ tới card này (bỏ những card đã có trong map đang mở); bấm để mở map đó đúng đoạn.
+
+**Kỹ thuật.** `core/knowledgeIndex.ts` (thuần: dựng mục, tìm/xếp hạng, gộp card dùng chung, backlink xuyên map, tô sáng — ánh xạ vị trí sau khi bỏ dấu), `core/commandPalette.ts` (danh sách lệnh + lọc, chạy qua cổng hẹp `CommandHost`), `ui/knowledgeController.ts` (chỉ mục trong bộ nhớ: map đang mở dựng từ bản trực tiếp, map khác đọc **chỉ-đọc** `loadMapReadOnly` — không kéo card, không ghi bù — và chỉ dựng lại khi mốc cập nhật đổi; map đã xoá bị bỏ; flush bản ghi chờ trước khi so mốc). Chưa lưu bền chỉ mục (KW10). Chưa làm đồ thị liên kết (mục tuỳ chọn của KW2).
+
+**Test:** 3 file mới + mở rộng `links.test.ts` (309 test đạt, `npm run check` sạch). Đã chạy thật trên Chromium: mở demo, tạo map mới, Ctrl+K "ca phe" thấy kết quả ở map demo, Enter chuyển map và mở đúng card; `>bo cuc` đổi bố cục; Esc đóng.
+
+### Checklist kiểm thử tay — KW2
+
+- [ ] Ctrl+K mở bảng, Esc/Ctrl+K đóng; nút "Tìm toàn bộ" cũng mở
+- [ ] Có ≥ 2 map: gõ từ có ở map kia → thấy kết quả kèm tên map; Enter → chuyển map đúng chỗ (node được chọn / card mở)
+- [ ] Gõ không dấu và hoa thường lẫn lộn đều ra; chữ khớp được tô vàng
+- [ ] Tab đổi bộ lọc Node/Card/Nội dung; `>` hiện lệnh, chọn "Bố cục: Tree Down" thì đổi bố cục
+- [ ] Sửa chữ ở map đang mở (chưa lưu) rồi Ctrl+K → thấy chữ mới; sửa map khác rồi quay lại → kết quả cập nhật
+- [ ] Trang card → 🔗 trên một khối → dán vào đoạn văn card khác → hiện viên liên kết; bấm → nhảy đúng khối (nháy vàng)
+- [ ] Đổi tên card đích → nhãn liên kết đổi theo; xoá khối đích → liên kết hiện gạch ngang
+- [ ] Card dùng chung 2 map: ở map B có đoạn trỏ tới card → mở card đó ở map A thấy "Được nhắc tới ở map khác"
+- [ ] Workspace ~20 map: lần mở bảng đầu có "Đang lập chỉ mục n/m", lần sau gần như tức thì

@@ -112,6 +112,7 @@ export function createEmptyMap(title: string): MindMap {
     cards: {},
     organicEdges: false,
     activeThemeId: null,
+    customTheme: null,
   };
 }
 

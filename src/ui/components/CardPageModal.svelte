@@ -16,7 +16,7 @@
   import type { Store } from "../../core/store";
   import type { AppController } from "../appController";
   import { mapStore } from "../svelteBridge";
-  import { cardPageStore, tableEditorStore } from "../uiStores";
+  import { cardPageStore, tableEditorStore, showNotice } from "../uiStores";
   import { showAlert } from "../dialog";
   import { imageFilesFrom } from "../imageImport";
   import { parseDelimited, tableFromGrid } from "../../core/table";
@@ -34,7 +34,9 @@
   import MentionTextarea from "./MentionTextarea.svelte";
   import LinkedText from "./LinkedText.svelte";
   import BacklinksList from "./BacklinksList.svelte";
-  import { findBacklinks, type LinkType } from "../../core/links";
+  import { knowledgeIndex, refreshKnowledgeIndex } from "../knowledgeController";
+  import { findBacklinks, makeLinkToken, describeBlock, type LinkType } from "../../core/links";
+  import type { Block } from "../../core/types";
 
   export let store: Store;
   export let controller: AppController;
@@ -48,8 +50,20 @@
   /** Đoạn văn đang ở chế độ sửa (các đoạn khác hiện chữ có liên kết bấm được). */
   let editingBlock: string | null = null;
 
-  function followLink(type: LinkType, id: string): void {
-    if (type === "card") controller.openCardPage(id);
+  /** KW2 — chép liên kết tới đúng khối này; dán vào đoạn văn ở card khác (Ctrl+V) để tạo liên kết khối. */
+  async function copyBlockLink(b: Block): Promise<void> {
+    if (!card) return;
+    const token = makeLinkToken("card", card.id, `${card.title || "Card"} › ${describeBlock(b)}`, b.id);
+    try {
+      await navigator.clipboard.writeText(token);
+      showNotice("Đã chép liên kết khối — dán vào đoạn văn của card khác");
+    } catch {
+      void showAlert(`Không chép được vào bộ nhớ tạm. Tự chép đoạn này:\n${token}`);
+    }
+  }
+
+  function followLink(type: LinkType, id: string, blockId: string | null): void {
+    if (type === "card") controller.openCardPage(id, blockId);
     else goTo(id);
   }
 
@@ -58,6 +72,17 @@
   $: if (target && !card) cardPageStore.set(null); // card bị xoá / hoàn tác việc tạo
   $: usages = card ? cardUsages($map, card.id) : [];
   $: backlinks = card ? findBacklinks($map, { type: "card", id: card.id }).filter((b) => b.cardId !== card?.id) : [];
+  // KW2 — liên kết ngược từ card ở map khác: lập (hoặc làm tươi) chỉ mục rồi tính lại.
+  let indexVersion = 0;
+  let indexedFor: string | null = null;
+  $: if (card && indexedFor !== card.id) {
+    indexedFor = card.id;
+    void refreshKnowledgeIndex(() => store.getMap()).then(() => (indexVersion += 1));
+  } else if (!card) indexedFor = null;
+  $: cross = card ? crossBacklinks(card.id, $map, indexVersion) : [];
+  function crossBacklinks(cardId: string, m: typeof $map, _v: number) {
+    return knowledgeIndex.backlinksToCard(cardId, new Set(Object.keys(m.cards)));
+  }
   $: if (card && target?.focusBlockId) void focusBlock(target.focusBlockId);
 
   async function focusBlock(id: string): Promise<void> {
@@ -169,8 +194,8 @@
           {/each}
         {/if}
       </div>
-      {#if backlinks.length > 0}
-        <div class="pg-backlinks"><BacklinksList map={$map} {backlinks} {controller} /></div>
+      {#if backlinks.length > 0 || cross.length > 0}
+        <div class="pg-backlinks"><BacklinksList map={$map} {backlinks} {cross} {controller} /></div>
       {/if}
 
       {#if card.blocks.length === 0}
@@ -183,6 +208,7 @@
             <button type="button" title="Lên" disabled={i === 0} on:click={() => card && store.dispatch(new MoveBlockCommand(card.id, b.id, i - 1))}>↑</button>
             <button type="button" title="Xuống" disabled={i === card.blocks.length - 1}
               on:click={() => card && store.dispatch(new MoveBlockCommand(card.id, b.id, i + 1))}>↓</button>
+            <button type="button" title="Chép liên kết tới khối này (dán vào card khác)" on:click={() => void copyBlockLink(b)}>🔗</button>
             <button type="button" title="Chèn đoạn văn ngay dưới" on:click={() => void addTextAt(i + 1)}>＋</button>
             <button type="button" class="danger" title="Xoá khối" on:click={() => card && store.dispatch(new RemoveBlockCommand(card.id, b.id))}>✕</button>
           </div>
@@ -196,7 +222,7 @@
             {:else}
               <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
               <div class="pg-text pg-text-view" title="Bấm để sửa" on:click={() => (editingBlock = b.id)}>
-                <LinkedText map={$map} text={b.text} on:open={(e) => followLink(e.detail.type, e.detail.id)} />
+                <LinkedText map={$map} text={b.text} on:open={(e) => followLink(e.detail.type, e.detail.id, e.detail.blockId)} />
               </div>
             {/if}
           {:else if b.type === "image"}

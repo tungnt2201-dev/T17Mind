@@ -336,6 +336,7 @@ function buildMapFromRows(rows: RawRow[], sheetName: string): ImportResult {
     cards: {},
       organicEdges: false,
       activeThemeId: null,
+      customTheme: null,
     },
   };
 }

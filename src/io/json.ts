@@ -214,6 +214,7 @@ function importNestedJson(obj: Record<string, unknown>): ImportResult {
     cards: {},
     organicEdges: (obj as { organicEdges?: unknown }).organicEdges === true,
     activeThemeId: null,
+    customTheme: null,
   };
 
   const validationErrors = validateMindMap(map);

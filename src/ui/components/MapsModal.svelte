@@ -17,8 +17,24 @@
   import type { Store } from "../../core/store";
   import type { AppController } from "../appController";
   import { mapStore } from "../svelteBridge";
-  import { mapsModalOpenStore } from "../uiStores";
-  import { listMaps, renameMap, deleteMap, type MapIndexEntry } from "../../io/storage";
+  import { mapsModalOpenStore, workspaceStore } from "../uiStores";
+  import {
+    listMaps,
+    renameMap,
+    deleteMap,
+    listBrowserOnlyMaps,
+    copyBrowserMapsToWorkspace,
+    getWorkspaceRepo,
+    type MapIndexEntry,
+  } from "../../io/storage";
+  import {
+    chooseWorkspaceFolder,
+    reconnectWorkspaceFolder,
+    disconnectWorkspaceFolder,
+    useDefaultNativeWorkspace,
+    revealWorkspaceFolder,
+    defaultNativeWorkspacePath,
+  } from "../workspaceController";
   import { createEmptyMap } from "../../core/tree";
   import { showConfirm } from "../dialog";
 
@@ -31,8 +47,44 @@
   let editingMapId: string | null = null;
   let editingValue = "";
 
+  let browserOnly: MapIndexEntry[] = [];
+  let busy = false;
+
   async function refresh(): Promise<void> {
     entries = await listMaps();
+    browserOnly = await listBrowserOnlyMaps();
+  }
+
+  /** KW0 — sau khi đổi nơi lưu: map đang mở không thuộc Workspace mới thì
+   *  mở map gần nhất của Workspace đó (nếu có). */
+  async function afterSwitch(changed: boolean): Promise<void> {
+    if (!changed) return;
+    const repo = getWorkspaceRepo();
+    if (repo && !repo.getEntry($map.mapId)) {
+      const target = repo.lastOpenedMapId ?? repo.listMaps()[0]?.mapId;
+      if (target) await controller.openMap(target);
+    }
+    await refresh();
+  }
+  async function run(fn: () => Promise<boolean | void>): Promise<void> {
+    if (busy) return;
+    busy = true;
+    try {
+      await afterSwitch((await fn()) !== false);
+    } finally {
+      busy = false;
+    }
+  }
+  async function importBrowserMaps(): Promise<void> {
+    await run(async () => {
+      await copyBrowserMapsToWorkspace(browserOnly.map((e) => e.mapId));
+    });
+  }
+  function savedText(ws: typeof $workspaceStore): string {
+    if (ws.error) return `⚠ ${ws.error}`;
+    if (ws.pending) return "Đang chờ ghi…";
+    if (ws.lastSavedAt) return `Đã lưu ${formatTime(ws.lastSavedAt)}`;
+    return "";
   }
 
   $: if ($mapsModalOpenStore) refresh();
@@ -70,7 +122,10 @@
   }
 
   async function removeMap(entry: MapIndexEntry): Promise<void> {
-    const ok = await showConfirm(`Xoá hẳn map "${entry.title}"? Không thể hoàn tác việc này.`, "Xoá", "Huỷ");
+    const msg = getWorkspaceRepo()
+      ? `Xoá map "${entry.title}"? File của map được chuyển vào thư mục .trash trong Workspace (lấy lại được bằng tay).`
+      : `Xoá hẳn map "${entry.title}"? Không thể hoàn tác việc này.`;
+    const ok = await showConfirm(msg, "Xoá", "Huỷ");
     if (!ok) return;
 
     const isCurrentlyOpen = entry.mapId === $map.mapId;
@@ -97,6 +152,57 @@
   <div class="modal-overlay open" role="presentation" on:click={onOverlayClick}>
     <div class="modal maps-modal">
       <h2>Map gần đây</h2>
+      <section class="ws" aria-label="Nơi lưu">
+        {#if $workspaceStore.kind === "idb"}
+          <div class="ws-line">
+            <span class="ws-icon" aria-hidden="true">🗄️</span>
+            <span class="ws-text"><strong>Bộ nhớ trình duyệt</strong>
+              <span class="muted">— dữ liệu chỉ nằm trong trình duyệt này.</span></span>
+          </div>
+          {#if $workspaceStore.needsPermission}
+            <div class="ws-actions">
+              <span class="muted">Thư mục “{$workspaceStore.needsPermission}” cần cấp lại quyền.</span>
+              <button type="button" class="btn small-btn primary" disabled={busy} on:click={() => run(reconnectWorkspaceFolder)}>Cấp quyền</button>
+            </div>
+          {/if}
+          {#if $workspaceStore.folderSupported}
+            <div class="ws-actions">
+              <button type="button" class="btn small-btn" disabled={busy} on:click={() => run(chooseWorkspaceFolder)}>📁 Chọn thư mục Workspace…</button>
+              <span class="muted">Lưu mỗi map thành file .t17m trong một thư mục trên máy.</span>
+            </div>
+          {:else}
+            <p class="muted ws-note">Trình duyệt này không cho chọn thư mục — dùng Chrome/Edge hoặc bản exe để lưu vào thư mục.</p>
+          {/if}
+        {:else}
+          <div class="ws-line">
+            <span class="ws-icon" aria-hidden="true">📁</span>
+            <span class="ws-text"><strong>Thư mục Workspace</strong>
+              <span class="ws-path" title={$workspaceStore.label}>{$workspaceStore.label}</span></span>
+          </div>
+          <div class="ws-actions">
+            {#if $workspaceStore.kind === "native"}
+              <button type="button" class="btn small-btn" on:click={() => revealWorkspaceFolder()}>Mở thư mục</button>
+            {/if}
+            <button type="button" class="btn small-btn" disabled={busy} on:click={() => run(chooseWorkspaceFolder)}>Đổi thư mục…</button>
+            {#if $workspaceStore.kind === "native" && $workspaceStore.label !== defaultNativeWorkspacePath()}
+              <button type="button" class="btn small-btn" disabled={busy} title={defaultNativeWorkspacePath()} on:click={() => run(useDefaultNativeWorkspace)}>Về mặc định</button>
+            {/if}
+            {#if $workspaceStore.kind === "browser"}
+              <button type="button" class="btn small-btn" disabled={busy} on:click={() => run(disconnectWorkspaceFolder)}>Thôi dùng thư mục</button>
+            {/if}
+            <span class="ws-status" class:err={!!$workspaceStore.error}>{savedText($workspaceStore)}</span>
+          </div>
+          {#if browserOnly.length > 0}
+            <div class="ws-actions">
+              <span class="muted">{browserOnly.length} map chỉ có trong bộ nhớ trình duyệt.</span>
+              <button type="button" class="btn small-btn" disabled={busy} on:click={importBrowserMaps}>Đưa vào Workspace</button>
+            </div>
+          {/if}
+        {/if}
+        {#if $workspaceStore.error && $workspaceStore.kind === "idb"}
+          <p class="ws-status err">⚠ {$workspaceStore.error}</p>
+        {/if}
+      </section>
       {#if entries.length === 0}
         <p class="muted">Chưa có map nào được lưu.</p>
       {:else}
@@ -138,8 +244,55 @@
 {/if}
 
 <style>
+  .ws {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin: 8px 0 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 12px;
+  }
+  .ws-line {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    min-width: 0;
+  }
+  .ws-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .ws-path {
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 11px;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ws-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+  }
+  .ws-note {
+    margin: 0;
+  }
+  .ws-status {
+    font-size: 11px;
+    color: var(--muted);
+    margin-left: auto;
+  }
+  .ws-status.err {
+    color: #b91c1c;
+    margin: 0;
+  }
   .maps-modal {
-    width: 460px;
+    width: 520px;
     max-width: calc(100vw - 40px);
   }
   .maps-list {

@@ -32,9 +32,12 @@ import { wireErrorBox } from "./ui/errorBox";
 import { wireShortcutsModal } from "./ui/shortcutsModal";
 import { linkingModeStore, viewVersionStore } from "./ui/uiStores";
 import { byId } from "./ui/dom";
-import { loadLastActiveMap, saveMap } from "./io/storage";
+import { loadLastActiveMap, saveMap, onCardsPulled } from "./io/storage";
+import { showNotice } from "./ui/uiStores";
+import { initWorkspace } from "./ui/workspaceController";
 import ToolbarComponent from "./ui/components/Toolbar.svelte";
 import SearchBarComponent from "./ui/components/SearchBar.svelte";
+import CommandPaletteComponent from "./ui/components/CommandPalette.svelte";
 import MapsModalComponent from "./ui/components/MapsModal.svelte";
 import SidePanelComponent from "./ui/components/SidePanel.svelte";
 import HelpModalComponent from "./ui/components/HelpModal.svelte";
@@ -45,6 +48,8 @@ import ContextMenuComponent from "./ui/components/ContextMenu.svelte";
 import LibraryPanelComponent from "./ui/components/LibraryPanel.svelte";
 import CardPageModalComponent from "./ui/components/CardPageModal.svelte";
 import ExportDocModalComponent from "./ui/components/ExportDocModal.svelte";
+import ThemeEditorModalComponent from "./ui/components/ThemeEditorModal.svelte";
+import ToastComponent from "./ui/components/Toast.svelte";
 
 async function bootstrap(): Promise<void> {
   const canvas = byId<HTMLCanvasElement>("map-canvas");
@@ -54,6 +59,12 @@ async function bootstrap(): Promise<void> {
   // (khác localStorage đồng bộ trước đây) — bootstrap() phải chờ xong
   // mới khởi tạo Store/CanvasRenderer/AppController, nếu không sẽ lỡ
   // khởi tạo với map RỖNG rồi mới "biết" có map cũ cần khôi phục.
+  // KW1 — mở map có card được cập nhật từ map khác → báo ngắn.
+  onCardsPulled((titles) =>
+    showNotice(`Đã cập nhật ${titles.length} card từ map khác: ${titles.slice(0, 3).join(", ")}${titles.length > 3 ? "…" : ""}`)
+  );
+  // KW0 — gắn thư mục Workspace (nếu có) TRƯỚC, để map đầu tiên đọc từ đó.
+  await initWorkspace();
   const initialMap = (await loadLastActiveMap()) ?? createEmptyMap("Chủ đề trung tâm");
   const store = new Store(initialMap);
 
@@ -82,6 +93,7 @@ async function bootstrap(): Promise<void> {
   // các lớp vanilla cũ.
   mount(ToolbarComponent, { target: byId("toolbar-root"), props: { store, selection, controller } });
   mount(SearchBarComponent, { target: byId("search-bar-root"), props: { store, controller } });
+  mount(CommandPaletteComponent, { target: byId("palette-root"), props: { store, controller } });
   mount(MapsModalComponent, { target: byId("maps-modal-root"), props: { store, controller } });
   mount(SidePanelComponent, { target: byId("side-panel-root"), props: { store, selection, controller } });
   mount(HelpModalComponent, { target: byId("help-modal-root"), props: {} });
@@ -92,6 +104,8 @@ async function bootstrap(): Promise<void> {
   mount(LibraryPanelComponent, { target: byId("library-panel-root"), props: { store, selection, controller } });
   mount(CardPageModalComponent, { target: byId("card-page-root"), props: { store, controller } });
   mount(ExportDocModalComponent, { target: byId("export-doc-root"), props: { store, selection, controller } });
+  mount(ThemeEditorModalComponent, { target: byId("theme-editor-root"), props: { store, controller } });
+  mount(ToastComponent, { target: byId("toast-root"), props: {} });
 
   // FIX: canvas đã được đo kích thước một lần trong constructor của
   // CanvasRenderer ở TRÊN — lúc đó Toolbar chưa kịp gắn vào DOM nên đo

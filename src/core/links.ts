@@ -4,6 +4,9 @@
  * H2 (Liên kết hai chiều) — liên kết từ văn bản của card tới card/node
  * khác. Lưu NGAY TRONG chữ của khối văn bản dưới dạng token
  *     [[card:<id>|Nhãn]]   hoặc   [[node:<id>|Nhãn]]
+ * KW2 — liên kết tới MỘT KHỐI của card: [[card:<id>#<blockId>|Nhãn]]
+ * (bấm vào mở trang card, cuộn và nháy đúng khối đó; khối bị xoá thì
+ * liên kết hiện là liên kết hỏng).
  * → không đổi schema, xuất/nhập JSON/.t17m giữ nguyên. Nhãn chỉ là bản
  * chụp lúc chèn; khi hiển thị dùng tên HIỆN TẠI của đích (đổi tên card
  * không làm hỏng liên kết), đích đã bị xoá thì hiện là liên kết hỏng.
@@ -12,22 +15,27 @@
  * một card/node (findBacklinks).
  * ---------------------------------------------------------------------
  */
-import type { MindMap } from "./types";
+import type { Block, MindMap } from "./types";
 import { normalizeForSearch } from "./search";
 
 export type LinkType = "card" | "node";
 export interface LinkRef {
   type: LinkType;
   id: string;
+  /** KW2 — chỉ có với liên kết card: trỏ tới một khối trong card đó. */
+  blockId?: string | null;
 }
-export type Segment = { kind: "text"; text: string } | { kind: "link"; type: LinkType; id: string; label: string };
+export type Segment =
+  | { kind: "text"; text: string }
+  | { kind: "link"; type: LinkType; id: string; blockId: string | null; label: string };
 
-const TOKEN_RE = /\[\[(card|node):([A-Za-z0-9_-]+)(?:\|([^\]\n]*))?\]\]/g;
+const TOKEN_RE = /\[\[(card|node):([A-Za-z0-9_-]+)(?:#([A-Za-z0-9_-]+))?(?:\|([^\]\n]*))?\]\]/g;
 
-/** Token liên kết; nhãn bỏ ký tự làm vỡ cú pháp ("]", "|", xuống dòng). */
-export function makeLinkToken(type: LinkType, id: string, label: string): string {
+/** Token liên kết; nhãn bỏ ký tự làm vỡ cú pháp ("]", "|", xuống dòng). `blockId` chỉ có nghĩa với liên kết card. */
+export function makeLinkToken(type: LinkType, id: string, label: string, blockId: string | null = null): string {
   const clean = label.replace(/[\]|\n]+/g, " ").trim();
-  return `[[${type}:${id}${clean ? `|${clean}` : ""}]]`;
+  const block = type === "card" && blockId ? `#${blockId}` : "";
+  return `[[${type}:${id}${block}${clean ? `|${clean}` : ""}]]`;
 }
 
 /** Tách chữ thành các đoạn chữ thường và liên kết. */
@@ -37,7 +45,8 @@ export function parseSegments(text: string): Segment[] {
   for (const m of text.matchAll(TOKEN_RE)) {
     const at = m.index ?? 0;
     if (at > last) out.push({ kind: "text", text: text.slice(last, at) });
-    out.push({ kind: "link", type: m[1] as LinkType, id: m[2]!, label: m[3] ?? "" });
+    const blockId = m[1] === "card" ? m[3] ?? null : null;
+    out.push({ kind: "link", type: m[1] as LinkType, id: m[2]!, blockId, label: m[4] ?? "" });
     last = at + m[0].length;
   }
   if (last < text.length) out.push({ kind: "text", text: text.slice(last) });
@@ -45,14 +54,43 @@ export function parseSegments(text: string): Segment[] {
 }
 
 export function linksIn(text: string): LinkRef[] {
-  return parseSegments(text).flatMap((s) => (s.kind === "link" ? [{ type: s.type, id: s.id }] : []));
+  return parseSegments(text).flatMap((s) => (s.kind === "link" ? [{ type: s.type, id: s.id, blockId: s.blockId }] : []));
 }
 
-/** Tên hiện tại của đích liên kết (null nếu đích không còn). */
-export function resolveLinkLabel(map: MindMap, type: LinkType, id: string): string | null {
+/** Mô tả ngắn một khối ("Đoạn: …", "Bảng: …", "Ảnh: …", "Biểu đồ: …") để làm nhãn liên kết khối. */
+export function describeBlock(block: Block): string {
+  const clip = (t: string): string => {
+    const one = t.replace(/\s+/g, " ").trim();
+    return one.length > 32 ? `${one.slice(0, 31).trimEnd()}…` : one;
+  };
+  switch (block.type) {
+    case "text": {
+      const t = clip(plainTextBare(block.text));
+      return t ? `Đoạn: ${t}` : "Đoạn văn";
+    }
+    case "table":
+      return block.title ? `Bảng: ${clip(block.title)}` : "Bảng";
+    case "image":
+      return block.caption ? `Ảnh: ${clip(block.caption)}` : "Ảnh";
+    case "chart":
+      return block.title ? `Biểu đồ: ${clip(block.title)}` : "Biểu đồ";
+  }
+}
+
+/** Chữ thuần không cần map (thay token bằng nhãn đã chụp) — dùng riêng cho mô tả khối. */
+function plainTextBare(text: string): string {
+  return text.includes("[[") ? parseSegments(text).map((s) => (s.kind === "text" ? s.text : s.label || "liên kết")).join("") : text;
+}
+
+/** Tên hiện tại của đích liên kết (null nếu đích không còn). Liên kết khối: "Tên card › mô tả khối"; khối đã xoá = hỏng. */
+export function resolveLinkLabel(map: MindMap, type: LinkType, id: string, blockId: string | null = null): string | null {
   if (type === "card") {
     const c = map.cards[id];
-    return c ? c.title || "(card chưa đặt tên)" : null;
+    if (!c) return null;
+    const title = c.title || "(card chưa đặt tên)";
+    if (!blockId) return title;
+    const b = c.blocks.find((x) => x.id === blockId);
+    return b ? `${title} › ${describeBlock(b)}` : null;
   }
   const n = map.nodes[id];
   return n ? n.text || "(node trống)" : null;
@@ -63,16 +101,16 @@ export function resolveLinkLabel(map: MindMap, type: LinkType, id: string): stri
 export function plainText(text: string, map?: MindMap): string {
   if (!text.includes("[[")) return text;
   return parseSegments(text)
-    .map((s) => (s.kind === "text" ? s.text : (map && resolveLinkLabel(map, s.type, s.id)) || s.label || "liên kết"))
+    .map((s) => (s.kind === "text" ? s.text : (map && resolveLinkLabel(map, s.type, s.id, s.blockId)) || s.label || "liên kết"))
     .join("");
 }
 
 /** Đổi id trong mọi token theo bảng ánh xạ (ghép map — MergeMapCommand). */
 export function remapLinks(text: string, cardIds: Map<string, string>, nodeIds: Map<string, string>): string {
   if (!text.includes("[[")) return text;
-  return text.replace(TOKEN_RE, (whole, type: LinkType, id: string, label?: string) => {
+  return text.replace(TOKEN_RE, (whole, type: LinkType, id: string, blockId?: string, label?: string) => {
     const next = (type === "card" ? cardIds : nodeIds).get(id);
-    return next ? makeLinkToken(type, next, label ?? "") : whole;
+    return next ? makeLinkToken(type, next, label ?? "", blockId ?? null) : whole;
   });
 }
 
@@ -90,7 +128,7 @@ export function findBacklinks(map: MindMap, target: LinkRef): Backlink[] {
   for (const card of Object.values(map.cards)) {
     for (const b of card.blocks) {
       if (b.type !== "text" || !b.text.includes(needle)) continue;
-      if (!linksIn(b.text).some((l) => l.type === target.type && l.id === target.id)) continue;
+      if (!linksIn(b.text).some((l) => l.type === target.type && l.id === target.id && (target.blockId == null || l.blockId === target.blockId))) continue;
       const plain = plainText(b.text, map).replace(/\s+/g, " ").trim();
       out.push({ cardId: card.id, blockId: b.id, snippet: plain.length > 120 ? `${plain.slice(0, 117)}…` : plain });
     }

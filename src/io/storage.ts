@@ -26,11 +26,21 @@
  * giá trị "an toàn" (null/[]/false) nếu IndexedDB bị chặn/lỗi — giữ
  * đúng triết lý "giải pháp lưu trữ không được phép làm SẬP app" của
  * bản cũ, chỉ lặng lẽ bỏ qua khi không lưu/đọc được.
+ *
+ * KW0 — khi đã gắn một THƯ MỤC Workspace (setWorkspaceRepo, xem
+ * io/workspaceRepo.ts) thì thư mục đó là NƠI LƯU CHUẨN: danh sách map,
+ * mở map, xoá, đổi tên đều đi qua nó. IndexedDB vẫn được ghi NGAY mỗi lần
+ * lưu làm bản dự phòng; thư mục được ghi sau khi ngừng sửa WRITE_DELAY_MS
+ * (ghi cả file .t17m mỗi phím gõ là quá nặng). Lúc mở map, bản nào mới
+ * hơn (so updatedAt) thắng — app tắt đột ngột trước khi kịp ghi ra thư
+ * mục thì lần sau vẫn lấy lại được từ IndexedDB rồi ghi bù.
  * ---------------------------------------------------------------------
  */
 import type { MindMap } from "../core/types";
 import { validateMindMap } from "../core/validate";
 import { migrateToLatest } from "../core/migrate";
+import { mapDisplayTitle } from "../core/workspace";
+import type { WorkspaceRepo } from "./workspaceRepo";
 
 const DB_NAME = "t17mind-db";
 const DB_VERSION = 1;
@@ -82,19 +92,89 @@ function runInStore<T>(storeName: string, mode: IDBTransactionMode, fn: (store: 
   );
 }
 
-/** Tên hiển thị của một map: ưu tiên mapTitle đã đặt riêng, không thì
- *  lấy luôn chữ của node gốc — người dùng không cần đặt tên thủ công
- *  cho trường hợp thông thường. */
-function effectiveTitle(map: MindMap): string {
-  const custom = map.mapTitle?.trim();
-  if (custom) return custom;
-  const rootText = map.nodes[map.rootId]?.text?.trim();
-  return rootText || "Chưa đặt tên";
+const effectiveTitle = mapDisplayTitle;
+
+// ------------------------------------------------------- KW0: Workspace
+
+/** Ghi ra thư mục Workspace sau khi ngừng sửa chừng này (ms). */
+export const WRITE_DELAY_MS = 800;
+
+export interface WorkspaceSaveStatus {
+  /** Lần ghi ra thư mục thành công gần nhất (ms), 0 nếu chưa. */
+  lastSavedAt: number;
+  /** Còn thay đổi chưa ghi ra thư mục. */
+  pending: boolean;
+  /** Lỗi ghi gần nhất (null nếu lần ghi sau đó đã thành công). */
+  error: string | null;
 }
 
-/** Liệt kê mọi map đã lưu, mới cập nhật nhất lên đầu — dùng cho "Map
- *  gần đây". Đọc từ bảng chỉ mục NHẸ, không tải dữ liệu đầy đủ. */
-export async function listMaps(): Promise<MapIndexEntry[]> {
+let repo: WorkspaceRepo | null = null;
+const pendingWrites = new Map<string, { map: MindMap; updatedAt: number; timer: ReturnType<typeof setTimeout> }>();
+let status: WorkspaceSaveStatus = { lastSavedAt: 0, pending: false, error: null };
+let statusListener: ((s: WorkspaceSaveStatus) => void) | null = null;
+
+function setStatus(patch: Partial<WorkspaceSaveStatus>): void {
+  status = { ...status, ...patch };
+  statusListener?.(status);
+}
+
+export function onWorkspaceSaveStatus(fn: ((s: WorkspaceSaveStatus) => void) | null): void {
+  statusListener = fn;
+  fn?.(status);
+}
+
+/** Gắn (hoặc bỏ — null) thư mục Workspace làm nơi lưu chuẩn. */
+export function setWorkspaceRepo(next: WorkspaceRepo | null): void {
+  for (const p of pendingWrites.values()) clearTimeout(p.timer);
+  pendingWrites.clear();
+  repo = next;
+  setStatus({ pending: false, error: null });
+}
+
+export function getWorkspaceRepo(): WorkspaceRepo | null {
+  return repo;
+}
+
+function scheduleWorkspaceWrite(map: MindMap, updatedAt: number): void {
+  if (!repo) return;
+  const old = pendingWrites.get(map.mapId);
+  if (old) clearTimeout(old.timer);
+  const timer = setTimeout(() => void writeOne(map.mapId), WRITE_DELAY_MS);
+  pendingWrites.set(map.mapId, { map, updatedAt, timer });
+  setStatus({ pending: true });
+}
+
+async function writeOne(mapId: string): Promise<void> {
+  const job = pendingWrites.get(mapId);
+  const target = repo;
+  if (!job || !target) return;
+  clearTimeout(job.timer);
+  pendingWrites.delete(mapId);
+  try {
+    await target.writeMap(job.map, job.updatedAt);
+    setStatus({ lastSavedAt: Date.now(), error: null, pending: pendingWrites.size > 0 });
+  } catch (err) {
+    console.warn(`Không ghi được map "${mapId}" ra thư mục Workspace:`, err);
+    setStatus({ error: (err as Error)?.message ?? String(err), pending: pendingWrites.size > 0 });
+  }
+}
+
+/** Ghi ngay mọi thay đổi đang chờ ra thư mục (gọi trước khi đóng app,
+ *  khi đổi Workspace, khi tab bị ẩn). */
+export async function flushWorkspaceWrites(): Promise<void> {
+  await Promise.all([...pendingWrites.keys()].map((id) => writeOne(id)));
+  await repo?.idle();
+}
+
+async function idbIndexEntry(mapId: string): Promise<MapIndexEntry | undefined> {
+  try {
+    return await runInStore<MapIndexEntry | undefined>(INDEX_STORE, "readonly", (s) => s.get(mapId));
+  } catch {
+    return undefined;
+  }
+}
+
+async function listIdbMaps(): Promise<MapIndexEntry[]> {
   try {
     const all = await runInStore<MapIndexEntry[]>(INDEX_STORE, "readonly", (s) => s.getAll());
     return all.sort((a, b) => b.updatedAt - a.updatedAt);
@@ -103,12 +183,43 @@ export async function listMaps(): Promise<MapIndexEntry[]> {
   }
 }
 
+/** Map chỉ có trong bộ nhớ trình duyệt mà Workspace chưa có (để đưa vào). */
+export async function listBrowserOnlyMaps(): Promise<MapIndexEntry[]> {
+  if (!repo) return [];
+  const r = repo;
+  return (await listIdbMaps()).filter((e) => !r.getEntry(e.mapId));
+}
+
+/** Chép các map (theo id) từ bộ nhớ trình duyệt vào thư mục Workspace. */
+export async function copyBrowserMapsToWorkspace(mapIds: string[]): Promise<number> {
+  if (!repo) return 0;
+  let n = 0;
+  for (const id of mapIds) {
+    const map = await loadIdbMap(id);
+    const entry = await idbIndexEntry(id);
+    if (!map) continue;
+    await repo.writeMap(map, entry?.updatedAt ?? Date.now());
+    n++;
+  }
+  return n;
+}
+
+/** Liệt kê mọi map đã lưu, mới cập nhật nhất lên đầu — dùng cho "Map
+ *  gần đây". Đọc từ bảng chỉ mục NHẸ, không tải dữ liệu đầy đủ. */
+export async function listMaps(): Promise<MapIndexEntry[]> {
+  if (repo) return repo.listMaps().map((e) => ({ mapId: e.mapId, title: e.title, updatedAt: e.updatedAt }));
+  return listIdbMaps();
+}
+
 /** Lưu một map: ghi dữ liệu đầy đủ, cập nhật bảng chỉ mục, và đánh dấu
  *  nó là map đang mở gần nhất. */
 export async function saveMap(map: MindMap): Promise<void> {
+  const updatedAt = Date.now();
+  scheduleWorkspaceWrite(map, updatedAt);
+  if (repo && repo.lastOpenedMapId !== map.mapId) void repo.setLastOpened(map.mapId).catch(() => undefined);
   try {
     await runInStore(MAPS_STORE, "readwrite", (s) => s.put(map));
-    const entry: MapIndexEntry = { mapId: map.mapId, title: effectiveTitle(map), updatedAt: Date.now() };
+    const entry: MapIndexEntry = { mapId: map.mapId, title: effectiveTitle(map), updatedAt };
     await runInStore(INDEX_STORE, "readwrite", (s) => s.put(entry));
     await runInStore(META_STORE, "readwrite", (s) => s.put({ key: LAST_ACTIVE_KEY, value: map.mapId }));
   } catch {
@@ -121,6 +232,61 @@ export async function saveMap(map: MindMap): Promise<void> {
 /** Tải một map theo đúng mapId, tự di trú lên schema mới nhất và xác
  *  thực trước khi trả về — null nếu không tồn tại hoặc dữ liệu hỏng. */
 export async function loadMap(mapId: string): Promise<MindMap | null> {
+  if (!repo) return loadIdbMap(mapId);
+  // KW1 — ghi nốt mọi thay đổi đang chờ trước (card vừa sửa ở map đang mở
+  // phải vào kho card chung trước khi map kia đọc).
+  await flushWorkspaceWrites();
+  const r = repo;
+  if (!r) return loadIdbMap(mapId);
+  const map = await loadFromWorkspace(r, mapId);
+  if (map) {
+    const updated = await r.pullNewerCards(map);
+    if (updated.length > 0) {
+      cardsPulledListener?.(updated);
+      void saveMap(map);
+    }
+  }
+  return map;
+}
+
+/**
+ * KW2 — đọc map CHỈ ĐỂ LẬP CHỈ MỤC: không kéo card mới từ kho chung, không
+ * ghi bù, không đổi map đang mở. Cùng quy tắc chọn bản mới nhất như loadMap().
+ */
+export async function loadMapReadOnly(mapId: string): Promise<MindMap | null> {
+  const r = repo;
+  if (!r) return loadIdbMap(mapId);
+  const entry = r.getEntry(mapId);
+  const idbEntry = await idbIndexEntry(mapId);
+  if (idbEntry && (!entry || idbEntry.updatedAt > entry.updatedAt)) {
+    const fromIdb = await loadIdbMap(mapId);
+    if (fromIdb) return fromIdb;
+  }
+  return entry ? r.readMap(mapId) : null;
+}
+
+let cardsPulledListener: ((titles: string[]) => void) | null = null;
+/** KW1 — báo cho giao diện khi mở map có card được cập nhật từ map khác. */
+export function onCardsPulled(fn: ((titles: string[]) => void) | null): void {
+  cardsPulledListener = fn;
+}
+
+async function loadFromWorkspace(repo: WorkspaceRepo, mapId: string): Promise<MindMap | null> {
+  const entry = repo.getEntry(mapId);
+  const idbEntry = await idbIndexEntry(mapId);
+  // Bản trong IndexedDB mới hơn thư mục: lần trước app tắt trước khi kịp
+  // ghi ra thư mục → dùng bản này và ghi bù.
+  if (idbEntry && (!entry || idbEntry.updatedAt > entry.updatedAt)) {
+    const fromIdb = await loadIdbMap(mapId);
+    if (fromIdb) {
+      if (entry) scheduleWorkspaceWrite(fromIdb, idbEntry.updatedAt);
+      return fromIdb;
+    }
+  }
+  return entry ? repo.readMap(mapId) : null;
+}
+
+async function loadIdbMap(mapId: string): Promise<MindMap | null> {
   try {
     const raw = await runInStore<MindMap | undefined>(MAPS_STORE, "readonly", (s) => s.get(mapId));
     if (!raw) return null;
@@ -141,18 +307,25 @@ export async function loadMap(mapId: string): Promise<MindMap | null> {
  *  từng mở map nào, hoặc map đó đã bị xoá — KHÔNG tự ý rơi vào một map
  *  khác bất kỳ trong danh sách. */
 export async function loadLastActiveMap(): Promise<MindMap | null> {
+  let id: string | null = null;
   try {
     const meta = await runInStore<{ key: string; value: string } | undefined>(META_STORE, "readonly", (s) => s.get(LAST_ACTIVE_KEY));
-    if (!meta) return null;
-    return await loadMap(meta.value);
+    id = meta?.value ?? null;
   } catch {
-    return null;
+    id = null;
   }
+  if (repo) {
+    // Thư mục mang sang máy khác: map mở gần nhất trên máy này có thể không
+    // thuộc Workspace → dùng map mở gần nhất ghi trong workspace.json.
+    if (!id || !repo.getEntry(id)) id = repo.lastOpenedMapId ?? repo.listMaps()[0]?.mapId ?? null;
+  }
+  return id ? loadMap(id) : null;
 }
 
 /** Đánh dấu map đang mở gần nhất — gọi khi CHUYỂN SANG một map khác
  *  (không phải lúc sửa nội dung, lúc đó saveMap() đã tự làm việc này). */
 export async function setLastActiveMapId(mapId: string): Promise<void> {
+  void repo?.setLastOpened(mapId).catch(() => undefined);
   try {
     await runInStore(META_STORE, "readwrite", (s) => s.put({ key: LAST_ACTIVE_KEY, value: mapId }));
   } catch {
@@ -177,6 +350,18 @@ export async function renameMap(mapId: string, newTitle: string): Promise<boolea
  *  đây đúng là map đang mở gần nhất, xoá luôn con trỏ đó (không để nó
  *  trỏ tới một map không còn tồn tại). */
 export async function deleteMap(mapId: string): Promise<void> {
+  const pending = pendingWrites.get(mapId);
+  if (pending) {
+    clearTimeout(pending.timer);
+    pendingWrites.delete(mapId);
+  }
+  if (repo) {
+    try {
+      await repo.deleteMap(mapId);
+    } catch (err) {
+      console.warn(`Không xoá được map "${mapId}" trong Workspace:`, err);
+    }
+  }
   try {
     await runInStore(MAPS_STORE, "readwrite", (s) => s.delete(mapId));
     await runInStore(INDEX_STORE, "readwrite", (s) => s.delete(mapId));
@@ -184,6 +369,27 @@ export async function deleteMap(mapId: string): Promise<void> {
     if (meta?.value === mapId) {
       await runInStore(META_STORE, "readwrite", (s) => s.delete(LAST_ACTIVE_KEY));
     }
+  } catch {
+    // bỏ qua
+  }
+}
+
+/** KW0 — cặp key/value bền trong IndexedDB (đường dẫn/handle thư mục
+ *  Workspace…). Giá trị có thể là object (handle thư mục lưu được nhờ
+ *  structured clone). undefined nếu chưa có hoặc lỗi. */
+export async function getMeta<T>(key: string): Promise<T | undefined> {
+  try {
+    const row = await runInStore<{ key: string; value: T } | undefined>(META_STORE, "readonly", (s) => s.get(key));
+    return row?.value;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function setMeta(key: string, value: unknown): Promise<void> {
+  try {
+    if (value === undefined) await runInStore(META_STORE, "readwrite", (s) => s.delete(key));
+    else await runInStore(META_STORE, "readwrite", (s) => s.put({ key, value }));
   } catch {
     // bỏ qua
   }

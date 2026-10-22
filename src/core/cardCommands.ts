@@ -19,6 +19,17 @@ function requireCard(map: MindMap, cardId: string): Card {
   return card;
 }
 
+/**
+ * KW0 — đánh dấu card vừa đổi nội dung: `rev` tăng, `updatedAt` = bây giờ.
+ * Gọi ở CẢ apply() lẫn revert(): hoàn tác cũng là một lần thay đổi mới
+ * (rev chỉ tăng, không lùi) — để bước đồng bộ card giữa nhiều map (KW1)
+ * luôn nhận ra bản nào mới hơn, kể cả sau Ctrl+Z.
+ */
+export function touchCard(card: Card, now: number = Date.now()): void {
+  card.rev = (Number.isFinite(card.rev) ? card.rev : 0) + 1;
+  card.updatedAt = Math.max(now, (Number.isFinite(card.updatedAt) ? card.updatedAt : 0) + 1);
+}
+
 /** Xoá khỏi map.assets các ảnh trong `candidateIds` mà không còn ai dùng;
  *  trả về phần đã xoá để revert() khôi phục. */
 function pruneAssets(map: MindMap, candidateIds: string[], exceptCardId: string | null): Record<string, ImageAsset> {
@@ -113,9 +124,11 @@ export class RenameCardCommand implements Command {
     const card = requireCard(map, this.cardId);
     this.old = card.title;
     card.title = this.title;
+    touchCard(requireCard(map, this.cardId));
   }
   revert(map: MindMap): void {
     requireCard(map, this.cardId).title = this.old;
+    touchCard(requireCard(map, this.cardId));
   }
 }
 
@@ -141,6 +154,7 @@ export class AddBlockCommand implements Command {
     }
     const at = this.index === null ? card.blocks.length : Math.max(0, Math.min(this.index, card.blocks.length));
     card.blocks.splice(at, 0, deepClone(this.block));
+    touchCard(requireCard(map, this.cardId));
   }
   revert(map: MindMap): void {
     const card = requireCard(map, this.cardId);
@@ -149,6 +163,7 @@ export class AddBlockCommand implements Command {
       if (this.replacedAsset) map.assets[this.addedAssetId] = this.replacedAsset;
       else delete map.assets[this.addedAssetId];
     }
+    touchCard(requireCard(map, this.cardId));
   }
 }
 
@@ -164,12 +179,14 @@ export class ReplaceBlockCommand implements Command {
     if (i < 0) throw new Error(`Khối không tồn tại: ${this.block.id}`);
     this.old = card.blocks[i] as Block;
     card.blocks[i] = deepClone(this.block);
+    touchCard(requireCard(map, this.cardId));
   }
   revert(map: MindMap): void {
     if (!this.old) return;
     const card = requireCard(map, this.cardId);
     const i = card.blocks.findIndex((b) => b.id === this.block.id);
     if (i >= 0) card.blocks[i] = this.old;
+    touchCard(requireCard(map, this.cardId));
   }
 }
 
@@ -199,10 +216,12 @@ export class UpdateTableCommand implements Command {
       if (colOrigin && b.type === "chart" && b.tableBlockId === this.table.id) return remapChartColumns(b, colOrigin);
       return b;
     });
+    touchCard(requireCard(map, this.cardId));
   }
   revert(map: MindMap): void {
     if (!this.oldBlocks) return;
     requireCard(map, this.cardId).blocks = this.oldBlocks;
+    touchCard(requireCard(map, this.cardId));
   }
 }
 
@@ -226,11 +245,13 @@ export class RemoveBlockCommand implements Command {
       .flatMap((b) => (b.type === "image" ? [b.assetId] : []));
     const assets = pruneAssets(map, removedImages, null);
     this.snapshot = { blocks: before, assets };
+    touchCard(requireCard(map, this.cardId));
   }
   revert(map: MindMap): void {
     if (!this.snapshot) return;
     requireCard(map, this.cardId).blocks = this.snapshot.blocks;
     Object.assign(map.assets, this.snapshot.assets);
+    touchCard(requireCard(map, this.cardId));
   }
 }
 
@@ -247,6 +268,7 @@ export class MoveBlockCommand implements Command {
     const [b] = card.blocks.splice(this.oldIndex, 1);
     const at = Math.max(0, Math.min(this.toIndex, card.blocks.length));
     card.blocks.splice(at, 0, b as Block);
+    touchCard(requireCard(map, this.cardId));
   }
   revert(map: MindMap): void {
     const card = requireCard(map, this.cardId);
@@ -254,6 +276,7 @@ export class MoveBlockCommand implements Command {
     if (cur < 0 || this.oldIndex < 0) return;
     const [b] = card.blocks.splice(cur, 1);
     card.blocks.splice(this.oldIndex, 0, b as Block);
+    touchCard(requireCard(map, this.cardId));
   }
 }
 
@@ -343,4 +366,36 @@ export function buildAddImagesToNodeCommand(
     );
   }
   return new CompositeCommand(commands, images.length > 1 ? `Thêm ${images.length} ảnh` : "Thêm ảnh");
+}
+
+/**
+ * KW1 — đưa một card từ kho card chung (Workspace) vào map đang mở, giữ
+ * NGUYÊN id (cùng một card ở nhiều map), kèm dữ liệu ảnh nó dùng. Map đã
+ * có card đó thì không làm gì. Thường gộp với CreateNodeWithCardCommand /
+ * AttachCardToNodeCommand trong một CompositeCommand (một bước hoàn tác).
+ */
+export class ImportCardCommand implements Command {
+  readonly label = "Thêm card từ Workspace";
+  private added = false;
+  private addedAssets: string[] = [];
+  constructor(private readonly card: Card, private readonly assets: Record<string, ImageAsset>) {}
+  apply(map: MindMap): void {
+    this.added = false;
+    this.addedAssets = [];
+    if (map.cards[this.card.id]) return;
+    for (const id of cardAssetIds(this.card)) {
+      const a = this.assets[id];
+      if (a && !map.assets[id]) {
+        map.assets[id] = { ...a };
+        this.addedAssets.push(id);
+      }
+    }
+    map.cards[this.card.id] = deepClone(this.card);
+    this.added = true;
+  }
+  revert(map: MindMap): void {
+    if (!this.added) return;
+    delete map.cards[this.card.id];
+    for (const id of this.addedAssets) delete map.assets[id];
+  }
 }
