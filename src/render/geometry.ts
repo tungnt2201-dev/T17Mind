@@ -7,7 +7,8 @@
  * và để có thể viết test cho từng phép tính mà không cần dựng canvas.
  * ---------------------------------------------------------------------
  */
-import type { MindMap, MindNode, Summary, Boundary } from "../core/types";
+import type { MindMap, MindNode, Summary, Boundary, BoundaryMode } from "../core/types";
+import type { Pt, Region } from "./adaptiveBoundary";
 import { isVerticalLayout } from "../core/types";
 import { visibleRepresentativeId } from "../core/tree";
 export { visibleRepresentativeId };
@@ -481,15 +482,44 @@ export function findVisuallyNearestNode(
 // P2.4 — Khoanh vùng (Boundary)
 // ---------------------------------------------------------------------
 
+/** Chip nhỏ của nhóm trực quan: nhãn các vùng phụ, số thành viên bị ẩn, nhãn nhóm ở chế độ phân tán. */
+export interface GroupChip {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  text: string;
+  kind: "region" | "hidden" | "label";
+  /** Với chip "hidden": node đại diện đang hiện. */
+  nodeId?: string;
+}
+
 export interface BoundaryGeometry {
+  /** Hộp bao toàn bộ (vùng + nhãn + chip); với nhóm cũ là chính khung chữ nhật. */
   x: number;
   y: number;
   width: number;
   height: number;
+  /** Nhãn chính của nhóm. */
   labelX: number;
   labelY: number;
   labelW: number;
   labelH: number;
+  /** Chế độ vẽ; thiếu = "rectangle" (nhóm cũ). */
+  mode?: BoundaryMode;
+  /** E: các vùng bao tách rời. */
+  regions?: Region[];
+  /** F: khung viền quanh từng node thành viên đang hiện. */
+  memberOutlines?: { x: number; y: number; width: number; height: number }[];
+  chips?: GroupChip[];
+  /** Nét nối phụ (cây khung nhỏ nhất) giữa các vùng / thành viên. */
+  connectors?: [Pt, Pt][];
+  /** E quá phân mảnh (nhiều vùng) — nên gợi ý chuyển sang chế độ phân tán. */
+  fragmented?: boolean;
+  /** Đã rơi về hộp bao từng cụm (dữ liệu quá lớn / đang kéo). */
+  approximate?: boolean;
+  /** Kết quả liên kết gần-xa lần tính này — dùng làm hysteresis lần sau. */
+  links?: Set<string>;
 }
 
 const BOUNDARY_PADDING = 24;

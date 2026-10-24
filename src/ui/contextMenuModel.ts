@@ -98,7 +98,7 @@ export function buildMenu(t: MenuTarget): MenuEntry[] {
     case "multi":
       return [
         item("summary", `Tóm tắt ${t.count} node`),
-        item("boundary", "Khoanh vùng"),
+        item("boundary", "Nhóm trực quan (Khoanh vùng)"),
         SEP,
         item("copy", "Sao chép", "Ctrl+C"),
         item("cut", "Cắt", "Ctrl+X"),
@@ -115,7 +115,7 @@ export function buildMenu(t: MenuTarget): MenuEntry[] {
     case "summary":
       return [item("editLabel", "Sửa nhãn tóm tắt"), SEP, item("delete", "Xoá tóm tắt", "Del", { danger: true })];
     case "boundary":
-      return [item("editLabel", "Sửa nhãn khoanh vùng"), SEP, item("delete", "Xoá khoanh vùng", "Del", { danger: true })];
+      return [item("editLabel", "Sửa nhãn nhóm"), SEP, item("delete", "Xoá nhóm", "Del", { danger: true })];
     case "sticky":
       return [item("editLabel", "Sửa ghi chú dán"), SEP, item("delete", "Xoá ghi chú dán", "Del", { danger: true })];
     case "canvas":
