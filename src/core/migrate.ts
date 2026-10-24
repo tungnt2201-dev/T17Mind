@@ -19,6 +19,7 @@ import { generateMapId, generateTagId } from "./tree";
 import { sanitizeTheme } from "./theme";
 import { sanitizeTreeSettings } from "./treeSettings";
 import { normalizeVisual } from "./boundaryVisual";
+import { sanitizeTagFields, sanitizeFieldValues } from "./tagDbSanitize";
 
 type UnknownRecord = Record<string, unknown>;
 type MigrationFn = (raw: UnknownRecord) => UnknownRecord;
@@ -598,6 +599,9 @@ export function migrateToLatest(raw: UnknownRecord): MindMap {
   if (typeof safe.assets !== "object" || safe.assets === null) safe.assets = {};
   if (typeof safe.activeThemeId !== "string") safe.activeThemeId = null;
   safe.customTheme = sanitizeTheme(safe.customTheme);
+  // KW5 — thuộc tính Tag + giá trị trên node là TUỲ CHỌN (không đổi schema): làm sạch khi đọc file.
+  sanitizeTagFields(safe.tags as UnknownRecord[]);
+  sanitizeFieldValues(safe.nodes as Record<string, UnknownRecord>, safe.tags as UnknownRecord[]);
   safe.treeSettings = sanitizeTreeSettings(safe.treeSettings, new Set(Object.keys((safe.nodes as object) ?? {})));
   // Nhóm trực quan: `visual` là tuỳ chọn thêm sau (không đổi schema) — làm sạch khi đọc file; hỏng/thiếu = hình chữ nhật cũ.
   for (const b of safe.boundaries as UnknownRecord[]) {

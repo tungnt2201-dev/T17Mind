@@ -44,3 +44,21 @@ describe("File demo docs/demo/T17Mind-bieu-do.t17m (KW4)", () => {
     expect(exported.every((b) => b.kind === "chart" && b.series.some((s) => s.values.some((v) => v !== null)))).toBe(true);
   });
 });
+
+describe("File demo docs/demo/T17Mind-tag-database.t17m (KW5)", () => {
+  it("mở được; Tag 'Công việc' có 4 thuộc tính, 8 dòng, xuất lưới đúng", async () => {
+    const { rowsOfTag, tagFieldsOf, rowsToGrid } = await import("../core/tagDb");
+    const buf = readFileSync(new URL("../../docs/demo/T17Mind-tag-database.t17m", import.meta.url));
+    const res = await parseT17mFile(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const tag = res.map.tags.find((t) => t.name === "Công việc")!;
+    const fields = tagFieldsOf(tag);
+    expect(fields.map((f) => f.type)).toEqual(["status", "number", "date", "text"]);
+    const rows = rowsOfTag(res.map, tag.id);
+    expect(rows).toHaveLength(8);
+    const grid = rowsToGrid(rows, fields);
+    expect(grid[0]).toEqual(["Tên node", "Trạng thái", "Giờ ước tính", "Hạn", "Người làm"]);
+    expect(grid[1]).toEqual(["Wireframe trang chủ", "Xong", "6", "20/10/2026", "An"]);
+  });
+});

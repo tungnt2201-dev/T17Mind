@@ -77,6 +77,10 @@ export interface MindNode {
    *  node.height khi có, xem layout/index.ts và
    *  render/CanvasRenderer.ts#getMeasurer. */
   tagIds: string[];
+  /** KW5 — giá trị thuộc tính theo `TagField.id` (chuỗi chuẩn hoá: số "12.5", ngày
+   *  "2026-10-24", lựa chọn = id option, chữ nguyên văn). Thiếu khoá = chưa đặt. Chỉ
+   *  có nghĩa với các Tag node đang mang; đổi qua SetFieldValueCommand. */
+  fieldValues?: Record<string, string>;
 
   /** Kiểu đường nối từ node này TỚI CÁC CON của nó (không phải tới cha). */
   edgeColor: string | null;
@@ -228,6 +232,28 @@ export interface TagDef {
   /** Mã màu hex, ví dụ "#2f6fed" — dùng cho cả nền viên thuốc trên
    *  node lẫn ô quản lý Tag. */
   color: string;
+  /** KW5 — thuộc tính của Tag ("cơ sở dữ liệu Tag"). Tuỳ chọn, không đổi
+   *  schema: thiếu = Tag chưa có thuộc tính. Giá trị nằm ở
+   *  `MindNode.fieldValues` của từng node mang Tag này. */
+  fields?: TagField[];
+}
+
+export type TagFieldType = "text" | "number" | "date" | "select" | "status";
+
+export interface TagFieldOption {
+  id: string;
+  label: string;
+  /** Mã màu hex của thẻ lựa chọn (Kanban, viên thuốc trong bảng). */
+  color: string;
+}
+
+export interface TagField {
+  /** Duy nhất trong toàn map (khoá của MindNode.fieldValues). */
+  id: string;
+  name: string;
+  type: TagFieldType;
+  /** Chỉ có với "select" / "status". */
+  options?: TagFieldOption[];
 }
 
 /**

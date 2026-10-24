@@ -13,7 +13,7 @@ import type { MindMap, MindNode, Relationship, Summary, Boundary } from "./types
 import { CURRENT_SCHEMA_VERSION } from "./types";
 
 /** Sinh id ngẫu nhiên đủ ngắn để đọc, đủ dài để không trùng trong một tài liệu. */
-export function generateId(prefix: "n" | "r" | "s" | "b" | "k" | "m" | "tag" | "img" | "card" | "blk"): string {
+export function generateId(prefix: "n" | "r" | "s" | "b" | "k" | "m" | "tag" | "img" | "card" | "blk" | "fld" | "opt"): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
 }
 
@@ -38,6 +38,14 @@ export function generateBlockId(): string {
 /** P2.7e — định danh cho một Tag trong danh sách tập trung của map. */
 export function generateTagId(): string {
   return generateId("tag");
+}
+
+/** KW5 — định danh thuộc tính Tag / lựa chọn của thuộc tính. */
+export function generateFieldId(): string {
+  return generateId("fld");
+}
+export function generateOptionId(): string {
+  return generateId("opt");
 }
 
 /** Tạo một node mới, chưa gắn vào map nào. */

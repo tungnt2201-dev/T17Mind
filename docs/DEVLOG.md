@@ -3967,3 +3967,19 @@ Quyết định (theo lựa chọn của người dùng): nhập kiểu Excel `=
 **Giới hạn:** chưa có tham chiếu cột nguyên (B:B), tham chiếu sang bảng khác, kéo-điền công thức, % trong biểu thức (`=A1*10%`), và một ô văn bản thật sự bắt đầu bằng "=" sẽ bị hiểu là công thức. Ô công thức có kết quả số luôn canh phải.
 
 **Test:** `core/formula.test.ts` (40: hàm, phép tính, lỗi, vòng, chèn/xoá hàng-cột trên bảng thật, hiệu năng 1000×10), thêm ca vào `chartData.test.ts`, `chartCard.test.ts`, `docExport.test.ts`.
+
+## KW5 — Cơ sở dữ liệu Tag (thuộc tính, Bảng, Kanban, Biểu đồ)
+
+Biến Tag thành một "bảng dữ liệu": mỗi Tag có thể có THUỘC TÍNH (Chữ, Số, Ngày, Chọn một, Trạng thái); mỗi node mang Tag là một dòng.
+
+**Dữ liệu (không đổi schema, tuỳ chọn):** `TagDef.fields?: TagField[]` (id, tên, kiểu, `options` cho Chọn một/Trạng thái) và `MindNode.fieldValues?: Record<fieldId, string>` (chuỗi chuẩn hoá: số `"12.5"`, ngày `"2026-10-24"`, lựa chọn = id option). Thiếu = chưa đặt. `core/tagDbSanitize.ts` làm sạch khi đọc file (thuộc tính sai kiểu/trùng id, giá trị mồ côi hoặc sai kiểu bị bỏ), file cũ mở như thường.
+
+**Command (`core/tagDbCommands.ts`):** `AddTagFieldCommand` (Trạng thái tự có 3 lựa chọn), `UpdateTagFieldCommand` (tên, lựa chọn), `RemoveTagFieldCommand` (xoá cả giá trị, hoàn tác khôi phục đúng từng node), `SetFieldValueCommand` (một hay nhiều node = MỘT bước hoàn tác: sửa ô, sửa hàng loạt, kéo thẻ Kanban). Tối đa 20 thuộc tính/Tag, 30 lựa chọn/thuộc tính.
+
+**Logic thuần (`core/tagDb.ts`):** chuẩn hoá giá trị (số kiểu Việt/Anh dùng `parseNumber`), lấy dòng theo thứ tự cây, lọc (chứa/bằng/khác/lớn hơn/nhỏ hơn/trống/có giá trị, nhiều điều kiện AND; điều kiện chưa nhập xong thì không lọc), sắp xếp ổn định (số, ngày, lựa chọn theo thứ tự option, tên theo tiếng Việt; ô trống luôn cuối), nhóm (Bảng: theo cột bất kỳ; Kanban: đủ cột kể cả rỗng + "Chưa đặt"), gộp số liệu cho biểu đồ (đếm / tổng / trung bình), lưới xuất CSV/Excel (Excel giữ cột Số là số thật).
+
+**Giao diện:** nút "Bảng Tag" trên thanh công cụ (cũng có lệnh trong Ctrl+K) mở `TagDatabaseModal`: tab Bảng (sửa ô trực tiếp, lọc, sắp xếp, nhóm, chọn nhiều dòng để đặt một thuộc tính cho tất cả), Kanban (kéo thẻ sang cột khác đổi giá trị; Ctrl+Z/Ctrl+Y hoàn tác/làm lại ngay trong hộp), Biểu đồ (gộp theo thuộc tính chọn; đo Số dòng/Tổng/Trung bình; cột/đường/tròn; tải SVG/PNG, dùng lại bộ vẽ KW4), quản lý thuộc tính và lựa chọn; Xuất CSV/Excel theo đúng các dòng đang hiển thị. Khung bên phải của node có mục thuộc tính của các Tag node mang để sửa giá trị nhanh.
+
+**Giới hạn:** chưa có thuộc tính kiểu công thức/liên kết giữa các Tag; giá trị gắn trên NODE (không phải card dùng chung); Kanban chỉ một thuộc tính một lúc, không sắp thứ tự thẻ trong cột; chưa hiện giá trị thuộc tính trên node ở sơ đồ; xoá một lựa chọn thì giá trị đang trỏ vào nó thành "Chưa đặt" (hoàn tác được trong phiên, nhưng lưu rồi mở lại thì giá trị mồ côi bị làm sạch).
+
+**Test:** `core/tagDb.test.ts` (21: chuẩn hoá, Command + undo/redo, lọc, sắp xếp, nhóm, biểu đồ, xuất, JSON round-trip, làm sạch dữ liệu hỏng).

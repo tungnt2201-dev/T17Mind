@@ -39,7 +39,7 @@
   import type { SelectionModel } from "../selection";
   import type { AppController } from "../appController";
   import { mapStore, selectionStore } from "../svelteBridge";
-  import { linkingModeStore, helpModalOpenStore, searchOpenStore, formatPainterModeStore, mapsModalOpenStore, explorerStore, minimapStore, hasLinkedFileStore, libraryStore, exportDocStore, paletteOpenStore } from "../uiStores";
+  import { linkingModeStore, helpModalOpenStore, searchOpenStore, formatPainterModeStore, mapsModalOpenStore, explorerStore, minimapStore, hasLinkedFileStore, libraryStore, exportDocStore, paletteOpenStore, tagDbStore } from "../uiStores";
   import { THEMES } from "../../core/theme";
   import { customThemesStore } from "../userLibrary";
   import { settingsOfRoot } from "../../core/treeSettings";
@@ -388,6 +388,9 @@
       title="Nhóm trực quan (còn gọi là Khoanh vùng): gom các node ở bất kỳ nhánh nào vào một nhóm có nhãn và màu — mặc định vẽ bằng nhiều vùng bao ôm sát node, đổi sang chế độ Phân tán hoặc Hình chữ nhật trong khung bên phải"
       on:click={() => controller.createBoundaryFromSelection()}>
       <span class="icon icon-text">▭</span><span class="label">Nhóm trực quan</span></button>
+    <button class="tbar-btn" on:click={() => tagDbStore.set({ tagId: null })}
+      title="Cơ sở dữ liệu Tag: thêm thuộc tính cho Tag, xem node theo Bảng / Kanban / Biểu đồ, lọc, nhóm, xuất CSV/Excel">
+      <span class="icon icon-text">▦</span><span class="label">Bảng Tag</span></button>
 
     <span class="tbar-sep"></span>
 

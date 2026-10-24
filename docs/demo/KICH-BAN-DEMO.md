@@ -144,3 +144,22 @@ Trong `T17Mind-bieu-do.t17m`: node "Doanh thu & chi phí" có cột *Lợi nhu�
 - [ ] Chèn/xoá hàng/cột: tham chiếu cập nhật; xoá hàng chứa ô được tham chiếu → #REF
 - [ ] Ctrl+Z / Hủy trong trình sửa bảng hoàn tác đúng; lưu rồi mở lại file: công thức còn, kết quả đúng
 - [ ] Biểu đồ vẽ từ cột công thức; bảng 1000 hàng gõ mượt
+
+## Bước 14 — Cơ sở dữ liệu Tag (KW5)
+Mở `T17Mind-tag-database.t17m`: Tag "Công việc" gắn trên 8 việc, có 4 thuộc tính (Trạng thái, Giờ ước tính, Hạn, Người làm).
+1. Bấm "Bảng Tag" → tab Bảng: sửa trực tiếp trạng thái/giờ/hạn/người làm; bấm tên cột để sắp xếp.
+2. "+ Lọc": Trạng thái = Chưa làm; "Nhóm theo" Người làm.
+3. Tick vài dòng → "đặt Người làm = Khoa" → Áp dụng (một bước hoàn tác).
+4. Tab Kanban: kéo thẻ "Giỏ hàng" sang cột "Đang làm"; Ctrl+Z / Ctrl+Y.
+5. Tab Biểu đồ: gộp theo Trạng thái, đo "Tổng Giờ ước tính"; đổi sang tròn; Tải SVG/PNG.
+6. "Thuộc tính…": thêm cột mới, đổi màu/tên lựa chọn, xoá thuộc tính (Ctrl+Z khôi phục).
+7. Chọn một node trên sơ đồ: khung bên phải có mục thuộc tính; bấm "Mở bảng".
+8. Xuất CSV / Excel: đúng các dòng đang lọc; cột Giờ là số thật trong Excel.
+
+### Checklist kiểm thử tay (KW5)
+- [ ] Thêm đủ 5 kiểu thuộc tính; Trạng thái có sẵn 3 lựa chọn; nhập số sai/ngày sai bị từ chối kèm thông báo, ô trở lại giá trị cũ
+- [ ] Lọc nhiều điều kiện, sắp xếp (ô trống luôn cuối), nhóm theo cột chữ và theo cột chọn
+- [ ] Sửa hàng loạt N dòng = 1 lần Ctrl+Z; kéo thẻ Kanban = 1 lần Ctrl+Z
+- [ ] Xoá thuộc tính có dữ liệu → Ctrl+Z khôi phục đủ giá trị; xoá Tag → Ctrl+Z khôi phục cả thuộc tính
+- [ ] Lưu, mở lại file: thuộc tính và giá trị còn nguyên; mở file cũ (không có thuộc tính) bình thường
+- [ ] Biểu đồ đổi theo bộ lọc; xuất CSV mở bằng Excel đúng tiếng Việt
