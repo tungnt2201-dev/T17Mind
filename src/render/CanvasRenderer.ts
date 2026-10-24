@@ -33,7 +33,7 @@ import {
   type BoundaryGeometry,
   type DropTarget,
 } from "./geometry";
-import type { Boundary, MindMap, MindNode, StickyNote, TagDef } from "../core/types";
+import type { Boundary, MindMap, MindNode, StickyNote } from "../core/types";
 import { lightenHex } from "../core/theme";
 import { isVerticalLayout } from "../core/types";
 import { layoutOfNode, settingsOfNode } from "../core/treeSettings";
@@ -43,6 +43,7 @@ import { collectVisibleNodeIds, getRootIds } from "../core/tree";
 import type { NodeMeasurer } from "../layout";
 import { buildChartModel, drawChartOnCanvas, type ChartModel } from "./chartModel";
 import { chartDataOf } from "../core/chartData";
+import { nodeFieldChips } from "../core/tagDb";
 import { THUMB_ROW_H, THUMB_MORE_W, THUMB_FONT, type ThumbLayout } from "./tableThumb";
 import type { ChartBlock, ImageAsset, TableBlock } from "../core/types";
 import { assetDims, IMAGE_THUMB_HEIGHT, type ImageDims, type ImageThumbLayout } from "./imageThumb";
@@ -111,6 +112,7 @@ const LABEL_ROW_HEIGHT = 22;
 const LABEL_PILL_HEIGHT = 16;
 const LABEL_PILL_PAD_X = 8;
 const LABEL_PILL_GAP = 5;
+const LABEL_ROW_MAX_WIDTH = 420;
 
 /** P2.7h (Phần 4) — "Kiểu cây tự nhiên": độ rộng ĐẦU đường (phía cha)
  *  = computeEdgeWidth() nhân với hệ số này (phóng to hẳn so với nét
@@ -300,7 +302,6 @@ export class CanvasRenderer {
    *  P2.7e — nhận thêm map để tra TÊN Tag qua tagIds (trước đây
    *  node.labels tự nó đã là chữ, giờ chỉ là id, cần tra ngược). */
   getMeasurer(map: MindMap): NodeMeasurer {
-    const tagNameById = new Map(map.tags.map((t) => [t.id, t.name]));
     this.pruneImageCache(map);
     return (node: MindNode, isRoot: boolean) => {
       let { width, height } = this.measureTextBox(node, isRoot);
@@ -309,11 +310,10 @@ export class CanvasRenderer {
       // chứa trọn hàng viên thuốc đó nếu nó rộng hơn phần chữ chính.
       if (node.tagIds.length > 0) {
         this.ctx.font = FONT_LABEL;
-        const tagNames = node.tagIds.map((id) => tagNameById.get(id) ?? "?");
+        const items = this.labelItems(map, node);
         const pillsWidth =
-          tagNames.reduce((sum, name) => sum + this.ctx.measureText(name).width + LABEL_PILL_PAD_X * 2, 0) +
-          LABEL_PILL_GAP * (node.tagIds.length - 1);
-        width = Math.max(width, Math.min(320, pillsWidth + 20));
+          items.reduce((sum, it) => sum + this.ctx.measureText(it.text).width + LABEL_PILL_PAD_X * 2, 0) + LABEL_PILL_GAP * (items.length - 1);
+        width = Math.max(width, Math.min(LABEL_ROW_MAX_WIDTH, pillsWidth + 20));
         height += LABEL_ROW_HEIGHT;
       }
 
@@ -1767,31 +1767,56 @@ export class CanvasRenderer {
    *  nó). Mỗi viên lấy ĐÚNG màu của Tag tương ứng (nền nhạt tự tính từ
    *  màu Tag qua lightenHex, chữ giữ nguyên màu gốc) — trước đây mọi
    *  nhãn dùng chung một màu xanh cố định. */
+  /**
+   * Các viên trong hàng dưới cùng của node: viên Tag (màu Tag), rồi các thẻ GIÁ TRỊ thuộc tính (KW5, bật
+   * "Hiện trên node"): lựa chọn/trạng thái mang màu lựa chọn, giá trị khác là thẻ xám "Tên: giá trị".
+   * Viên nào không còn vừa bề rộng tối đa thì bị bỏ, thay bằng một viên "…".
+   */
+  private labelItems(map: MindMap, node: MindNode): { text: string; fg: string; bg: string; capsule: boolean }[] {
+    const items: { text: string; fg: string; bg: string; capsule: boolean }[] = [];
+    for (const id of node.tagIds) {
+      const tag = map.tags.find((t) => t.id === id);
+      items.push({ text: tag?.name ?? "?", fg: tag?.color ?? "#6b7480", bg: lightenHex(tag?.color ?? "#6b7480", 0.82), capsule: true });
+    }
+    for (const chip of nodeFieldChips(map, node)) {
+      items.push(
+        chip.color
+          ? { text: chip.text, fg: chip.color, bg: lightenHex(chip.color, 0.82), capsule: false }
+          : { text: chip.text, fg: "#4b5563", bg: "#eef0f3", capsule: false }
+      );
+    }
+    return items;
+  }
+
   private drawLabelPills(map: MindMap, node: MindNode): void {
     if (node.tagIds.length === 0) return;
     const ctx = this.ctx;
     const y = node.y + node.height - LABEL_ROW_HEIGHT / 2;
-
-    const tags = node.tagIds.map((id) => map.tags.find((t) => t.id === id)).filter((t): t is TagDef => t != null);
-    if (tags.length === 0) return;
+    let items = this.labelItems(map, node);
+    if (items.length === 0) return;
 
     ctx.font = FONT_LABEL;
-    const widths = tags.map((tag) => ctx.measureText(tag.name).width + LABEL_PILL_PAD_X * 2);
-    const totalWidth = widths.reduce((a, b) => a + b, 0) + LABEL_PILL_GAP * (tags.length - 1);
-    let x = node.x + node.width / 2 - totalWidth / 2;
+    const widthOf = (text: string): number => ctx.measureText(text).width + LABEL_PILL_PAD_X * 2;
+    const maxW = Math.max(40, Math.min(LABEL_ROW_MAX_WIDTH, node.width) - 8);
+    const total = (list: typeof items): number => list.reduce((a, it) => a + widthOf(it.text), 0) + LABEL_PILL_GAP * (list.length - 1);
+    if (total(items) > maxW) {
+      const kept = [...items];
+      while (kept.length > 1 && total([...kept, { text: "…", fg: "#6b7480", bg: "#eef0f3", capsule: false }]) > maxW) kept.pop();
+      items = kept.length < items.length ? [...kept, { text: "…", fg: "#6b7480", bg: "#eef0f3", capsule: false }] : kept;
+    }
+    let x = node.x + node.width / 2 - total(items) / 2;
 
     ctx.save();
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    for (let i = 0; i < tags.length; i++) {
-      const tag = tags[i] as TagDef;
-      const w = widths[i] as number;
+    for (const it of items) {
+      const w = widthOf(it.text);
       ctx.beginPath();
-      this.roundRectPath(x, y - LABEL_PILL_HEIGHT / 2, w, LABEL_PILL_HEIGHT, LABEL_PILL_HEIGHT / 2);
-      ctx.fillStyle = lightenHex(tag.color, 0.82);
+      this.roundRectPath(x, y - LABEL_PILL_HEIGHT / 2, w, LABEL_PILL_HEIGHT, it.capsule ? LABEL_PILL_HEIGHT / 2 : 4);
+      ctx.fillStyle = it.bg;
       ctx.fill();
-      ctx.fillStyle = tag.color;
-      ctx.fillText(tag.name, x + w / 2, y + 1);
+      ctx.fillStyle = it.fg;
+      ctx.fillText(it.text, x + w / 2, y + 1);
       x += w + LABEL_PILL_GAP;
     }
     ctx.restore();

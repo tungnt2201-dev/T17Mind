@@ -58,6 +58,8 @@ export interface TagFieldPatch {
   name?: string;
   /** Thay toàn bộ danh sách lựa chọn (chỉ select/status). Giá trị trỏ tới lựa chọn đã xoá được xem là "chưa đặt". */
   options?: TagFieldOption[];
+  /** Bật/tắt hiện giá trị trên node ở sơ đồ. */
+  showOnNode?: boolean;
 }
 
 export class UpdateTagFieldCommand implements Command {
@@ -72,6 +74,10 @@ export class UpdateTagFieldCommand implements Command {
     this.old = { ...cur, ...(cur.options ? { options: cloneOptions(cur.options) } : {}) };
     const next: TagField = { ...cur };
     if (this.patch.name !== undefined) next.name = this.patch.name;
+    if (this.patch.showOnNode !== undefined) {
+      if (this.patch.showOnNode) next.showOnNode = true;
+      else delete next.showOnNode;
+    }
     if (this.patch.options !== undefined && hasOptions(cur.type)) next.options = cloneOptions(this.patch.options).slice(0, MAX_OPTIONS_PER_FIELD);
     tag.fields = tag.fields!.map((f, j) => (j === i ? next : f));
   }
@@ -162,5 +168,24 @@ export class SetFieldValueCommand implements Command {
   /** Giá trị chuẩn hoá đã ghi ở lần apply gần nhất (để kiểm thử). */
   get appliedValue(): string {
     return this.applied;
+  }
+}
+
+/** Đặt thứ tự thủ công của các dòng trong một Tag (kéo thẻ Kanban đổi vị trí). */
+export class SetTagOrderCommand implements Command {
+  readonly label = "Đổi thứ tự thẻ";
+  private old: string[] | undefined;
+  private hadOrder = false;
+  constructor(private readonly tagId: string, private readonly order: readonly string[]) {}
+  apply(map: MindMap): void {
+    const tag = requireTag(map, this.tagId);
+    this.hadOrder = tag.order !== undefined;
+    this.old = tag.order ? [...tag.order] : undefined;
+    tag.order = [...this.order];
+  }
+  revert(map: MindMap): void {
+    const tag = requireTag(map, this.tagId);
+    if (this.hadOrder) tag.order = this.old ? [...this.old] : [];
+    else delete tag.order;
   }
 }

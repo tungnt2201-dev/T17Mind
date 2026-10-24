@@ -4006,3 +4006,13 @@ Kiểm tra tay: mọi nút hàng 2 còn hoạt động và còn tooltip; menu Ch
 **Giới hạn:** không có chế độ sửa WYSIWYG (sửa trong ô chữ, xem đã định dạng); danh sách số đánh lại thứ tự khi hiển thị chứ không tự đánh lại trong chuỗi khi chèn/xoá giữa chừng; chưa có bảng/ảnh nằm trong dòng văn bản (vẫn là khối riêng); Ctrl+Z khi con trỏ đang trong ô chữ của trang card vẫn là hoàn tác của trình duyệt cho đến khi rời ô (hành vi sẵn có).
 
 **Test:** `core/richText.test.ts` (23: phân tích, ký hiệu hỏng, chữ cũ không đổi, phép sửa, menu "/"), `io/richExport.test.ts` (12: docModel/Markdown/Word, văn bản thường không đổi, nhập Markdown + khứ hồi, khối nhúng: validate, Command, xuất, vòng lặp, ghép map).
+
+## Bảng Tag: giá trị hiện trên node + thứ tự thẻ Kanban
+
+Xử lý hai giới hạn còn lại của KW5.
+
+- **Hiện giá trị trên node:** mỗi thuộc tính có tuỳ chọn `showOnNode` ("Hiện trên node" trong "Thuộc tính…", đổi qua `UpdateTagFieldCommand`, hoàn tác được). Thuộc tính bật và có giá trị thì hiện thành thẻ nhỏ ở hàng dưới cùng của node, ngay sau viên Tag: Chọn một/Trạng thái mang màu lựa chọn, kiểu khác là thẻ xám "Tên: giá trị". Tối đa 4 thẻ; hàng rộng tối đa 420 px, thẻ nào không vừa bị thay bằng "…". `core/tagDb.ts#nodeFieldChips` (thuần) + `CanvasRenderer.labelItems` dùng chung cho đo node và vẽ nên bề rộng node luôn khớp.
+- **Thứ tự thẻ Kanban:** `TagDef.order?: string[]` (id node) lưu thứ tự thủ công. Kanban xếp thẻ trong cột theo đó (node chưa xếp đi sau, theo thứ tự cây); kéo thẻ thả LÊN một thẻ khác = chèn trước thẻ đó, thả vào vùng trống của cột = xuống cuối cột. Đổi cột + đổi vị trí gộp trong MỘT bước hoàn tác (`CompositeCommand` của `SetFieldValueCommand` + `SetTagOrderCommand`). Bảng vẫn dùng "sắp xếp" riêng, không bị ảnh hưởng. `orderRows` / `moveInOrder` là hàm thuần có test.
+- Cả hai là dữ liệu tuỳ chọn, không đổi schema, làm sạch khi đọc file (`showOnNode` chỉ nhận đúng `true`, `order` bỏ trùng/rác).
+
+**Test:** thêm 7 ca vào `core/tagDb.test.ts` (thẻ trên node, giới hạn số thẻ, JSON/làm sạch, orderRows, moveInOrder, SetTagOrderCommand, kéo thẻ một bước hoàn tác).
