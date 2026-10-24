@@ -3990,6 +3990,10 @@ Hàng công cụ thứ hai dài ~1900 px (phải cuộn ngang). Rút còn ~800 p
 
 Kiểm tra tay: mọi nút hàng 2 còn hoạt động và còn tooltip; menu Chèn/Nhánh trôi đóng sau khi chọn; nút Liên kết chéo đổi trạng thái; cửa sổ 1280 px không còn thanh cuộn ngang.
 
+## Bản exe: các nút "Tải/Xuất" lẻ dùng hộp thoại Lưu của Windows
+
+Các nút tải file lẻ (Tải SVG/PNG của biểu đồ, Xuất CSV/Excel của Bảng Tag và của trình sửa bảng, xuất theme) dùng `downloadBlob` → thẻ `<a download>`, mà WebView2 trong Neutralino không đảm bảo xử lý (có thể không hiện gì hoặc lưu im lặng vào Downloads). Nay `downloadBlob` trong bản exe gọi `nativeSaveBlob` (`io/nativeFs.ts`): hộp thoại Lưu của Windows với tên gợi ý + bộ lọc theo đuôi file, rồi ghi file thật; bấm Huỷ thì không ghi; lỗi thì rơi về cách tải của trình duyệt. Trình duyệt/PWA không đổi. Chưa kiểm trên Windows thật (đã kiểm với Neutralino giả trong Chromium: CSV và Excel ghi đúng nội dung/đúng tên). Test: `io/nativeSave.test.ts` (4).
+
 ## KW6 — Card Editor nâng cao (Markdown rút gọn, thanh định dạng, menu "/", khối nhúng)
 
 **Quyết định thư viện:** KHÔNG thêm thư viện editor ngoài (ProseMirror/TipTap ~100–150 KB). Khối văn bản vẫn là MỘT CHUỖI (`TextBlock.text`) và định dạng là "Markdown rút gọn" nằm ngay trong chuỗi đó. Lý do: không đổi schema/định dạng file, chữ cũ hiện y nguyên, token liên kết `[[card:…]]` và `@` giữ nguyên, tìm kiếm/trích đoạn/xuất đều đọc chuỗi, undo vẫn là `ReplaceBlockCommand` từng lần chỉnh, bản exe và PWA không nặng thêm. Đổi lại ô sửa là ô chữ có thanh định dạng (không phải WYSIWYG); chế độ xem hiển thị đã định dạng.

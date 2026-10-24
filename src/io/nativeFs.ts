@@ -29,6 +29,7 @@ interface NeutralinoApi {
 }
 
 function api(): NeutralinoApi | null {
+  if (typeof window === "undefined") return null;
   const n = (window as unknown as { Neutralino?: NeutralinoApi }).Neutralino;
   return n && typeof n.os?.showSaveDialog === "function" ? n : null;
 }
@@ -62,6 +63,22 @@ export async function nativeOpenDialog(title: string, defaultPath: string, forma
   const filters = [{ name: "Mọi định dạng mở được", extensions: allExt }, ...filtersFor(formats)];
   const paths = await n.os.showOpenDialog(title, { defaultPath, filters });
   return paths[0] ?? null;
+}
+
+/**
+ * Lưu một blob/chuỗi ra file qua hộp thoại Lưu của Windows (bản exe), với tên gợi ý `filename`; đuôi file lấy từ tên.
+ * Dùng cho các nút "Tải/Xuất" lẻ (SVG, PNG, CSV, Excel, theme…) — trong WebView2, thẻ <a download> không đáng tin.
+ * Trả về đường dẫn đã ghi, hoặc null nếu người dùng bấm Huỷ. Ném lỗi nếu không chạy trong bản exe hoặc ghi thất bại.
+ */
+export async function nativeSaveBlob(blob: Blob | string, filename: string): Promise<string | null> {
+  const n = api();
+  if (!n) throw new Error("Không chạy trong bản exe.");
+  const ext = /\.([A-Za-z0-9]{1,8})$/.exec(filename)?.[1]?.toLowerCase();
+  const filters: NeutralinoFilter[] = ext ? [{ name: `Tệp .${ext}`, extensions: [ext] }, { name: "Mọi tệp", extensions: ["*"] }] : [{ name: "Mọi tệp", extensions: ["*"] }];
+  const path = await n.os.showSaveDialog("Lưu tệp", { defaultPath: filename, filters });
+  if (!path) return null;
+  await nativeWriteFile(path, blob);
+  return path;
 }
 
 export async function nativeWriteFile(path: string, data: Blob | string): Promise<void> {
