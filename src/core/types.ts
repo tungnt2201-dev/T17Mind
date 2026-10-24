@@ -171,6 +171,30 @@ export interface Boundary {
   label: string;
   fillColor: string | null;
   borderColor: string | null;
+  /** Nhóm trực quan (Visual Group): thiếu = hình chữ nhật như cũ (file cũ không đổi gì).
+   *  Chỉ là TUỲ CHỌN HIỂN THỊ — đường bao thật luôn được tính lại từ vị trí node, không lưu. */
+  visual?: BoundaryVisualOptions;
+}
+
+/**
+ * Cách vẽ một nhóm: "rectangle" (khung chữ nhật cũ), "multiContour" (E — một hoặc nhiều
+ * vùng bao tự thích nghi ôm sát các node), "distributed" (F — viền/chip nhỏ trên từng node
+ * thành viên, không có vùng nền lớn).
+ */
+export type BoundaryMode = "rectangle" | "multiContour" | "distributed";
+
+export interface BoundaryVisualOptions {
+  mode: BoundaryMode;
+  /** Khoảng đệm quanh mỗi node (đơn vị thế giới). */
+  padding: number;
+  /** Hai node cách nhau (mép tới mép) không quá giá trị này thì được nối vào cùng một vùng. */
+  connectionGap: number;
+  /** 0–1: độ bo tròn góc đường bao. */
+  smoothness: number;
+  /** Độ đậm của màu nền vùng (0–1). */
+  fillOpacity: number;
+  /** Vẽ nét đứt mảnh nối các vùng / các thành viên của nhóm. */
+  showConnectors: boolean;
 }
 
 /**

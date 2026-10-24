@@ -384,8 +384,10 @@
       <Icon name="link" /><span class="label">Liên kết</span></button>
     <button class="tbar-btn" disabled={!canCreateSummary} on:click={() => controller.createSummaryFromSelection()}>
       <span class="icon icon-text">{"{ }"}</span><span class="label">Tóm tắt</span></button>
-    <button class="tbar-btn" disabled={!canCreateBoundary} on:click={() => controller.createBoundaryFromSelection()}>
-      <span class="icon icon-text">▭</span><span class="label">Khoanh vùng</span></button>
+    <button class="tbar-btn" disabled={!canCreateBoundary}
+      title="Nhóm trực quan (còn gọi là Khoanh vùng): gom các node ở bất kỳ nhánh nào vào một nhóm có nhãn và màu — mặc định vẽ bằng nhiều vùng bao ôm sát node, đổi sang chế độ Phân tán hoặc Hình chữ nhật trong khung bên phải"
+      on:click={() => controller.createBoundaryFromSelection()}>
+      <span class="icon icon-text">▭</span><span class="label">Nhóm trực quan</span></button>
 
     <span class="tbar-sep"></span>
 

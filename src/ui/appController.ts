@@ -28,7 +28,9 @@ import {
   type DragPreview,
   type SearchPulse,
 } from "../render/CanvasRenderer";
-import { computeDropTarget, summaryGeometry, findVisuallyNearestNode, type DropTarget } from "../render/geometry";
+import { computeDropTarget, summaryGeometry, findVisuallyNearestNode, visibleRepresentativeId, type BoundaryGeometry, type DropTarget } from "../render/geometry";
+import { defaultVisual } from "../core/boundaryVisual";
+import { computeGroupGeometry } from "../render/groupGeometry";
 import {
   AddChildCommand,
   UpdateTextCommand,
@@ -900,6 +902,15 @@ export class AppController {
         maxY = Math.max(maxY, g.maxY);
       }
     }
+    // Nhóm trực quan có thể lòi ra ngoài node (vùng bao, nhãn, chip) — mở rộng khung cho vừa.
+    for (const b of map.boundaries) {
+      const g = computeGroupGeometry(map, b);
+      if (!g) continue;
+      minX = Math.min(minX, g.x);
+      minY = Math.min(minY, g.y);
+      maxX = Math.max(maxX, g.x + g.width);
+      maxY = Math.max(maxY, g.y + g.height);
+    }
     if (!Number.isFinite(minX)) return Promise.resolve(null); // map rỗng bất thường — không có gì để xuất
 
     const pad = 40;
@@ -1075,6 +1086,22 @@ export class AppController {
     requestAnimationFrame(() => this.startEditSummaryLabel(cmd.newSummaryId));
   }
 
+  /** Hình học đang vẽ của một nhóm (để giao diện biết số vùng, phân mảnh…). */
+  getBoundaryGeometry(boundaryId: string): BoundaryGeometry | null {
+    return this.renderer.getBoundaryGeometry(boundaryId);
+  }
+
+  /** Chọn mọi thành viên của nhóm (kể cả thành viên đang ẩn thì chọn đại diện đang hiện của nó). */
+  selectBoundaryMembers(boundaryId: string): void {
+    const map = this.store.getMap();
+    const b = map.boundaries.find((x) => x.id === boundaryId);
+    if (!b) return;
+    const ids = new Set<string>();
+    for (const id of b.nodeIds) if (map.nodes[id]) ids.add(visibleRepresentativeId(map, id));
+    if (ids.size === 0) return;
+    this.selection.applyMarqueeResult([...ids], false, map.rootId);
+  }
+
   canCreateBoundary(): boolean {
     return this.selection.ids.size >= 1;
   }
@@ -1088,7 +1115,8 @@ export class AppController {
     const ids = Array.from(this.selection.ids);
     if (ids.length === 0) return;
 
-    const cmd = new AddBoundaryCommand(ids, "Khoanh vùng");
+    // Nhóm mới mặc định ở chế độ E (nhiều vùng thích nghi); nhóm cũ trong file giữ hình chữ nhật.
+    const cmd = new AddBoundaryCommand(ids, "Nhóm", defaultVisual());
     this.store.dispatch(cmd);
     this.selection.selectBoundary(cmd.newBoundaryId);
     requestAnimationFrame(() => this.startEditBoundaryLabel(cmd.newBoundaryId));
@@ -1407,7 +1435,7 @@ export class AppController {
         height: geo.labelH * this.view.scale,
         fontSizePx: 12,
       },
-      (value) => this.store.dispatch(new UpdateBoundaryCommand(boundaryId, { label: value || "Khoanh vùng" }))
+      (value) => this.store.dispatch(new UpdateBoundaryCommand(boundaryId, { label: value || "Nhóm" }))
     );
   }
 

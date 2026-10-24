@@ -18,6 +18,7 @@ import type { MindMap } from "./types";
 import { generateMapId, generateTagId } from "./tree";
 import { sanitizeTheme } from "./theme";
 import { sanitizeTreeSettings } from "./treeSettings";
+import { normalizeVisual } from "./boundaryVisual";
 
 type UnknownRecord = Record<string, unknown>;
 type MigrationFn = (raw: UnknownRecord) => UnknownRecord;
@@ -598,6 +599,14 @@ export function migrateToLatest(raw: UnknownRecord): MindMap {
   if (typeof safe.activeThemeId !== "string") safe.activeThemeId = null;
   safe.customTheme = sanitizeTheme(safe.customTheme);
   safe.treeSettings = sanitizeTreeSettings(safe.treeSettings, new Set(Object.keys((safe.nodes as object) ?? {})));
+  // Nhóm trực quan: `visual` là tuỳ chọn thêm sau (không đổi schema) — làm sạch khi đọc file; hỏng/thiếu = hình chữ nhật cũ.
+  for (const b of safe.boundaries as UnknownRecord[]) {
+    if (b && typeof b === "object" && "visual" in b) {
+      const v = normalizeVisual(b.visual);
+      if (v) b.visual = v;
+      else delete b.visual;
+    }
+  }
   safe.cards = normalizeCardMeta(normalizeTableSizes(normalizeImageBlockSizes(safe.cards)));
 
   // Cùng lý do, cùng cách sửa — nhưng ở CẤP NODE: children/markers/

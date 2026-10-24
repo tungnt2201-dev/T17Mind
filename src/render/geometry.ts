@@ -7,9 +7,12 @@
  * và để có thể viết test cho từng phép tính mà không cần dựng canvas.
  * ---------------------------------------------------------------------
  */
-import type { MindMap, MindNode, Summary, Boundary } from "../core/types";
+import type { MindMap, MindNode, Summary, Boundary, BoundaryMode } from "../core/types";
+import type { Pt, Region } from "./adaptiveBoundary";
 import { isVerticalLayout } from "../core/types";
 import { layoutOfNode } from "../core/treeSettings";
+import { visibleRepresentativeId } from "../core/tree";
+export { visibleRepresentativeId };
 import { collectSubtreeIds, collectVisibleNodeIds, getRootIds, getNodeDepth } from "../core/tree";
 
 export interface Point {
@@ -229,25 +232,6 @@ export function summaryGeometry(map: MindMap, s: Summary): SummaryGeometry | nul
 // khi node đầu kia bị ẩn bên trong một nhánh đã thu gọn
 // ---------------------------------------------------------------------
 
-/**
- * Nếu nodeId đang hiển thị bình thường (không tổ tiên nào thu gọn),
- * trả về chính nó. Nếu bị ẩn bên trong một nhánh đã thu gọn, trả về id
- * của tổ tiên thu gọn CAO NHẤT (gần gốc nhất) trong chuỗi tổ tiên — đó
- * là node THẬT SỰ đang hiển thị trên canvas thay cho nó. Dùng để vẽ
- * đường liên kết chéo/ngoặc tóm tắt "gom" về đúng node cha đang hiện,
- * thay vì trôi tới vị trí cũ của node đã ẩn.
- */
-export function visibleRepresentativeId(map: MindMap, nodeId: string): string {
-  let result = nodeId;
-  let parentId = map.nodes[nodeId]?.parentId ?? null;
-  while (parentId) {
-    const parent = map.nodes[parentId];
-    if (!parent) break;
-    if (parent.collapsed) result = parentId; // đi tiếp lên cao hơn để tìm tổ tiên thu gọn cao nhất
-    parentId = parent.parentId;
-  }
-  return result;
-}
 
 // ---------------------------------------------------------------------
 // P1.8 — kéo thả đổi cấu trúc cây
@@ -500,15 +484,44 @@ export function findVisuallyNearestNode(
 // P2.4 — Khoanh vùng (Boundary)
 // ---------------------------------------------------------------------
 
+/** Chip nhỏ của nhóm trực quan: nhãn các vùng phụ, số thành viên bị ẩn, nhãn nhóm ở chế độ phân tán. */
+export interface GroupChip {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  text: string;
+  kind: "region" | "hidden" | "label";
+  /** Với chip "hidden": node đại diện đang hiện. */
+  nodeId?: string;
+}
+
 export interface BoundaryGeometry {
+  /** Hộp bao toàn bộ (vùng + nhãn + chip); với nhóm cũ là chính khung chữ nhật. */
   x: number;
   y: number;
   width: number;
   height: number;
+  /** Nhãn chính của nhóm. */
   labelX: number;
   labelY: number;
   labelW: number;
   labelH: number;
+  /** Chế độ vẽ; thiếu = "rectangle" (nhóm cũ). */
+  mode?: BoundaryMode;
+  /** E: các vùng bao tách rời. */
+  regions?: Region[];
+  /** F: khung viền quanh từng node thành viên đang hiện. */
+  memberOutlines?: { x: number; y: number; width: number; height: number }[];
+  chips?: GroupChip[];
+  /** Nét nối phụ (cây khung nhỏ nhất) giữa các vùng / thành viên. */
+  connectors?: [Pt, Pt][];
+  /** E quá phân mảnh (nhiều vùng) — nên gợi ý chuyển sang chế độ phân tán. */
+  fragmented?: boolean;
+  /** Đã rơi về hộp bao từng cụm (dữ liệu quá lớn / đang kéo). */
+  approximate?: boolean;
+  /** Kết quả liên kết gần-xa lần tính này — dùng làm hysteresis lần sau. */
+  links?: Set<string>;
 }
 
 const BOUNDARY_PADDING = 24;
