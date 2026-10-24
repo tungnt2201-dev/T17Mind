@@ -9,12 +9,13 @@
  * file.
  * ---------------------------------------------------------------------
  */
-import type { ChartKind, MindMap, MindNode, TableAlign, TableBlock } from "./types";
+import type { Block, Card, ChartKind, MindMap, MindNode, TableAlign, TableBlock } from "./types";
 import { chartDataOf } from "./chartData";
 import { displayCells } from "./formula";
 import { formatNumber } from "./numberParse";
 import { getRootIds } from "./tree";
-import { plainText } from "./links";
+import { displayText, hasRichSyntax, inlineText, parseRich, type Inline } from "./richText";
+import { resolveLinkLabel } from "./links";
 
 export interface DocOptions {
   /** "map" = cả map (kể cả nhánh trôi); "branch" = chỉ nhánh `branchRootId`. */
@@ -46,10 +47,23 @@ export const DEFAULT_DOC_OPTIONS: DocOptions = {
  * ghi chú/card của nó có outline d + 1) — Word dùng để thụt lề theo tầng;
  * `indent` = mức lồng trong danh sách (Markdown).
  */
+/** Một đoạn chữ có kiểu (KW6 — khối văn bản có định dạng). */
+export interface DocRun {
+  text: string;
+  bold?: boolean;
+  italic?: boolean;
+  strike?: boolean;
+  code?: boolean;
+}
+
 export type DocBlock =
   | { kind: "heading"; level: number; text: string; outline: number }
   | { kind: "listItem"; depth: number; text: string; checked: boolean | null; outline: number }
-  | { kind: "paragraph"; text: string; indent: number; outline: number }
+  | { kind: "paragraph"; text: string; indent: number; outline: number; runs?: DocRun[] }
+  | { kind: "quote"; text: string; indent: number; outline: number; runs?: DocRun[] }
+  | { kind: "code"; lines: string[]; indent: number; outline: number }
+  /** Mục danh sách TRONG khối văn bản của card (khác `listItem` là node của cây). */
+  | { kind: "cardItem"; marker: "bullet" | "number" | "check"; n: number; checked: boolean; depth: number; text: string; indent: number; outline: number; runs?: DocRun[] }
   | {
       kind: "table";
       indent: number;
@@ -88,6 +102,55 @@ export function splitParagraphs(text: string): string[] {
     .filter((p) => p.trim().length > 0);
 }
 
+/** Khối văn bản có định dạng → các DocBlock (đậm/nghiêng/…, danh sách, trích dẫn, khối mã). Chữ thường: trả null để dùng đường cũ. */
+function richDocBlocks(text: string, map: MindMap, indent: number, outline: number): DocBlock[] | null {
+  if (!hasRichSyntax(text)) return null;
+  const labelOf = (l: NonNullable<Inline["link"]>): string | null => resolveLinkLabel(map, l.type, l.id, l.blockId);
+  const runsOf = (inline: Inline[], force?: { bold?: boolean }): DocRun[] =>
+    inline.map((s) => ({
+      text: s.link ? (labelOf(s.link) ?? s.link.label) || "liên kết" : s.text,
+      ...(s.bold || force?.bold ? { bold: true } : {}),
+      ...(s.italic ? { italic: true } : {}),
+      ...(s.strike ? { strike: true } : {}),
+      ...(s.code ? { code: true } : {}),
+    }));
+  const out: DocBlock[] = [];
+  for (const b of parseRich(text)) {
+    switch (b.kind) {
+      case "blank":
+        break;
+      case "paragraph":
+        out.push({ kind: "paragraph", text: inlineText(b.inline, labelOf), runs: runsOf(b.inline), indent, outline });
+        break;
+      case "heading":
+        out.push({ kind: "paragraph", text: inlineText(b.inline, labelOf), runs: runsOf(b.inline, { bold: true }), indent, outline });
+        break;
+      case "quote":
+        out.push({ kind: "quote", text: inlineText(b.inline, labelOf), runs: runsOf(b.inline), indent, outline });
+        break;
+      case "code":
+        out.push({ kind: "code", lines: b.lines, indent, outline });
+        break;
+      case "bullet":
+      case "number":
+      case "check":
+        out.push({
+          kind: "cardItem",
+          marker: b.kind,
+          n: b.kind === "number" ? b.n : 0,
+          checked: b.kind === "check" ? b.checked : false,
+          depth: b.depth,
+          text: inlineText(b.inline, labelOf),
+          runs: runsOf(b.inline),
+          indent,
+          outline,
+        });
+        break;
+    }
+  }
+  return out;
+}
+
 export function buildDocModel(map: MindMap, opts: DocOptions): DocModel {
   const blocks: DocBlock[] = [];
   const depthLimit = Math.max(0, Math.min(6, Math.floor(opts.headingDepth)));
@@ -106,9 +169,12 @@ export function buildDocModel(map: MindMap, opts: DocOptions): DocModel {
     if (card.title && card.title.trim() !== node.text.trim()) {
       blocks.push({ kind: "paragraph", text: card.title, indent, outline });
     }
-    for (const b of card.blocks) {
+    /** Một khối của card → DocBlock. `depth` > 0 = đang nằm trong khối nhúng (chỉ nhúng lồng tối đa một tầng). */
+    const emitBlock = (b: Block, card: Card, depth: number): void => {
       if (b.type === "text") {
-        for (const p of splitParagraphs(plainText(b.text, map))) blocks.push({ kind: "paragraph", text: p, indent, outline });
+        const rich = richDocBlocks(b.text, map, indent, outline);
+        if (rich) blocks.push(...rich);
+        else for (const p of splitParagraphs(displayText(b.text, map))) blocks.push({ kind: "paragraph", text: p, indent, outline });
       } else if (b.type === "table") {
         blocks.push({
           kind: "table",
@@ -122,7 +188,7 @@ export function buildDocModel(map: MindMap, opts: DocOptions): DocModel {
         });
       } else if (b.type === "image") {
         const asset = map.assets[b.assetId];
-        if (!opts.includeImages || !asset) continue;
+        if (!opts.includeImages || !asset) return;
         blocks.push({
           kind: "image",
           indent,
@@ -138,7 +204,7 @@ export function buildDocModel(map: MindMap, opts: DocOptions): DocModel {
         const src = card.blocks.find((x): x is TableBlock => x.type === "table" && x.id === b.tableBlockId);
         if (!src) {
           blocks.push({ kind: "paragraph", text: `[Biểu đồ${b.title ? `: ${b.title}` : ""}]`, indent, outline });
-          continue;
+          return;
         }
         const d = chartDataOf(src, b);
         blocks.push({
@@ -150,8 +216,20 @@ export function buildDocModel(map: MindMap, opts: DocOptions): DocModel {
           labels: d.labels,
           series: d.series.map((x) => ({ name: x.name, values: x.values })),
         });
+      } else if (b.type === "embed") {
+        const target = map.cards[b.cardId];
+        const picked = target && b.blockId ? target.blocks.filter((x) => x.id === b.blockId) : target?.blocks ?? [];
+        if (!target || (b.blockId && picked.length === 0)) {
+          blocks.push({ kind: "paragraph", text: "[Nội dung nhúng: nguồn đã bị xoá]", indent, outline });
+        } else if (depth >= 1) {
+          blocks.push({ kind: "paragraph", text: `[Nhúng lồng: ${target.title || "card"}]`, indent, outline });
+        } else {
+          if (!b.blockId) blocks.push({ kind: "paragraph", text: `Nhúng từ: ${target.title || "(card chưa đặt tên)"}`, runs: [{ text: `Nhúng từ: ${target.title || "(card chưa đặt tên)"}`, italic: true }], indent, outline });
+          for (const x of picked) emitBlock(x, target, depth + 1);
+        }
       }
-    }
+    };
+    for (const b of card.blocks) emitBlock(b, card, 0);
   };
 
   const walk = (id: string, depth: number): void => {

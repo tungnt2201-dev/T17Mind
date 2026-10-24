@@ -9,7 +9,7 @@
  */
 import type { Card, MindMap } from "./types";
 import { normalizeForSearch } from "./search";
-import { plainText } from "./links";
+import { displayText } from "./richText";
 
 export type LibraryFilter = "all" | "inbox" | "used";
 
@@ -33,7 +33,7 @@ export function cardUsages(map: MindMap, cardId: string): string[] {
 export function cardSearchText(card: Card): string {
   const parts: string[] = [card.title];
   for (const b of card.blocks) {
-    if (b.type === "text") parts.push(plainText(b.text));
+    if (b.type === "text") parts.push(displayText(b.text));
     else if (b.type === "table") parts.push(b.title, ...b.cells.flat());
     else if (b.type === "image") parts.push(b.caption);
     else if (b.type === "chart") parts.push(b.title);
@@ -43,7 +43,8 @@ export function cardSearchText(card: Card): string {
 
 export function blockCounts(card: Card): LibraryEntry["counts"] {
   const counts = { text: 0, table: 0, image: 0, chart: 0 };
-  for (const b of card.blocks) counts[b.type]++;
+  // Khối nhúng tính như một khối văn bản (hiện cùng biểu tượng chữ).
+  for (const b of card.blocks) counts[b.type === "embed" ? "text" : b.type]++;
   return counts;
 }
 
@@ -105,7 +106,7 @@ export function listLibrary(
 export function cardSnippet(card: Card, max = 90): string {
   const text = card.blocks.find((b) => b.type === "text" && b.text.trim());
   if (!text || text.type !== "text") return "";
-  const one = plainText(text.text).replace(/\s+/g, " ").trim();
+  const one = displayText(text.text).replace(/\s+/g, " ").trim();
   return one.length > max ? `${one.slice(0, max - 1).trimEnd()}…` : one;
 }
 

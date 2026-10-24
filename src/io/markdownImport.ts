@@ -16,7 +16,8 @@
  */
 import type { Card, MindNode, TableAlign } from "../core/types";
 import { createEmptyMap, createNode, generateId, generateBlockId } from "../core/tree";
-import { createCard, createImageBlock } from "../core/cards";
+import { createCard, createImageBlock, createTextBlock } from "../core/cards";
+import { hasRichSyntax } from "../core/richText";
 import { tableFromGrid } from "../core/table";
 import { validateMindMap } from "../core/validate";
 import type { ImportResult } from "./json";
@@ -73,9 +74,16 @@ export function parseMarkdownDoc(text: string, fallbackTitle = "Markdown"): Impo
     return c;
   };
   const flushPara = (): void => {
-    const p = para.join("\n").trim();
+    const raw = para.join("\n").trim();
     para = [];
-    if (!p) return;
+    if (!raw) return;
+    // KW6 — đoạn có định dạng (đậm/nghiêng/mã/trích dẫn…) thành khối VĂN BẢN của card (giữ nguyên ký hiệu
+    // Markdown rút gọn); đoạn chữ thường vẫn là ghi chú của node như trước.
+    if (hasRichSyntax(raw)) {
+      cardOf(current).blocks.push(createTextBlock(raw));
+      return;
+    }
+    const p = stripInline(raw);
     const n = node(current);
     n.notes = n.notes ? `${n.notes}\n\n${p}` : p;
   };
@@ -84,6 +92,16 @@ export function parseMarkdownDoc(text: string, fallbackTitle = "Markdown"): Impo
     const line = lines[i]!;
     if (!line.trim()) {
       flushPara();
+      continue;
+    }
+    if (/^```/.test(line.trim())) {
+      // Khối mã rào bằng ``` → khối văn bản của card (nội dung giữ nguyên, kể cả dòng trống bên trong).
+      flushPara();
+      const body: string[] = [];
+      let j = i + 1;
+      while (j < lines.length && !/^```\s*$/.test(lines[j]!.trim())) body.push(lines[j++]!);
+      cardOf(current).blocks.push(createTextBlock(`\`\`\`\n${body.join("\n")}\n\`\`\``));
+      i = j;
       continue;
     }
     const h = HEADING.exec(line);
@@ -163,7 +181,7 @@ export function parseMarkdownDoc(text: string, fallbackTitle = "Markdown"): Impo
         continue;
       }
     }
-    para.push(stripInline(line.trim().replace(/ {2}$/, "")));
+    para.push(line.trim().replace(/ {2}$/, ""));
   }
   flushPara();
 

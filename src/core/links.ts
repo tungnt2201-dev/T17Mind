@@ -15,6 +15,7 @@
  * một card/node (findBacklinks).
  * ---------------------------------------------------------------------
  */
+import { displayText } from "./richText";
 import type { Block, MindMap } from "./types";
 import { normalizeForSearch } from "./search";
 
@@ -74,6 +75,8 @@ export function describeBlock(block: Block): string {
       return block.caption ? `Ảnh: ${clip(block.caption)}` : "Ảnh";
     case "chart":
       return block.title ? `Biểu đồ: ${clip(block.title)}` : "Biểu đồ";
+    case "embed":
+      return block.blockId ? "Khối nhúng" : "Card nhúng";
   }
 }
 
@@ -129,7 +132,7 @@ export function findBacklinks(map: MindMap, target: LinkRef): Backlink[] {
     for (const b of card.blocks) {
       if (b.type !== "text" || !b.text.includes(needle)) continue;
       if (!linksIn(b.text).some((l) => l.type === target.type && l.id === target.id && (target.blockId == null || l.blockId === target.blockId))) continue;
-      const plain = plainText(b.text, map).replace(/\s+/g, " ").trim();
+      const plain = displayText(b.text, map).replace(/\s+/g, " ").trim();
       out.push({ cardId: card.id, blockId: b.id, snippet: plain.length > 120 ? `${plain.slice(0, 117)}…` : plain });
     }
   }

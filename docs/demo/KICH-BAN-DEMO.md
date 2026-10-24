@@ -163,3 +163,22 @@ Mở `T17Mind-tag-database.t17m`: Tag "Công việc" gắn trên 8 việc, có 4
 - [ ] Xoá thuộc tính có dữ liệu → Ctrl+Z khôi phục đủ giá trị; xoá Tag → Ctrl+Z khôi phục cả thuộc tính
 - [ ] Lưu, mở lại file: thuộc tính và giá trị còn nguyên; mở file cũ (không có thuộc tính) bình thường
 - [ ] Biểu đồ đổi theo bộ lọc; xuất CSV mở bằng Excel đúng tiếng Việt
+
+## Bước 15 — Card Editor nâng cao (KW6)
+Mở `T17Mind-card-editor.t17m` (3 node: "Ghi chú họp", "Tóm tắt tuần", "Ngân sách").
+1. Bấm chữ trích trên node "Ghi chú họp" → trang card: tiêu đề, danh sách, việc cần làm, danh sách số, trích dẫn, khối mã đều đã định dạng. Bấm ô tick đổi trạng thái.
+2. Bấm vào đoạn văn để sửa: thanh định dạng hiện phía trên. Bôi đen chữ → B / I (hoặc Ctrl+B / Ctrl+I).
+3. Xuống cuối, gõ "/" ở đầu dòng → menu: chọn "Việc cần làm", gõ, Enter nối dòng, Enter ở dòng rỗng để thoát danh sách.
+4. "Nhúng…" (hoặc "/" → "Nhúng card hoặc khối") → chọn card "Ngân sách" → nhúng cả card hoặc một khối. Sửa bảng ở card Ngân sách → khối nhúng đổi theo. Node "Tóm tắt tuần" có sẵn khối nhúng.
+5. Xuất → Word và Markdown: định dạng, danh sách, trích dẫn, khối mã, khối nhúng đều có trong file.
+
+### Checklist kiểm thử tay (KW6)
+- [ ] Văn bản cũ (không ký hiệu) hiển thị y nguyên; chữ như "9:00 - mang laptop", "3 * 4" không bị biến đổi
+- [ ] B / I / S / mã bật và tắt đúng (bôi đen rồi bấm lại thì bỏ); không bôi đen thì chèn cặp ký hiệu
+- [ ] Nhiều dòng: bấm "•", "1.", "☐", "❝" áp cho tất cả dòng; bấm lại thì bỏ
+- [ ] Enter nối danh sách (số tăng, tick trống); Enter ở dòng rỗng thoát danh sách
+- [ ] Menu "/" chỉ mở ở đầu dòng; lọc không dấu ("/viec"); Esc đóng
+- [ ] Mỗi lần định dạng là một bước hoàn tác (đóng trang rồi Ctrl+Z)
+- [ ] Khối nhúng: cả card, một khối, nguồn bị xoá (báo rõ), không tự nhúng chính mình, mở nguồn
+- [ ] Đoạn trích trên node không còn ký hiệu **, `, #
+- [ ] Word mở được: chữ đậm/nghiêng/gạch, danh sách, vạch trích dẫn, khối mã; Markdown nhập lại giữ định dạng

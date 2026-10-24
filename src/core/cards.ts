@@ -7,7 +7,7 @@
  * ---------------------------------------------------------------------
  */
 import { defaultChartColumns } from "./chartData";
-import type { Block, Card, ChartBlock, ImageBlock, ImageDisplaySize, MindMap, TableAlign, TableBlock, TextBlock } from "./types";
+import type { Block, Card, ChartBlock, EmbedBlock, ImageBlock, ImageDisplaySize, MindMap, TableAlign, TableBlock, TextBlock } from "./types";
 import { generateBlockId, generateCardId } from "./tree";
 import { TABLE_DEFAULT_COL_W, TABLE_DEFAULT_ROW_H } from "./table";
 
@@ -51,6 +51,10 @@ export function createChartBlock(tableBlockId: string, kind: ChartBlock["kind"] 
   };
 }
 
+export function createEmbedBlock(cardId: string, blockId: string | null = null): EmbedBlock {
+  return { id: generateBlockId(), type: "embed", cardId, blockId };
+}
+
 /** Biểu đồ mới cho card: lấy bảng ĐẦU TIÊN của card (null nếu card chưa có bảng). */
 export function createChartForCard(card: Card, kind: ChartBlock["kind"] = "bar"): ChartBlock | null {
   const table = card.blocks.find((b): b is TableBlock => b.type === "table");
@@ -74,6 +78,8 @@ export function summarizeBlock(block: Block): string {
       return block.caption || "Ảnh";
     case "chart":
       return `${block.title ? block.title + " — " : ""}Biểu đồ ${block.kind}`;
+    case "embed":
+      return block.blockId ? "Khối nhúng từ card khác" : "Card nhúng";
   }
 }
 
@@ -156,6 +162,11 @@ export function validateCard(card: Card, assets: MindMap["assets"]): string[] {
         if (b.seriesColumns.length === 0) errors.push(`${bw}: biểu đồ cần ít nhất 1 cột số liệu.`);
         break;
       }
+      case "embed":
+        if (typeof b.cardId !== "string" || b.cardId === "") errors.push(`${bw}: khối nhúng thiếu cardId.`);
+        else if (b.cardId === card.id) errors.push(`${bw}: card không được nhúng chính nó.`);
+        if (b.blockId !== null && typeof b.blockId !== "string") errors.push(`${bw}: blockId của khối nhúng phải là chữ hoặc null.`);
+        break;
       default:
         errors.push(`${bw}: loại khối không hỗ trợ "${(b as { type?: unknown }).type}".`);
     }

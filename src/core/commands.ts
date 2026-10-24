@@ -797,6 +797,7 @@ export class MergeMapCommand implements Command {
         if (b.type === "image") b.assetId = assetIdRemap.get(b.assetId) ?? b.assetId;
         // H2 — liên kết [[card:…]] / [[node:…]] trong văn bản trỏ theo id mới.
         if (b.type === "text") b.text = remapLinks(b.text, cardIdRemap, nodeIdRemap);
+        else if (b.type === "embed") b.cardId = cardIdRemap.get(b.cardId) ?? b.cardId;
       }
       map.cards[newCardId] = card;
     }

@@ -1,4 +1,5 @@
 /** ui/dom.ts — vài hàm tiện ích DOM nhỏ, dùng lặp lại nhiều nơi trong ui/. */
+import { isDesktopApp, nativeSaveBlob } from "../io/nativeFs";
 
 export function byId<T extends HTMLElement = HTMLElement>(id: string): T {
   const el = document.getElementById(id);
@@ -10,7 +11,23 @@ export function escapeAttr(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 }
 
+/**
+ * Tải/lưu một file người dùng vừa yêu cầu. Bản exe (WebView2) hiện hộp thoại Lưu của Windows rồi ghi file thật
+ * (thẻ <a download> không đáng tin trong WebView2); trình duyệt thường vẫn tải xuống kiểu trình duyệt. Nếu hộp
+ * thoại/ghi file lỗi thì rơi về cách tải của trình duyệt.
+ */
 export function downloadBlob(blob: Blob, filename: string): void {
+  if (isDesktopApp()) {
+    void nativeSaveBlob(blob, filename).catch((err) => {
+      console.error("Lưu file qua hộp thoại Windows thất bại, dùng cách tải của trình duyệt:", err);
+      browserDownload(blob, filename);
+    });
+    return;
+  }
+  browserDownload(blob, filename);
+}
+
+function browserDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
