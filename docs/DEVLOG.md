@@ -3969,3 +3969,9 @@ Biến Tag thành một "bảng dữ liệu": mỗi Tag có thể có THUỘC T�
 **Giới hạn:** chưa có thuộc tính kiểu công thức/liên kết giữa các Tag; giá trị gắn trên NODE (không phải card dùng chung); Kanban chỉ một thuộc tính một lúc, không sắp thứ tự thẻ trong cột; chưa hiện giá trị thuộc tính trên node ở sơ đồ; xoá một lựa chọn thì giá trị đang trỏ vào nó thành "Chưa đặt" (hoàn tác được trong phiên, nhưng lưu rồi mở lại thì giá trị mồ côi bị làm sạch).
 
 **Test:** `core/tagDb.test.ts` (21: chuẩn hoá, Command + undo/redo, lọc, sắp xếp, nhóm, biểu đồ, xuất, JSON round-trip, làm sạch dữ liệu hỏng).
+
+## Thanh công cụ gọn hơn (hàng 2)
+
+Hàng công cụ thứ hai dài ~1900 px (phải cuộn ngang). Rút còn ~800 px, không bỏ chức năng nào: Vừa khung, Về gốc, Sắp xếp lại, Tự nhiên, Áp dụng theme, Theme riêng, Sao chép, Nhân bản, Định dạng, Xoá chuyển thành nút CHỈ-BIỂU-TƯỢNG (có `title` đầy đủ + `aria-label`; nút bật/tắt có trạng thái nổi và `aria-pressed`). Ghi chú dán / Liên kết chéo / Tóm tắt / Nhóm trực quan gộp vào menu "Chèn ▾" (nút sáng lên khi chế độ liên kết đang bật); Tạo / Tách nhánh trôi gộp vào menu "Nhánh trôi ▾"; "Bảng Tag" thành biểu tượng ▦ trong cụm biểu tượng bên phải hàng 1. Logic gọi AppController giữ nguyên, chỉ đổi cách trình bày. Phím tắt không đổi.
+
+Kiểm tra tay: mọi nút hàng 2 còn hoạt động và còn tooltip; menu Chèn/Nhánh trôi đóng sau khi chọn; nút Liên kết chéo đổi trạng thái; cửa sổ 1280 px không còn thanh cuộn ngang.

@@ -135,7 +135,7 @@
 
   // ---- P2.15: menu thả xuống (Tệp/Nhập/Xuất/Hiển thị) — trạng thái UI
   // THUẦN HIỂN THỊ, đóng/mở bằng cách bấm, tự đóng khi bấm ra ngoài. ----
-  type MenuName = "file" | "import" | "export" | "display";
+  type MenuName = "file" | "import" | "export" | "display" | "insert" | "branch";
   let openMenu: MenuName | null = null;
   // Toạ độ panel tính bằng position:fixed theo toạ độ MÀN HÌNH của nút
   // vừa bấm — KHÔNG dùng position:absolute neo theo .menu-wrap (cách
@@ -305,6 +305,8 @@
 
     <span class="tbar-spacer"></span>
 
+    <button class="tbar-icon-btn chip" aria-label="Bảng Tag" title="Cơ sở dữ liệu Tag: thêm thuộc tính cho Tag, xem node theo Bảng / Kanban / Biểu đồ, lọc, nhóm, xuất CSV/Excel"
+      on:click={() => tagDbStore.set({ tagId: null })}><span class="icon icon-text">▦</span></button>
     <button class="tbar-icon-btn chip" class:active={$explorerStore.open} title="Bật/tắt khung duyệt cây Explorer bên trái"
       on:click={() => explorerStore.update((s) => ({ ...s, open: !s.open }))}><Icon name="sidebar" /></button>
     <button class="tbar-icon-btn chip" class:active={$libraryStore.open} title="Bật/tắt Thư viện card — tìm, lọc card, kéo card thả vào map; Inbox cho card chưa gắn node"
@@ -324,10 +326,10 @@
 
     <span class="tbar-sep"></span>
 
-    <button class="tbar-btn" title="Canh khung nhìn vừa khít mọi node đang hiển thị (phím tắt: F) — hữu ích ngay sau khi thu gọn một nhánh lớn, tránh còn sót khoảng trống cũ"
-      on:click={() => controller.fitToView()}><Icon name="maximize" /><span class="label">Vừa khung</span></button>
-    <button class="tbar-btn" title="Về node gốc — chọn + cuộn vào khung nhìn (phím tắt: Home)"
-      on:click={() => controller.navigateHome()}><Icon name="home" /><span class="label">Về gốc</span></button>
+    <button class="tbar-icon-btn" aria-label="Vừa khung" title="Vừa khung — canh khung nhìn vừa khít mọi node đang hiển thị (phím tắt: F). Hữu ích ngay sau khi thu gọn một nhánh lớn, tránh còn sót khoảng trống cũ"
+      on:click={() => controller.fitToView()}><Icon name="maximize" /></button>
+    <button class="tbar-icon-btn" aria-label="Về gốc" title="Về node gốc — chọn + cuộn vào khung nhìn (phím tắt: Home)"
+      on:click={() => controller.navigateHome()}><Icon name="home" /></button>
 
     <span class="tbar-sep"></span>
 
@@ -342,17 +344,16 @@
       <option value="orgChart">Organization Chart</option>
       <option value="treeUp">Tree Up</option>
     </select>
-    <button class="tbar-btn" id="btn-auto-arrange" disabled={!canAutoArrange}
-      title="Đưa các node đã bị kéo tay lệch khỏi vị trí bố cục tự động về lại đúng chỗ — có chọn node/nhánh nào thì chỉ gọn lại nhánh đó, không chọn gì thì gọn lại toàn bộ map. Giữ nguyên vị trí tổng thể của node gốc và mọi nhánh trôi trên canvas."
-      on:click={() => controller.autoArrange()}>
-      <Icon name="wand" /><span class="label">Sắp xếp lại</span></button>
-    <button class="tbar-btn" class:active={treeSettings.organicEdges}
-      title="Đường nối dạng dải băng thon dần (dày gần trung tâm, mỏng dần ra xa) thay vì nét đều một độ dày — chỉ áp cho cây đang chọn ({treeName}); không áp dụng cho Organization Chart (mặc định tắt)"
-      on:click={() => controller.toggleOrganicEdges()}><Icon name="leaf" /><span class="label">Tự nhiên</span></button>
+    <button class="tbar-icon-btn" id="btn-auto-arrange" aria-label="Sắp xếp lại" disabled={!canAutoArrange}
+      title="Sắp xếp lại — đưa các node đã bị kéo tay lệch khỏi vị trí bố cục tự động về lại đúng chỗ. Có chọn node/nhánh nào thì chỉ gọn lại nhánh đó, không chọn gì thì gọn lại toàn bộ map. Giữ nguyên vị trí tổng thể của node gốc và mọi nhánh trôi trên canvas."
+      on:click={() => controller.autoArrange()}><Icon name="wand" /></button>
+    <button class="tbar-icon-btn" class:active={treeSettings.organicEdges} aria-label="Tự nhiên" aria-pressed={treeSettings.organicEdges}
+      title="Tự nhiên — đường nối dạng dải băng thon dần (dày gần trung tâm, mỏng dần ra xa) thay vì nét đều một độ dày; chỉ áp cho cây đang chọn ({treeName}); không áp dụng cho Organization Chart (mặc định tắt)"
+      on:click={() => controller.toggleOrganicEdges()}><Icon name="leaf" /></button>
 
     <span class="tbar-sep"></span>
 
-    <select id="theme-select" bind:value={selectedThemeId} title="Chọn bộ theme rồi bấm Áp dụng" class="tbar-select">
+    <select id="theme-select" bind:value={selectedThemeId} title="Chọn bộ theme rồi bấm dấu ✓ để áp dụng" class="tbar-select">
       <optgroup label="Có sẵn">
         {#each THEMES as theme (theme.id)}
           <option value={theme.id}>{theme.name}</option>
@@ -371,45 +372,61 @@
         </optgroup>
       {/if}
     </select>
-    <button class="tbar-btn" title="Áp bộ theme đã chọn cho cây đang chọn ({treeName}) — các cây khác giữ nguyên"
-      on:click={() => controller.applyTheme(selectedThemeId)}><Icon name="check" /><span class="label">Áp dụng</span></button>
-    <button class="tbar-btn" title="Tạo / sửa theme riêng, nhập/xuất file theme"
-      on:click={() => themeEditorStore.set({ baseThemeId: selectedThemeId })}>🎨<span class="label">Theme riêng</span></button>
+    <button class="tbar-icon-btn" aria-label="Áp dụng theme" title="Áp dụng — áp bộ theme đã chọn cho cây đang chọn ({treeName}); các cây khác giữ nguyên"
+      on:click={() => controller.applyTheme(selectedThemeId)}><Icon name="check" /></button>
+    <button class="tbar-icon-btn" aria-label="Theme riêng" title="Theme riêng — tạo / sửa theme của bạn, nhập/xuất file theme"
+      on:click={() => themeEditorStore.set({ baseThemeId: selectedThemeId })}>🎨</button>
 
     <span class="tbar-sep"></span>
 
-    <button class="tbar-btn" on:click={() => controller.createStickyNote()} title="Thêm ghi chú dán tự do trên canvas">
-      <Icon name="note" /><span class="label">Ghi chú</span></button>
-    <button class="tbar-btn" class:active={$linkingModeStore} on:click={toggleLinkMode}>
-      <Icon name="link" /><span class="label">Liên kết</span></button>
-    <button class="tbar-btn" disabled={!canCreateSummary} on:click={() => controller.createSummaryFromSelection()}>
-      <span class="icon icon-text">{"{ }"}</span><span class="label">Tóm tắt</span></button>
-    <button class="tbar-btn" disabled={!canCreateBoundary}
-      title="Nhóm trực quan (còn gọi là Khoanh vùng): gom các node ở bất kỳ nhánh nào vào một nhóm có nhãn và màu — mặc định vẽ bằng nhiều vùng bao ôm sát node, đổi sang chế độ Phân tán hoặc Hình chữ nhật trong khung bên phải"
-      on:click={() => controller.createBoundaryFromSelection()}>
-      <span class="icon icon-text">▭</span><span class="label">Nhóm trực quan</span></button>
-    <button class="tbar-btn" on:click={() => tagDbStore.set({ tagId: null })}
-      title="Cơ sở dữ liệu Tag: thêm thuộc tính cho Tag, xem node theo Bảng / Kanban / Biểu đồ, lọc, nhóm, xuất CSV/Excel">
-      <span class="icon icon-text">▦</span><span class="label">Bảng Tag</span></button>
+    <div class="menu-wrap">
+      <button class="tbar-btn menu-btn" class:menu-open={openMenu === "insert"} class:active={$linkingModeStore}
+        title="Chèn: ghi chú dán, liên kết chéo, tóm tắt, nhóm trực quan"
+        on:click={(e) => toggleMenu("insert", e.currentTarget)}>
+        <Icon name="plus" /><span class="label">Chèn</span><span class="chevron">▾</span></button>
+      {#if openMenu === "insert"}
+        <div class="menu-panel" style="top:{menuPos.top}px; left:{menuPos.left}px;">
+          <button class="menu-item" title="Thêm ghi chú dán tự do trên canvas" on:click={() => runAndClose(() => controller.createStickyNote())}>
+            <Icon name="note" />Ghi chú dán</button>
+          <button class="menu-item toggle" class:checked={$linkingModeStore} title="Bật chế độ nối hai node bằng liên kết chéo"
+            on:click={() => runAndClose(toggleLinkMode)}>
+            <Icon name="link" />Liên kết chéo{$linkingModeStore ? " (đang bật)" : ""}</button>
+          <button class="menu-item" disabled={!canCreateSummary} title="Tóm tắt các node anh em liền kề bằng dấu ngoặc nhọn"
+            on:click={() => runAndClose(() => controller.createSummaryFromSelection())}>
+            <span class="icon-text">{"{ }"}</span>Tóm tắt</button>
+          <button class="menu-item" disabled={!canCreateBoundary}
+            title="Nhóm trực quan (còn gọi là Khoanh vùng): gom các node ở bất kỳ nhánh nào vào một nhóm có nhãn và màu — mặc định vẽ bằng nhiều vùng bao ôm sát node, đổi sang chế độ Phân tán hoặc Hình chữ nhật trong khung bên phải"
+            on:click={() => runAndClose(() => controller.createBoundaryFromSelection())}>
+            <span class="icon-text">▭</span>Nhóm trực quan</button>
+        </div>
+      {/if}
+    </div>
 
     <span class="tbar-sep"></span>
 
-    <button class="tbar-btn" title="Sao chép (Ctrl+C)" on:click={() => controller.copySelection()}>
-      <Icon name="copy" /><span class="label">Sao chép</span></button>
-    <button class="tbar-btn" title="Nhân bản (Ctrl+D)" on:click={() => controller.duplicateSelection()}>
-      <Icon name="duplicate" /><span class="label">Nhân bản</span></button>
-    <button class="tbar-btn" class:active={$formatPainterModeStore}
+    <button class="tbar-icon-btn" aria-label="Sao chép" title="Sao chép (Ctrl+C)" on:click={() => controller.copySelection()}><Icon name="copy" /></button>
+    <button class="tbar-icon-btn" aria-label="Nhân bản" title="Nhân bản (Ctrl+D)" on:click={() => controller.duplicateSelection()}><Icon name="duplicate" /></button>
+    <button class="tbar-icon-btn" class:active={$formatPainterModeStore} aria-label="Định dạng" aria-pressed={$formatPainterModeStore}
       title="Sao chép định dạng: bấm node nguồn (đã chọn sẵn), rồi bấm các node đích liên tiếp — Esc để tắt"
       disabled={!canStartFormatPainter && !$formatPainterModeStore}
-      on:click={() => ($formatPainterModeStore ? controller.stopFormatPainter() : controller.startFormatPainter())}>
-      <Icon name="brush" /><span class="label">Định dạng</span></button>
-    <button class="tbar-btn" title="Tạo nhánh trôi mới, không gắn vào cây chính" on:click={() => controller.createFloatingBranch()}>
-      <Icon name="cloud" /><span class="label">Nhánh trôi</span></button>
-    <button class="tbar-btn" title="Tách nhánh đang chọn khỏi cây chính" disabled={!canDetachToFloating}
-      on:click={() => controller.detachSelectionToFloating()}>
-      <Icon name="scissors" /><span class="label">Tách nhánh</span></button>
-    <button class="tbar-btn danger" disabled={!canDelete} on:click={() => controller.deleteSelection()}>
-      <Icon name="trash" /><span class="label">Xoá</span></button>
+      on:click={() => ($formatPainterModeStore ? controller.stopFormatPainter() : controller.startFormatPainter())}><Icon name="brush" /></button>
+
+    <div class="menu-wrap">
+      <button class="tbar-btn menu-btn" class:menu-open={openMenu === "branch"} title="Nhánh trôi: tạo nhánh mới hoặc tách nhánh đang chọn khỏi cây chính"
+        on:click={(e) => toggleMenu("branch", e.currentTarget)}>
+        <Icon name="cloud" /><span class="label">Nhánh trôi</span><span class="chevron">▾</span></button>
+      {#if openMenu === "branch"}
+        <div class="menu-panel" style="top:{menuPos.top}px; left:{menuPos.left}px;">
+          <button class="menu-item" title="Tạo nhánh trôi mới, không gắn vào cây chính" on:click={() => runAndClose(() => controller.createFloatingBranch())}>
+            <Icon name="cloud" />Tạo nhánh trôi</button>
+          <button class="menu-item" title="Tách nhánh đang chọn khỏi cây chính" disabled={!canDetachToFloating}
+            on:click={() => runAndClose(() => controller.detachSelectionToFloating())}>
+            <Icon name="scissors" />Tách nhánh đang chọn</button>
+        </div>
+      {/if}
+    </div>
+
+    <button class="tbar-icon-btn danger" aria-label="Xoá" title="Xoá node đang chọn (Delete)" disabled={!canDelete} on:click={() => controller.deleteSelection()}><Icon name="trash" /></button>
 
     <span class="tbar-spacer"></span>
 
