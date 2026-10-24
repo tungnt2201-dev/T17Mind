@@ -213,3 +213,19 @@ describe("Nhóm trực quan — lưu/mở file (AB1)", () => {
     expect(validateMindMap(m).some((e) => e.includes("visual"))).toBe(true);
   });
 });
+
+describe("Nhóm trực quan — qua các định dạng lưu (AB4)", () => {
+  it("JSON đầy đủ và .t17m: kiểu vẽ + thông số + thành viên đóng/mở lại nguyên vẹn", async () => {
+    const { parseJsonFile, exportFlatJson } = await import("../io/json");
+    const { parseT17mFile, exportT17mFile } = await import("../io/t17m");
+    const { m, a1, b1 } = setup();
+    m.boundaries.push({ id: "b1", nodeIds: [a1, b1], label: "Nhóm", fillColor: "#cfe3ff", borderColor: "#2f6fed", visual: { ...defaultVisual("distributed"), padding: 36, showConnectors: true } });
+    const viaJson = parseJsonFile(exportFlatJson(m));
+    expect(viaJson.ok).toBe(true);
+    if (viaJson.ok) expect(viaJson.map.boundaries[0]).toEqual(m.boundaries[0]);
+    const blob = await exportT17mFile(m);
+    const viaZip = await parseT17mFile(await blob.arrayBuffer());
+    expect(viaZip.ok).toBe(true);
+    if (viaZip.ok) expect(viaZip.map.boundaries[0]).toEqual(m.boundaries[0]);
+  });
+});

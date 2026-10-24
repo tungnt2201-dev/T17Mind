@@ -71,6 +71,9 @@
     <h3>3. JSON đầy đủ (round-trip — hỗ trợ relationship + tóm tắt + khoanh vùng)</h3>
     <p>Đây là định dạng khi bấm "Xuất JSON" — sửa tay rồi nhập lại vẫn giữ nguyên liên kết/tóm tắt/khoanh vùng/độ uốn cong.
     Có thêm trường <code>schemaVersion</code> để phiên bản sau vẫn mở được file cũ.</p>
+    <p><b>Nhóm trực quan (Khoanh vùng):</b> mỗi nhóm trong <code>boundaries</code> có thể có thêm trường tuỳ chọn <code>visual</code> —
+    <code>{"{"}mode: "rectangle" | "multiContour" | "distributed", padding, connectionGap, smoothness, fillOpacity, showConnectors{"}"}</code>.
+    Thiếu <code>visual</code> = hình chữ nhật như bản cũ; giá trị sai được kẹp về khoảng hợp lệ. Đường bao không được lưu — luôn tính lại từ vị trí node.</p>
     <p>File còn có <code>mapId</code> (định danh riêng của map, dùng để lưu vào "Map gần đây" — <b>không đổi</b> nếu nhập lại đúng file đã có sẵn trường này, chỉ sinh mới khi thiếu), <code>mapTitle</code> (tên hiển thị tuỳ chọn, khác chữ của node gốc), và <code>layoutType</code> ("logicRight"/"logicLeft"/"logicBoth"/"treeDown"/"orgChart"/"treeUp", mặc định "logicRight" nếu thiếu).</p>
 
     <div class="close-row"><button class="btn primary" id="help-close" on:click={close}>Đã hiểu</button></div>

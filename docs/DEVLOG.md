@@ -3855,3 +3855,35 @@ Nhánh `feat/kw2-knowledge-index` (xếp chồng trên `feat/kw1-card-registry`)
 - [ ] Đổi tên card đích → nhãn liên kết đổi theo; xoá khối đích → liên kết hiện gạch ngang
 - [ ] Card dùng chung 2 map: ở map B có đoạn trỏ tới card → mở card đó ở map A thấy "Được nhắc tới ở map khác"
 - [ ] Workspace ~20 map: lần mở bảng đầu có "Đang lập chỉ mục n/m", lần sau gần như tức thì
+
+---
+
+## Nhóm trực quan: Adaptive Multi-Contour (E) + Distributed Group (F) (24/10/2026)
+
+Nhánh `feat/adaptive-multi-boundary`, từ `main` (70b85b7, schema 21). **Không đổi schema** (`visual` là trường tuỳ chọn thêm vào Boundary; file cũ không có = hình chữ nhật như trước; làm sạch khi đọc file). Làm theo đặc tả `T17Mind_Prompt_Adaptive_Multi_Boundary_EF` (4 chặng; AB2 và AB3 gộp một commit vì F dùng chung hình học/render/hit-test với E).
+
+**Dữ liệu (AB1).** `Boundary.visual?: { mode: "rectangle" | "multiContour" | "distributed", padding, connectionGap, smoothness, fillOpacity, showConnectors }`. Nhóm tạo mới mặc định `multiContour`; đổi qua lại Rectangle/E/F bằng `UpdateBoundaryCommand` (giữ id, thành viên, nhãn, màu; hoàn tác được; thông số luôn bị kẹp vào khoảng hợp lệ). Không lưu đường bao/Path2D — chỉ là dữ liệu dẫn xuất. `visibleRepresentativeId` chuyển về `core/tree.ts` (geometry.ts export lại). `core/boundaryVisual.ts#resolveBoundaryMembers` tách thành viên LOGIC (nodeIds) khỏi cách HIỆN: thành viên đang hiện dùng hình chữ nhật thật; bị ẩn sau nhánh thu gọn → quy về node đại diện (tổ tiên thu gọn cao nhất) kèm số lượng, **không dùng toạ độ node ẩn**.
+
+**Thuật toán E (AB2)** — `render/adaptiveBoundary.ts` (thuần TS): (1) liên kết hai node nếu khoảng cách mép–mép ≤ `connectionGap`, quét theo trục x; hysteresis: cặp đã nối chỉ tách khi ≥ 1,25× ngưỡng (trí nhớ lưu ở bộ nhớ renderer, không vào file); (2) nới mỗi node `padding`, thêm cầu nối chữ L giữa các cặp gần nhau nhưng **bỏ cầu nối nếu chạm node khác nhóm** (hạn chế ôm nhầm); (3) hợp các hình chữ nhật bằng nén toạ độ + mảng sai phân 2D rồi dò biên → vòng ngoài và lỗ trực giao (đường bao chứa chính xác mọi node cộng đệm, không tự cắt, không NaN; node ngoài nhóm bị vây có thể nằm trong lỗ); (4) bo góc → chuỗi đường dẫn SVG (dùng cho Canvas `Path2D` và xuất SVG). Mỗi vòng ngoài rời nhau = một vùng. Quá 700 hình hoặc `quality: "fast"` → rơi về hộp bao từng cụm (`approximate`). Không dùng SDF/Marching Squares: cách hợp hình chữ nhật cho kết quả chính xác, xác định và rẻ hơn, và không có tham số độ phân giải.
+- Số đo thật (Node, máy phát triển): 150 node/6 cụm ≈ 13 ms; 150 node/1 cụm ≈ 6 ms; 300 node ≈ 8 ms; 400 node/10 cụm ≈ 13 ms (lần tính đầy đủ). Renderer có cache theo chữ ký (vị trí/kích thước node, thu gọn, thành viên, tuỳ chọn, nhãn): chỉ pan/zoom **không** tính lại; hit-test dung sai theo pixel màn hình (~8 px).
+- Nhãn chính nằm ở mép trên-trái vùng lớn nhất (ổn định theo diện tích rồi id), vùng phụ có chip nhỏ; E có từ 6 vùng trở lên đặt cờ `fragmented` → SidePanel gợi ý chuyển sang F (không tự đổi dữ liệu).
+
+**F (AB3).** Viền bo quanh từng node thành viên đang hiện (không có nền lớn), nhãn nhóm ở thành viên đầu theo thứ tự đọc, chip "▣ N"/"+N" ở node đại diện của thành viên bị ẩn, nét nối phụ = cây khung nhỏ nhất (mặc định tắt). Chọn nhóm (bấm nhãn/chip/viền) → mọi viền/vùng đổi sang xanh; nút "Chọn các thành viên" ở SidePanel chọn mọi node thuộc nhóm.
+
+**Giao diện/xuất.** Nút "Nhóm trực quan" (alias Khoanh vùng) ở thanh công cụ và menu chuột phải; SidePanel: kiểu vẽ, ngưỡng nối, độ mượt, độ đệm, độ mờ nền, nét nối phụ, "Đặt lại mặc định". Xuất **SVG** nay có lớp nhóm (cả ba kiểu, trước đây bỏ qua); PNG và SVG mở rộng khung cho vừa vùng/nhãn/chip. Demo: `docs/demo/T17Mind-nhom-truc-quan.t17m` (+ ảnh chụp từ app chạy thật ở `docs/demo/nhom-truc-quan/`).
+
+**Test:** thêm `core/boundaryVisual.test.ts` (17), `render/adaptiveBoundary.test.ts` (20), `render/groupGeometry.test.ts` (20), `io/svgGroups.test.ts` (5) — toàn bộ suite 371 test đều đạt.
+
+**Chưa làm / giới hạn:** thành viên tự gồm cả cây con (đặc tả §4G, để chỗ mở rộng); tích hợp chọn nhóm trong Explorer; giảm chất lượng khi đang kéo (chưa cần — đã đo); chưa thử Windows thật / Chrome–Edge thật; E trong bản đồ đan xen dày sẽ ra nhiều vùng (cầu nối tránh node ngoài nhóm) — dùng F hoặc tăng ngưỡng.
+
+### Checklist kiểm thử tay
+- [ ] Shift+bấm vài node ở nhánh khác nhau → "Nhóm trực quan" → nhập tên: nhóm hiện nhiều vùng ôm sát, kiểu mặc định "Nhiều vùng thích nghi (E)"
+- [ ] Kéo một node thành viên ra xa rồi lại gần: vùng tách/nhập, không nhấp nháy khi dừng gần ngưỡng
+- [ ] Đổi Kiểu vẽ E → F → Hình chữ nhật → E; Ctrl+Z / Ctrl+Y từng bước; nhãn/màu/thành viên không đổi
+- [ ] Thu gọn nhánh chứa thành viên (phím C): chip ▣ N/+N ở node đại diện, vùng không dùng vị trí node ẩn; mở lại (Shift+C) thì vùng ôm lại
+- [ ] Thu gọn mọi thành viên: nhóm vẫn có nhãn + chip, chọn được, lưu file vẫn còn
+- [ ] Đổi 6 bố cục / theme riêng từng cây (nếu đã có): vùng/chip cập nhật theo
+- [ ] Bấm nền trong vùng: vẫn kéo chọn (marquee)/pan; bấm node vẫn chọn node; bấm viền/nhãn/chip chọn nhóm (thử zoom 30%, 100%, 200%)
+- [ ] Mở file nhóm cũ (hình chữ nhật): hiển thị y như trước; chủ động đổi sang E/F
+- [ ] Xuất PNG và SVG: có nhóm, đủ khung; nhánh thu gọn có chip
+- [ ] Bản đồ 100+ node với vài nhóm: kéo node mượt; chỉ pan/zoom không giật

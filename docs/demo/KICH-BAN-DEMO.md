@@ -82,6 +82,20 @@ Thời lượng gợi ý: 12–15 phút.
 
 **Thao tác:** chuột phải vào *Nhân sự* để xem menu. Xoá một node, nhấn **Ctrl+Z** để trả lại, rồi **Ctrl+Y** để làm lại.
 
+## Bước 11b — Nhóm trực quan (file riêng)
+
+Mở **`T17Mind-nhom-truc-quan.t17m`** (cùng thư mục): cùng bản đồ Gió Sớm Coffee, có thêm 5 nhóm.
+
+> "Cần gom những việc ở nhiều nhánh khác nhau vào một nhóm, mà không bôi cả một khung chữ nhật khổng lồ lên các ý khác?"
+
+- **Việc cần chốt tuần này** (xanh dương, kiểu E): một nhóm, vài vùng bao ôm sát từng cụm node; vùng phụ có chip nhỏ cùng màu.
+- **Khách hàng mục tiêu** (xanh lá, E) chồng lên vùng khác — nhấp vào nhãn hoặc viền để chọn đúng nhóm.
+- **Nội dung truyền thông** (đỏ, kiểu F — Phân tán): viền quanh từng node, không có nền lớn; có nét nối phụ.
+- **Nhóm cũ** (vàng): nhóm từ file cũ, vẫn hình chữ nhật.
+- **Mua sắm nội thất** (tím, E): nhánh *Hạng mục nội thất* đang thu gọn nên chip **+4** báo 4 thành viên ẩn; bấm **C** trên node đó để mở ra — vùng bao ôm lại các node vừa hiện.
+
+**Thao tác:** chọn một nhóm → khung bên phải đổi **Kiểu vẽ** (Hình chữ nhật / Nhiều vùng / Phân tán), kéo **Ngưỡng nối vùng**, **Độ đệm**, bật **Nét nối phụ**; **Ctrl+Z** để quay lại. Tạo nhóm mới: chọn nhiều node (Shift+bấm) → **Nhóm trực quan**.
+
 ## Bước 12 — Lưu & xuất
 
 > "Cuối cùng, cần báo cáo cho đối tác hay ngân hàng? Một cú bấm là bản đồ thành tài liệu Word có mục lục, bảng và hình ảnh."
