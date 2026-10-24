@@ -402,3 +402,12 @@ function buildXlsxWorkbook(map: MindMap): XLSX.WorkBook {
   XLSX.utils.book_append_sheet(workbook, worksheet, "Mindmap");
   return workbook;
 }
+
+/** Một bảng phẳng (hàng đầu là tiêu đề) → file .xlsx một sheet (dùng cho xuất Cơ sở dữ liệu Tag, KW5). */
+export function gridToXlsxBlob(grid: (string | number)[][], sheetName = "Dữ liệu"): Blob {
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(grid);
+  XLSX.utils.book_append_sheet(wb, ws, sheetName.replace(/[\\/?*[\]:]/g, " ").slice(0, 31) || "Dữ liệu");
+  const data = XLSX.write(wb, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
+  return new Blob([data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+}

@@ -25,6 +25,7 @@ export interface CommandHost {
   toggleExplorer(): void;
   toggleLibrary(): void;
   toggleMinimap(): void;
+  openTagDatabase(): void;
   toggleLinking(): void;
   addSticky(): void;
   addFloatingBranch(): void;
@@ -68,6 +69,7 @@ export const PALETTE_COMMANDS: PaletteCommand[] = [
   { id: "searchInMap", title: "Tìm trong map này", keywords: "tim kiem find", shortcut: "Ctrl+F", run: (h) => h.searchInMap() },
   { id: "explorer", title: "Bật/tắt khung Explorer", keywords: "duyet cay tag loc", run: (h) => h.toggleExplorer() },
   { id: "library", title: "Bật/tắt Thư viện card", keywords: "card the inbox", run: (h) => h.toggleLibrary() },
+  { id: "tagDatabase", title: "Cơ sở dữ liệu Tag (bảng, Kanban, biểu đồ)", keywords: "tag thuoc tinh bang kanban database loc nhom", run: (h) => h.openTagDatabase() },
   { id: "minimap", title: "Bật/tắt Minimap", keywords: "ban do nho", run: (h) => h.toggleMinimap() },
   { id: "linking", title: "Tạo liên kết chéo giữa hai node", keywords: "relationship noi", run: (h) => h.toggleLinking() },
   { id: "sticky", title: "Thêm ghi chú dán", keywords: "giay nho sticky", run: (h) => h.addSticky() },
