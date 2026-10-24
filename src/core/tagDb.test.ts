@@ -256,3 +256,101 @@ describe("lưu/đọc", () => {
     expect(o[0]!.color).not.toBe(o[1]!.color);
   });
 });
+
+import { MAX_NODE_CHIPS, moveInOrder, nodeFieldChips, orderRows } from "./tagDb";
+import { SetTagOrderCommand } from "./tagDbCommands";
+import { CompositeCommand } from "./commands";
+
+describe("thẻ giá trị trên node (showOnNode)", () => {
+  it("chỉ hiện thuộc tính được bật và có giá trị; lựa chọn mang màu, giá trị khác thành 'Tên: giá trị'", () => {
+    const s = setup();
+    const done = s.field(s.status).options![2]!;
+    s.store.dispatch(new SetFieldValueCommand([s.ids[0]!], s.status, done.id));
+    s.store.dispatch(new SetFieldValueCommand([s.ids[0]!], s.due, "2026-11-02"));
+    s.store.dispatch(new SetFieldValueCommand([s.ids[0]!], s.owner, "An"));
+    const node = () => s.store.getMap().nodes[s.ids[0]!]!;
+    expect(nodeFieldChips(s.store.getMap(), node())).toEqual([]); // mặc định không hiện gì
+    s.store.dispatch(new UpdateTagFieldCommand(s.tagId, s.status, { showOnNode: true }));
+    s.store.dispatch(new UpdateTagFieldCommand(s.tagId, s.due, { showOnNode: true }));
+    expect(nodeFieldChips(s.store.getMap(), node())).toEqual([
+      { text: "Xong", color: done.color },
+      { text: "Hạn: 02/11/2026", color: null },
+    ]);
+    s.store.undo();
+    expect(nodeFieldChips(s.store.getMap(), node())).toHaveLength(1);
+    s.store.dispatch(new UpdateTagFieldCommand(s.tagId, s.status, { showOnNode: false }));
+    expect(s.field(s.status).showOnNode).toBeUndefined();
+    expect(nodeFieldChips(s.store.getMap(), node())).toEqual([]);
+  });
+  it("node không có giá trị / không mang Tag thì không có thẻ; tối đa MAX_NODE_CHIPS", () => {
+    const s = setup();
+    for (const f of [s.status, s.hours, s.due, s.owner]) s.store.dispatch(new UpdateTagFieldCommand(s.tagId, f, { showOnNode: true }));
+    expect(nodeFieldChips(s.store.getMap(), s.store.getMap().nodes[s.ids[0]!]!)).toEqual([]);
+    expect(nodeFieldChips(s.store.getMap(), s.store.getMap().nodes[s.ids[4]!]!)).toEqual([]);
+    s.store.dispatch(new SetFieldValueCommand([s.ids[0]!], s.hours, "3"));
+    s.store.dispatch(new SetFieldValueCommand([s.ids[0]!], s.owner, "An"));
+    s.store.dispatch(new SetFieldValueCommand([s.ids[0]!], s.due, "2026-01-01"));
+    s.store.dispatch(new SetFieldValueCommand([s.ids[0]!], s.status, s.field(s.status).options![0]!.id));
+    expect(nodeFieldChips(s.store.getMap(), s.store.getMap().nodes[s.ids[0]!]!).length).toBeLessThanOrEqual(MAX_NODE_CHIPS);
+  });
+  it("showOnNode được giữ qua JSON và làm sạch giá trị lạ", () => {
+    const s = setup();
+    s.store.dispatch(new UpdateTagFieldCommand(s.tagId, s.hours, { showOnNode: true }));
+    const raw = JSON.parse(exportFlatJson(s.store.getMap()));
+    raw.tags[0].fields[0].showOnNode = "yes"; // không phải true → bỏ
+    const out = migrateToLatest(raw);
+    expect(fieldsOf(out, s.tagId)[0]!.showOnNode).toBeUndefined();
+    expect(fieldsOf(out, s.tagId)[1]!.showOnNode).toBe(true);
+  });
+});
+
+describe("thứ tự thẻ Kanban", () => {
+  const rows = (...ids: string[]) => ids.map((nodeId) => ({ nodeId, name: nodeId, values: {} }));
+  it("orderRows: dòng có trong order lên trước theo order, còn lại giữ thứ tự cây", () => {
+    expect(orderRows(rows("a", "b", "c", "d"), ["c", "a"]).map((r) => r.nodeId)).toEqual(["c", "a", "b", "d"]);
+    const same = rows("a", "b");
+    expect(orderRows(same, undefined)).toBe(same);
+    expect(orderRows(rows("a", "b"), ["zzz", "b"]).map((r) => r.nodeId)).toEqual(["b", "a"]);
+  });
+  it("moveInOrder: trước / sau một dòng / cuối", () => {
+    const all = ["a", "b", "c", "d"];
+    expect(moveInOrder(undefined, all, "d", { before: "b" })).toEqual(["a", "d", "b", "c"]);
+    expect(moveInOrder(undefined, all, "a", { after: "c" })).toEqual(["b", "c", "a", "d"]);
+    expect(moveInOrder(undefined, all, "a", null)).toEqual(["b", "c", "d", "a"]);
+    expect(moveInOrder(["d", "c"], all, "a", { before: "c" })).toEqual(["d", "a", "c", "b"]);
+    expect(moveInOrder(undefined, all, "b", { before: "khong-co" })).toEqual(["a", "c", "d", "b"]);
+  });
+  it("SetTagOrderCommand: undo trả lại, kể cả khi trước đó chưa có order; JSON giữ order, làm sạch trùng/rác", () => {
+    const s = setup();
+    const tag = () => s.store.getMap().tags.find((t) => t.id === s.tagId)!;
+    expect(tag().order).toBeUndefined();
+    s.store.dispatch(new SetTagOrderCommand(s.tagId, [s.ids[2]!, s.ids[0]!]));
+    expect(tag().order).toEqual([s.ids[2], s.ids[0]]);
+    s.store.dispatch(new SetTagOrderCommand(s.tagId, [s.ids[1]!]));
+    s.store.undo();
+    expect(tag().order).toEqual([s.ids[2], s.ids[0]]);
+    s.store.undo();
+    expect(tag().order).toBeUndefined();
+    s.store.redo();
+    const raw = JSON.parse(exportFlatJson(s.store.getMap()));
+    raw.tags[0].order = [s.ids[2], s.ids[2], 5, "", s.ids[0]];
+    expect(migrateToLatest(raw).tags[0]!.order).toEqual([s.ids[2], s.ids[0]]);
+    raw.tags[0].order = "hỏng";
+    expect(migrateToLatest(raw).tags[0]!.order).toBeUndefined();
+  });
+  it("kéo thẻ sang cột khác + đổi vị trí = MỘT bước hoàn tác", () => {
+    const s = setup();
+    const doing = s.field(s.status).options![1]!.id;
+    const all = rowsOfTag(s.store.getMap(), s.tagId).map((r) => r.nodeId);
+    s.store.dispatch(new SetFieldValueCommand([s.ids[1]!], s.status, doing));
+    const order = moveInOrder(undefined, all, s.ids[3]!, { before: s.ids[1]! });
+    s.store.dispatch(new CompositeCommand([new SetFieldValueCommand([s.ids[3]!], s.status, doing), new SetTagOrderCommand(s.tagId, order)], "Kéo thẻ Kanban"));
+    const m = () => s.store.getMap();
+    expect(m().nodes[s.ids[3]!]!.fieldValues![s.status]).toBe(doing);
+    expect(m().tags.find((t) => t.id === s.tagId)!.order![1]).toBe(s.ids[3]);
+    s.store.undo();
+    expect(m().nodes[s.ids[3]!]!.fieldValues).toBeUndefined();
+    expect(m().tags.find((t) => t.id === s.tagId)!.order).toBeUndefined();
+    expect(m().nodes[s.ids[1]!]!.fieldValues![s.status]).toBe(doing); // bước trước đó vẫn còn
+  });
+});

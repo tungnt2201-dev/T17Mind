@@ -40,7 +40,7 @@
   const map = mapStore(store);
   $: card = $map.cards[cardId] ?? null;
 
-  const TYPE_LABEL: Record<Block["type"], string> = { text: "Văn bản", table: "Bảng", image: "Ảnh", chart: "Biểu đồ" };
+  const TYPE_LABEL: Record<Block["type"], string> = { text: "Văn bản", table: "Bảng", image: "Ảnh", chart: "Biểu đồ", embed: "Nhúng" };
   const SIZE_LABEL: Record<ImageDisplaySize, string> = { small: "Nhỏ", medium: "Vừa", large: "Lớn" };
 
   let imageInput: HTMLInputElement | undefined;
@@ -125,7 +125,7 @@
             </span>
           </div>
           {#if b.type === "text"}
-            <MentionTextarea map={$map} cls="card-text" rows={3} placeholder="Nhập văn bản… (gõ @ hoặc [[ để liên kết card/node)"
+            <MentionTextarea map={$map} cls="card-text" rows={3} toolbar placeholder="Nhập văn bản… (gõ @ hoặc [[ để liên kết card/node)"
               value={b.text} excludeCardId={card.id}
               on:commit={(e) => card && store.dispatch(new ReplaceBlockCommand(card.id, { ...b, text: e.detail }))} />
           {:else if b.type === "table"}
@@ -160,6 +160,8 @@
                 </select>
               </div>
             </div>
+          {:else if b.type === "embed"}
+            <div class="muted">▣ {($map.cards[b.cardId]?.title || "(card)") + (b.blockId ? " · một khối" : "")} — chỉnh vị trí/gỡ ở trang card (Mở dạng trang)</div>
           {:else if b.type === "chart"}
             <ChartBlockEditor {store} {card} block={b} width={380} height={220} />
           {:else}

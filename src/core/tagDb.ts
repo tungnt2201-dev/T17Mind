@@ -323,3 +323,63 @@ export function rowsToTypedGrid(rows: DbRow[], fields: readonly TagField[]): (st
     ]),
   ];
 }
+
+// ------------------------------------------------------------ Thẻ giá trị trên node
+
+export const MAX_NODE_CHIPS = 4;
+
+export interface NodeChip {
+  text: string;
+  /** Màu lựa chọn (Chọn một / Trạng thái) hoặc null cho giá trị thường (chữ/số/ngày). */
+  color: string | null;
+}
+
+/** Thẻ giá trị hiện trên node: các thuộc tính bật `showOnNode` của các Tag node đang mang, chỉ những ô có giá trị. */
+export function nodeFieldChips(map: Pick<MindMap, "tags">, node: { tagIds: readonly string[]; fieldValues?: Record<string, string> }): NodeChip[] {
+  if (!node.fieldValues) return [];
+  const out: NodeChip[] = [];
+  for (const { field } of fieldsForNode(map, node.tagIds)) {
+    if (!field.showOnNode) continue;
+    const raw = node.fieldValues[field.id];
+    const shown = displayValue(field, raw);
+    if (shown === "") continue;
+    if (hasOptions(field.type)) out.push({ text: shown, color: optionOf(field, raw!)?.color ?? null });
+    else out.push({ text: `${field.name}: ${shown}`, color: null });
+    if (out.length >= MAX_NODE_CHIPS) break;
+  }
+  return out;
+}
+
+// ------------------------------------------------------------ Thứ tự thẻ (Kanban)
+
+/** Xếp dòng theo thứ tự thủ công `order`; dòng không có trong `order` ở sau, giữ thứ tự cũ (thứ tự cây). Ổn định. */
+export function orderRows(rows: DbRow[], order: readonly string[] | undefined): DbRow[] {
+  if (!order || order.length === 0) return rows;
+  const idx = new Map(order.map((id, i) => [id, i]));
+  return rows
+    .map((r, i) => ({ r, i, k: idx.get(r.nodeId) ?? Number.POSITIVE_INFINITY }))
+    .sort((a, b) => (a.k === b.k ? a.i - b.i : a.k - b.k))
+    .map((x) => x.r);
+}
+
+/**
+ * Thứ tự mới sau khi đặt `id` vào vị trí `anchor` (trước/sau một dòng khác; null = cuối cùng). `allIds` là mọi dòng của Tag
+ * theo thứ tự cây (để dòng chưa từng được xếp vẫn có vị trí xác định). Trả về danh sách đầy đủ.
+ */
+export function moveInOrder(
+  order: readonly string[] | undefined,
+  allIds: readonly string[],
+  id: string,
+  anchor: { before: string } | { after: string } | null
+): string[] {
+  const rows = orderRows(allIds.map((nodeId) => ({ nodeId, name: "", values: {} })), order).map((r) => r.nodeId);
+  const rest = rows.filter((x) => x !== id);
+  let at = rest.length;
+  if (anchor) {
+    const target = "before" in anchor ? anchor.before : anchor.after;
+    const ti = rest.indexOf(target);
+    if (ti >= 0) at = "before" in anchor ? ti : ti + 1;
+  }
+  rest.splice(at, 0, id);
+  return rest;
+}

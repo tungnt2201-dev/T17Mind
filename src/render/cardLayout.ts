@@ -24,7 +24,7 @@ import {
   type ImageThumbLayout,
 } from "./imageThumb";
 import type { ImageBlock } from "../core/types";
-import { plainText } from "../core/links";
+import { displayText } from "../core/richText";
 
 export const PREVIEW_FONT = "11px -apple-system, Segoe UI, sans-serif";
 export const PREVIEW_LINE_H = 15;
@@ -76,10 +76,11 @@ export function cardContentOf(
   const images: ImageBlock[] = [];
   for (const b of card.blocks) {
     if (b.type === "image" && !map.assets[b.assetId]) continue;
-    counts[b.type]++;
-    firstBlock[b.type] ??= b.id;
+    const kind: CardContentKind = b.type === "embed" ? "text" : b.type;
+    counts[kind]++;
+    firstBlock[kind] ??= b.id;
     if (b.type === "text" && previewText === null && b.text.trim()) {
-      previewText = plainText(b.text, map).trim();
+      previewText = displayText(b.text, map).trim();
       previewBlockId = b.id;
     } else if (b.type === "table") table ??= b;
     else if (b.type === "image") images.push(b);

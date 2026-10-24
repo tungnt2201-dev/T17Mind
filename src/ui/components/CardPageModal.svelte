@@ -29,12 +29,15 @@
     RemoveBlockCommand,
     MoveBlockCommand,
   } from "../../core/cardCommands";
-  import { createTextBlock, createTableBlock, createChartForCard, summarizeBlock } from "../../core/cards";
+  import { createTextBlock, createTableBlock, createChartForCard, createEmbedBlock, summarizeBlock } from "../../core/cards";
   import CardGlyph from "./CardGlyph.svelte";
   import MentionTextarea from "./MentionTextarea.svelte";
   import ChartBlockEditor from "./ChartBlockEditor.svelte";
   import { displayCells } from "../../core/formula";
-  import LinkedText from "./LinkedText.svelte";
+  import RichText from "./RichText.svelte";
+  import EmbedBlockView from "./EmbedBlockView.svelte";
+  import EmbedPicker from "./EmbedPicker.svelte";
+  import { toggleCheckLine } from "../../core/richText";
   import BacklinksList from "./BacklinksList.svelte";
   import { knowledgeIndex, refreshKnowledgeIndex } from "../knowledgeController";
   import { findBacklinks, makeLinkToken, describeBlock, type LinkType } from "../../core/links";
@@ -112,6 +115,14 @@
     await tick();
     paperEl?.querySelector<HTMLTextAreaElement>(`[data-block="${block.id}"] textarea`)?.focus();
     pendingFocus = null;
+  }
+  /** KW6 — khối nhúng: null = hộp chọn đóng; số = chèn vào vị trí đó (null-ish cuối = cuối card). */
+  let embedAt: { index: number | null } | null = null;
+  function pickEmbed(e: CustomEvent<{ cardId: string; blockId: string | null }>): void {
+    const at = embedAt;
+    embedAt = null;
+    if (!card || !at) return;
+    store.dispatch(new AddBlockCommand(card.id, createEmbedBlock(e.detail.cardId, e.detail.blockId), at.index));
   }
   function addTable(): void {
     if (card) store.dispatch(new AddBlockCommand(card.id, createTableBlock(3, 3)));
@@ -226,14 +237,15 @@
 
           {#if b.type === "text"}
             {#if editingBlock === b.id || !b.text.trim()}
-              <MentionTextarea map={$map} cls="pg-text" rows={1} autogrow autofocus={editingBlock === b.id}
+              <MentionTextarea map={$map} cls="pg-text" rows={1} autogrow toolbar autofocus={editingBlock === b.id} on:embed={() => (embedAt = { index: i + 1 })}
                 placeholder="Viết gì đó… (gõ @ hoặc [[ để liên kết tới card/node khác)" value={b.text} excludeCardId={card.id}
                 on:commit={(e) => card && store.dispatch(new ReplaceBlockCommand(card.id, { ...b, text: e.detail }))}
                 on:blur={() => { if (editingBlock === b.id) editingBlock = null; }} />
             {:else}
               <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
               <div class="pg-text pg-text-view" title="Bấm để sửa" on:click={() => (editingBlock = b.id)}>
-                <LinkedText map={$map} text={b.text} on:open={(e) => followLink(e.detail.type, e.detail.id, e.detail.blockId)} />
+                <RichText map={$map} text={b.text} on:open={(e) => followLink(e.detail.type, e.detail.id, e.detail.blockId)}
+                  on:toggle={(e) => card && store.dispatch(new ReplaceBlockCommand(card.id, { ...b, text: toggleCheckLine(b.text, e.detail.line) }))} />
               </div>
             {/if}
           {:else if b.type === "image"}
@@ -268,6 +280,8 @@
               <button type="button" class="btn small-btn pg-edit-table" on:click={() => card && tableEditorStore.set({ cardId: card.id, blockId: b.id })}>
                 Sửa bảng…</button>
             </div>
+          {:else if b.type === "embed"}
+            <EmbedBlockView map={$map} block={b} on:open={(e) => followLink(e.detail.type, e.detail.id, e.detail.blockId)} />
           {:else if b.type === "chart"}
             <ChartBlockEditor {store} {card} block={b} width={460} height={260} />
           {:else}
@@ -280,6 +294,7 @@
         <button type="button" on:click={() => void addTextAt(null)}><CardGlyph kind="text" /> Đoạn văn</button>
         <button type="button" on:click={addTable}><CardGlyph kind="table" /> Bảng</button>
         <button type="button" on:click={addChart}><CardGlyph kind="chart" /> Biểu đồ</button>
+        <button type="button" title="Nhúng nội dung một card khác (luôn là bản mới nhất)" on:click={() => (embedAt = { index: null })}><CardGlyph kind="text" /> Nhúng…</button>
         <button type="button" on:click={() => csvInput?.click()}><CardGlyph kind="table" /> Nhập CSV…</button>
         <button type="button" on:click={() => imageInput?.click()}><CardGlyph kind="image" /> Ảnh…</button>
         <input bind:this={imageInput} type="file" accept="image/*" multiple hidden on:change={addImages} />
@@ -287,6 +302,10 @@
       </div>
     </div>
   </div>
+{/if}
+
+{#if embedAt && card}
+  <EmbedPicker map={$map} excludeCardId={card.id} on:pick={pickEmbed} on:cancel={() => (embedAt = null)} />
 {/if}
 
 <style>
