@@ -151,6 +151,9 @@ export interface TableEditorTarget {
 }
 export const tableEditorStore = writable<TableEditorTarget | null>(null);
 
+/** KW5 — Cơ sở dữ liệu Tag (TagDatabaseModal): null = đóng; `tagId` = Tag mở sẵn (null = Tag đầu tiên). */
+export const tagDbStore = writable<{ tagId: string | null } | null>(null);
+
 /** Menu chuột phải đang mở (null = đóng) — AppController mở, component
  *  ContextMenu.svelte hiển thị và gọi `onPick` khi chọn một mục. */
 export interface ContextMenuState {

@@ -50,6 +50,7 @@
   import type { Boundary, BoundaryMode, BoundaryVisualOptions } from "../../core/types";
   import { showConfirm } from "../dialog";
   import CardSection from "./CardSection.svelte";
+  import NodeFieldsEditor from "./NodeFieldsEditor.svelte";
   import type { BorderStyle, EdgeShape, TextAlign, TextFit } from "../../core/types";
 
   export let store: Store;
@@ -657,6 +658,7 @@
           {/each}
         </div>
       {/if}
+      <NodeFieldsEditor {store} map={$map} node={n} />
       {#if tagPickerOpen}
         <div class="tag-picker">
           {#each $map.tags as tag (tag.id)}
