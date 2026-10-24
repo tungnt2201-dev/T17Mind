@@ -12,6 +12,7 @@
  * ngoại lệ chương trình.
  * ---------------------------------------------------------------------
  */
+import { normalizeVisual } from "./boundaryVisual";
 import type { MindMap, ValidationErrors } from "./types";
 import { getRootIds } from "./tree";
 import { validateCard } from "./cards";
@@ -97,6 +98,9 @@ export function validateMindMap(map: MindMap): ValidationErrors {
     }
     if (b.nodeIds.length < 1) {
       errors.push(`Boundary "${b.id}" phải gồm ít nhất 1 node.`);
+    }
+    if (b.visual !== undefined && normalizeVisual(b.visual) === undefined) {
+      errors.push(`Boundary "${b.id}" có tuỳ chọn hiển thị (visual) không hợp lệ.`);
     }
   }
 
