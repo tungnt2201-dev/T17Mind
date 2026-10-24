@@ -4003,8 +4003,10 @@ Xử lý hai giới hạn còn lại của KW5.
 ## Phân biệt Tag và thuộc tính của Tag (trên node và trong khung bên phải)
 
 Phản hồi từ bản dùng thử: node mang 2 Tag có bật "Hiện trên node" thì viên Tag và thẻ giá trị cùng kiểu, cùng hàng, thứ tự lẫn lộn nên không biết thẻ nào là Tag, thẻ nào thuộc Tag nào. Sửa:
-- **Trên sơ đồ** (`CanvasRenderer.labelItems`): gom theo TỪNG Tag. Viên Tag giữ kiểu cũ (hình thuốc nền nhạt, chữ màu Tag). Thẻ giá trị là hình chữ nhật bo nhỏ, nền sáng, VIỀN màu Tag, đứng ngay sau đúng viên Tag của nó; Chọn một/Trạng thái thêm chấm màu lựa chọn. Khoảng cách giữa hai nhóm Tag rộng hơn khoảng cách trong nhóm. Hàng rộng tối đa 480 px, không vừa thì bỏ bớt cuối hàng và thay bằng "…".
+- **Trên sơ đồ** (`CanvasRenderer.labelItems`): gom theo TỪNG Tag. Viên Tag giữ kiểu cũ (hình thuốc nền nhạt, chữ màu Tag). Thẻ giá trị là hình chữ nhật bo nhỏ, nền sáng, VIỀN màu Tag, đứng ngay sau đúng viên Tag của nó; Chọn một/Trạng thái thêm chấm màu lựa chọn. Khoảng cách giữa hai nhóm Tag rộng hơn khoảng cách trong nhóm. Hàng rộng tối đa 420 px; nhiều viên hơn thì XUỐNG DÒNG (xem bên dưới).
 - **Nội dung thẻ**: Trạng thái chỉ hiện giá trị (Chưa làm / Đang làm / Xong đã rõ nghĩa); Chọn một, Chữ, Số, Ngày hiện "Tên thuộc tính: giá trị" (trước đây Chọn một chỉ hiện giá trị nên "A22" của hai thuộc tính khác nhau giống hệt nhau). `nodeFieldChips(map, node, tagId?)` lọc theo Tag.
 - **Khung bên phải** (`NodeFieldsEditor`): mỗi Tag một khung có vạch trái màu Tag, đầu khung là viên Tag + nút "Mở bảng" + dòng "Thuộc tính của Tag này:"; Tag chưa có thuộc tính vẫn có khung với nút mở bảng.
 - Đổi tên mục "Thuộc tính công việc" (tiến độ/ưu tiên/checkbox có từ trước) thành "Tiến độ, ưu tiên & Tag" để không nhầm với thuộc tính của Tag.
 - Demo `T17Mind-tag-database.t17m` có thêm Tag thứ hai "Phương án" trên hai node để thử.
+
+**Nhiều dòng:** khối Tag/thẻ giá trị ở đáy node giờ có thể nhiều dòng (tối đa 4, dư thì viên "…" cuối dòng cuối). `render/labelRows.ts#packLabelRows` (thuần, có test) chia dòng: viên Tag luôn đi cùng thẻ giá trị đầu tiên của nó, thẻ quá dài tự rút gọn "…". Chiều cao node cộng đúng số dòng × 22 px (đo node, chữ chính, thẻ card, vẽ đều dùng chung `labelBlockHeight`); kết quả được nhớ trong một lần đo/vẽ để không đo chữ lặp lại. Node kéo cỡ tay theo bề rộng thì dòng chia theo bề rộng đó.
