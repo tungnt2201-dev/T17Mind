@@ -60,6 +60,14 @@ import { clipboardNodeToTree } from "./clipboard";
 import { remapLinks } from "./links";
 import { normalizeVisual } from "./boundaryVisual";
 import {
+  restoreTreeSettings,
+  settingsOfNode,
+  settingsOfRoot,
+  snapshotTreeSettings,
+  writeTreeSettings,
+  type TreeSettingsSnapshot,
+} from "./treeSettings";
+import {
   findTheme,
   branchHue,
   themeRootStyle,
@@ -736,6 +744,7 @@ export class MergeMapCommand implements Command {
     stickyNotes: StickyNote[];
     assets: MindMap["assets"];
     cards: MindMap["cards"];
+    treeSettings: MindMap["treeSettings"];
   } | null = null;
   private newRootIdsInternal: string[] = [];
 
@@ -755,6 +764,7 @@ export class MergeMapCommand implements Command {
       stickyNotes: deepClone(map.stickyNotes),
       assets: deepClone(map.assets),
       cards: deepClone(map.cards),
+      treeSettings: deepClone(map.treeSettings ?? {}),
     };
 
     // --- 1) Remap ID node: MỌI node trong file nhập đều nhận id MỚI ---
@@ -853,6 +863,9 @@ export class MergeMapCommand implements Command {
       rootNode.offsetY = cursorY;
       cursorY += 300;
       this.newRootIdsInternal.push(newRootId);
+      // Mỗi cây ghép vào giữ bố cục/theme/kiểu tự nhiên của chính nó (không bị ép theo cây chính).
+      if (!map.treeSettings) map.treeSettings = {};
+      map.treeSettings[newRootId] = deepClone(settingsOfRoot(this.importedMap, oldRootId));
     }
 
     for (const [id, node] of Object.entries(remappedNodes)) map.nodes[id] = node;
@@ -915,6 +928,7 @@ export class MergeMapCommand implements Command {
     map.stickyNotes = this.snapshot.stickyNotes;
     map.assets = this.snapshot.assets;
     map.cards = this.snapshot.cards;
+    map.treeSettings = this.snapshot.treeSettings;
   }
 }
 
@@ -1060,7 +1074,7 @@ export class PasteSubtreeCommand implements Command {
     // đang bật để nhất quán với "tạo node mới". KHÔNG đụng tới node có
     // fill/color khác null — đó là định dạng người dùng đã sao chép
     // tường minh, phải giữ nguyên y hệt lúc copy.
-    if (map.activeThemeId) {
+    if (settingsOfNode(map, this.parentId).activeThemeId) {
       for (const id of allIds) {
         const node = map.nodes[id];
         if (node && node.fill === null && node.color === null) {
@@ -1482,35 +1496,31 @@ export class SetStickyNotePositionCommand implements Command {
 export class ApplyThemeCommand implements Command {
   readonly label = "Áp dụng theme";
   private oldValues: Record<string, { fill: string | null; color: string | null }> = {};
-  private oldActiveThemeId: string | null = null;
-
-  private oldCustomTheme: Theme | null = null;
+  private oldSettings: TreeSettingsSnapshot | null = null;
 
   /** `theme` truyền kèm khi áp một theme RIÊNG (để nhúng đúng bản đang
-   *  thấy vào map); theme có sẵn chỉ cần id. */
-  constructor(private readonly themeId: string, private readonly theme: Theme | null = null) {}
+   *  thấy vào map); theme có sẵn chỉ cần id. `rootId`: cây được áp theme —
+   *  mặc định cây chính; truyền id gốc của một nhánh trôi để chỉ tô nhánh đó
+   *  (các cây khác giữ nguyên màu và theme của chúng). */
+  constructor(private readonly themeId: string, private readonly theme: Theme | null = null, private readonly rootId: string | null = null) {}
 
   apply(map: MindMap): void {
-    const theme = this.theme ?? findTheme(this.themeId, map);
+    const theme = this.theme ?? findTheme(this.themeId, map) ?? findTheme(this.themeId, settingsOfRoot(map, this.rootId ?? map.rootId));
     if (!theme) return;
+    const rootId = this.rootId ?? map.rootId;
     this.oldValues = {};
-    this.oldActiveThemeId = map.activeThemeId;
-    this.oldCustomTheme = map.customTheme;
-    map.activeThemeId = this.themeId;
-    map.customTheme = theme.custom ? deepClone(theme) : null;
+    this.oldSettings = snapshotTreeSettings(map);
+    writeTreeSettings(map, rootId, { activeThemeId: this.themeId, customTheme: theme.custom ? deepClone(theme) : null });
 
-    for (const rootId of getRootIds(map)) {
-      if (theme.perBranch) {
-        this.applyBranchColors(map, theme, rootId);
-      } else {
-        this.applyDepthBased(map, theme, rootId);
-      }
+    if (theme.perBranch) {
+      this.applyBranchColors(map, theme, rootId);
+    } else {
+      this.applyDepthBased(map, theme, rootId);
     }
   }
 
   revert(map: MindMap): void {
-    map.activeThemeId = this.oldActiveThemeId;
-    map.customTheme = this.oldCustomTheme;
+    if (this.oldSettings) restoreTreeSettings(map, this.oldSettings);
     for (const id of Object.keys(this.oldValues)) {
       const node = map.nodes[id];
       if (!node) continue;
@@ -1586,8 +1596,10 @@ export class ApplyThemeCommand implements Command {
  * đúng hành vi cũ — người dùng tự chọn màu hoặc dùng mặc định).
  */
 function applyActiveThemeToNewNode(map: MindMap, nodeId: string): void {
-  if (!map.activeThemeId) return;
-  const theme = findTheme(map.activeThemeId, map);
+  // Theme của CÂY chứa node (cây chính hoặc nhánh trôi), không phải của cả map.
+  const settings = settingsOfNode(map, nodeId);
+  if (!settings.activeThemeId) return;
+  const theme = findTheme(settings.activeThemeId, settings);
   if (!theme) return;
   const node = map.nodes[nodeId];
   if (!node) return;
@@ -1628,7 +1640,7 @@ export function extractFormatPatch(node: MindNode): NodeStylePatch {
  * cũng chỉ là MỘT CỜ BOOLEAN Y HỆT trên map, tái dùng luôn Command
  * này thay vì viết riêng.
  */
-export type MapDisplayFlag = "showEdgeLabels" | "showRelationships" | "showSummaries" | "organicEdges";
+export type MapDisplayFlag = "showEdgeLabels" | "showRelationships" | "showSummaries";
 
 export class ToggleMapDisplayFlagCommand implements Command {
   readonly label = "Đổi hiển thị";
@@ -1645,24 +1657,40 @@ export class ToggleMapDisplayFlagCommand implements Command {
 }
 
 /**
- * P2.7a — đổi kiểu bố cục của toàn map. Bản thân Command chỉ đổi
- * đúng một trường (`map.layoutType`) — việc TÍNH LẠI toạ độ mọi node
- * theo bố cục mới xảy ra tự động qua chuỗi phản ứng có sẵn
- * (dispatch -> notify -> fullRefresh -> applyLayout trong main.ts,
- * applyLayout giờ đọc thẳng map.layoutType), không cần Command này tự
- * tính toán gì thêm.
+ * "Kiểu cây tự nhiên" bật/tắt RIÊNG cho từng cây (cây chính hoặc một nhánh
+ * trôi) — xem core/treeSettings.ts.
+ */
+export class ToggleOrganicEdgesCommand implements Command {
+  readonly label = "Đổi kiểu cây tự nhiên";
+  private old: TreeSettingsSnapshot | null = null;
+  constructor(private readonly rootId: string | null = null) {}
+
+  apply(map: MindMap): void {
+    const rootId = this.rootId ?? map.rootId;
+    this.old = snapshotTreeSettings(map);
+    writeTreeSettings(map, rootId, { organicEdges: !settingsOfRoot(map, rootId).organicEdges });
+  }
+  revert(map: MindMap): void {
+    if (this.old) restoreTreeSettings(map, this.old);
+  }
+}
+
+/**
+ * Đổi kiểu bố cục của MỘT cây (cây chính, hoặc nhánh trôi có gốc `rootId`).
+ * Việc TÍNH LẠI toạ độ xảy ra tự động qua chuỗi phản ứng có sẵn (dispatch ->
+ * notify -> fullRefresh -> applyLayout, applyLayout đọc bố cục theo từng cây).
  */
 export class SetLayoutTypeCommand implements Command {
   readonly label = "Đổi bố cục";
-  private oldValue: LayoutType = "logicRight";
-  constructor(private readonly newValue: LayoutType) {}
+  private old: TreeSettingsSnapshot | null = null;
+  constructor(private readonly newValue: LayoutType, private readonly rootId: string | null = null) {}
 
   apply(map: MindMap): void {
-    this.oldValue = map.layoutType;
-    map.layoutType = this.newValue;
+    this.old = snapshotTreeSettings(map);
+    writeTreeSettings(map, this.rootId ?? map.rootId, { layoutType: this.newValue });
   }
   revert(map: MindMap): void {
-    map.layoutType = this.oldValue;
+    if (this.old) restoreTreeSettings(map, this.old);
   }
 }
 

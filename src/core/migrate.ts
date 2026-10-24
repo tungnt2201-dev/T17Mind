@@ -17,6 +17,7 @@ import { CURRENT_SCHEMA_VERSION } from "./types";
 import type { MindMap } from "./types";
 import { generateMapId, generateTagId } from "./tree";
 import { sanitizeTheme } from "./theme";
+import { sanitizeTreeSettings } from "./treeSettings";
 import { normalizeVisual } from "./boundaryVisual";
 
 type UnknownRecord = Record<string, unknown>;
@@ -517,6 +518,11 @@ function migrateV20toV21(raw: UnknownRecord): UnknownRecord {
   return { ...raw, schemaVersion: 21, customTheme: sanitizeTheme(raw.customTheme) };
 }
 
+/** Phiên bản 21 -> 22: cài đặt bố cục/theme/tự nhiên riêng cho từng nhánh trôi (`treeSettings`), ban đầu rỗng — nhánh trôi vẫn theo cây chính như trước. */
+function migrateV21toV22(raw: UnknownRecord): UnknownRecord {
+  return { ...raw, schemaVersion: 22, treeSettings: {} };
+}
+
 const MIGRATIONS: Record<number, MigrationFn> = {
   0: migrateV0toV1,
   1: migrateV1toV2,
@@ -539,6 +545,7 @@ const MIGRATIONS: Record<number, MigrationFn> = {
   18: migrateV18toV19,
   19: migrateV19toV20,
   20: migrateV20toV21,
+  21: migrateV21toV22,
 };
 
 /**
@@ -591,6 +598,7 @@ export function migrateToLatest(raw: UnknownRecord): MindMap {
   if (typeof safe.assets !== "object" || safe.assets === null) safe.assets = {};
   if (typeof safe.activeThemeId !== "string") safe.activeThemeId = null;
   safe.customTheme = sanitizeTheme(safe.customTheme);
+  safe.treeSettings = sanitizeTreeSettings(safe.treeSettings, new Set(Object.keys((safe.nodes as object) ?? {})));
   // Nhóm trực quan: `visual` là tuỳ chọn thêm sau (không đổi schema) — làm sạch khi đọc file; hỏng/thiếu = hình chữ nhật cũ.
   for (const b of safe.boundaries as UnknownRecord[]) {
     if (b && typeof b === "object" && "visual" in b) {

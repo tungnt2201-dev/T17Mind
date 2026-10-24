@@ -673,3 +673,10 @@ input[type="file"] {
 .card-usage-link:hover { background: #eef3fe; }
 .menu-key { margin-left: auto; padding-left: 18px; color: #9aa1ab; font-size: 11px; }
 #side-panel .card-open-page { width: 100%; margin: 0 0 6px; }
+
+/* Chip báo cây đang áp dụng cho Bố cục / Tự nhiên / Theme (schema 22) */
+.tbar-tree {
+  display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 999px; font-size: 12px; white-space: nowrap;
+  background: #eef3fe; color: #2f6fed; border: 1px solid #c9d9fb; cursor: help;
+}
+.tbar-tree.floating { background: #fdf3e3; color: #b7791f; border-color: #f0d9a8; }

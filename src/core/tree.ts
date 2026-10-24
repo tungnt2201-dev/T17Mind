@@ -113,6 +113,7 @@ export function createEmptyMap(title: string): MindMap {
     organicEdges: false,
     activeThemeId: null,
     customTheme: null,
+    treeSettings: {},
   };
 }
 

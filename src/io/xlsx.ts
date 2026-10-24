@@ -337,6 +337,7 @@ function buildMapFromRows(rows: RawRow[], sheetName: string): ImportResult {
       organicEdges: false,
       activeThemeId: null,
       customTheme: null,
+      treeSettings: {},
     },
   };
 }

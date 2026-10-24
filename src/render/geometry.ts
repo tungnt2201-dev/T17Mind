@@ -10,6 +10,7 @@
 import type { MindMap, MindNode, Summary, Boundary, BoundaryMode } from "../core/types";
 import type { Pt, Region } from "./adaptiveBoundary";
 import { isVerticalLayout } from "../core/types";
+import { layoutOfNode } from "../core/treeSettings";
 import { visibleRepresentativeId } from "../core/tree";
 export { visibleRepresentativeId };
 import { collectSubtreeIds, collectVisibleNodeIds, getRootIds, getNodeDepth } from "../core/tree";
@@ -94,8 +95,9 @@ export function parentChildEdgeAnchors(
   parent: MindNode,
   child: MindNode
 ): { sx: number; sy: number; ex: number; ey: number } {
-  if (isVerticalLayout(map.layoutType)) {
-    if (map.layoutType === "treeUp") {
+  const layoutType = layoutOfNode(map, parent.id);
+  if (isVerticalLayout(layoutType)) {
+    if (layoutType === "treeUp") {
       // P2.7c — soi gương treeDown: nối từ ĐỈNH cha (mép "ra ngoài",
       // xa gốc hơn) tới ĐÁY con (mép "vào trong", gần gốc hơn) — con
       // nằm PHÍA TRÊN cha trong bố cục này.
@@ -118,10 +120,10 @@ export function parentChildEdgeAnchors(
   const ey = child.y + child.height / 2;
 
   let childIsLeft: boolean;
-  if (map.layoutType === "logicBoth") {
+  if (layoutType === "logicBoth") {
     childIsLeft = child.x + child.width <= parent.x;
   } else {
-    childIsLeft = map.layoutType === "logicLeft";
+    childIsLeft = layoutType === "logicLeft";
   }
 
   if (childIsLeft) {
@@ -317,7 +319,6 @@ export function computeDropTarget(
   // mọi layout khác), nên khe hở giữa 2 anh em liên tiếp cũng nằm
   // theo trục X, không phải trục Y — phải đảo hẳn cách dò so với logic
   // gốc (viết cho layout ngang, nơi anh em xếp CỘT DỌC).
-  const isVertical = isVerticalLayout(map.layoutType);
 
   // 1) Khe giữa hai anh em liên tiếp — ưu tiên kiểm tra trước vì vùng
   //    nhạy của nó hẹp, nếu để hit-test thân node chạy trước sẽ nuốt mất.
@@ -332,7 +333,8 @@ export function computeDropTarget(
       .filter((n): n is MindNode => Boolean(n));
     if (childNodes.length < 2) continue;
 
-    if (isVertical) {
+    // Bố cục của CÂY chứa node cha (mỗi cây có thể một kiểu).
+    if (isVerticalLayout(layoutOfNode(map, parentId))) {
       // Anh em xếp ngang (trái->phải theo đúng thứ tự mảng, xem
       // layoutSubtreeDown) — kiểm dải Y CHUNG trước, rồi tìm khe theo X.
       const top = Math.min(...childNodes.map((n) => n.y)) - GAP_SLACK;

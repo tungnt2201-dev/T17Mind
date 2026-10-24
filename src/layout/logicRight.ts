@@ -27,8 +27,9 @@ const V_GAP = 16; // khoảng cách dọc giữa hai node anh em
  * một nhánh trôi đi chỗ khác chỉ là đổi offsetX/offsetY của gốc đó,
  * giống hệt kéo một node thường.
  */
-export function layoutLogicRight(map: MindMap): void {
-  for (const rootId of getRootIds(map)) {
+/** `rootIds`: các cây cần xếp (mặc định mọi cây) — applyLayout gọi riêng cho từng nhóm cây cùng bố cục. */
+export function layoutLogicRight(map: MindMap, rootIds: string[] = getRootIds(map)): void {
+  for (const rootId of rootIds) {
     layoutSubtreeRight(map, rootId, 0, 0);
   }
 }
