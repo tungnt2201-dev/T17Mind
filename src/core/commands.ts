@@ -34,6 +34,7 @@ import type {
   Relationship,
   Summary,
   Boundary,
+  BoundaryVisualOptions,
   StickyNote,
   LayoutType,
   TagDef,
@@ -57,6 +58,7 @@ import {
 import type { ClipboardNode } from "./clipboard";
 import { clipboardNodeToTree } from "./clipboard";
 import { remapLinks } from "./links";
+import { normalizeVisual } from "./boundaryVisual";
 import {
   findTheme,
   branchHue,
@@ -1274,9 +1276,10 @@ export class UpdateSummaryCommand implements Command {
 // =====================================================================
 
 export class AddBoundaryCommand implements Command {
-  readonly label = "Tạo khoanh vùng";
+  readonly label = "Tạo nhóm trực quan";
   private created: Boundary | null = null;
-  constructor(private readonly nodeIds: string[], private readonly initialLabel: string) {}
+  /** `visual`: cách vẽ nhóm mới (bỏ trống = hình chữ nhật cũ; giao diện truyền `defaultVisual()` = nhiều vùng thích nghi). */
+  constructor(private readonly nodeIds: string[], private readonly initialLabel: string, private readonly visual?: BoundaryVisualOptions) {}
 
   apply(map: MindMap): void {
     const boundary: Boundary = this.created ?? {
@@ -1285,6 +1288,7 @@ export class AddBoundaryCommand implements Command {
       label: this.initialLabel,
       fillColor: "#fdf2ce",
       borderColor: "#e8b923",
+      ...(this.visual ? { visual: normalizeVisual(this.visual) } : {}),
     };
     this.created = boundary;
     if (!map.boundaries.some((b) => b.id === boundary.id)) map.boundaries.push(boundary);
@@ -1319,10 +1323,10 @@ export class DeleteBoundaryCommand implements Command {
   }
 }
 
-export type BoundaryPatch = Partial<Pick<Boundary, "label" | "fillColor" | "borderColor">>;
+export type BoundaryPatch = Partial<Pick<Boundary, "label" | "fillColor" | "borderColor" | "visual">>;
 
 export class UpdateBoundaryCommand implements Command {
-  readonly label = "Sửa khoanh vùng";
+  readonly label = "Sửa nhóm trực quan";
   private oldValues: BoundaryPatch = {};
   constructor(private readonly boundaryId: string, private readonly patch: BoundaryPatch) {}
 
@@ -1331,8 +1335,9 @@ export class UpdateBoundaryCommand implements Command {
     if (!boundary) return;
     const old: BoundaryPatch = {};
     for (const key of Object.keys(this.patch) as (keyof BoundaryPatch)[]) {
-      (old as unknown as Record<string, unknown>)[key] = boundary[key];
-      (boundary as unknown as Record<string, unknown>)[key] = this.patch[key];
+      (old as unknown as Record<string, unknown>)[key] = key === "visual" ? deepClone(boundary.visual) : boundary[key];
+      // `visual` luôn được làm sạch (kẹp khoảng hợp lệ) trước khi ghi.
+      (boundary as unknown as Record<string, unknown>)[key] = key === "visual" ? normalizeVisual(this.patch.visual) : this.patch[key];
     }
     this.oldValues = old;
   }
@@ -1340,7 +1345,9 @@ export class UpdateBoundaryCommand implements Command {
     const boundary = map.boundaries.find((b) => b.id === this.boundaryId);
     if (!boundary) return;
     for (const key of Object.keys(this.oldValues) as (keyof BoundaryPatch)[]) {
-      (boundary as unknown as Record<string, unknown>)[key] = this.oldValues[key];
+      const v = this.oldValues[key];
+      if (key === "visual" && v === undefined) delete boundary.visual;
+      else (boundary as unknown as Record<string, unknown>)[key] = key === "visual" ? deepClone(v) : v;
     }
   }
 }

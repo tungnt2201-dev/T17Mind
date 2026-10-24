@@ -19,12 +19,17 @@
  * nhiên" (luôn dùng nét đều, không thon dần), quan hệ chéo, tóm tắt,
  * khoanh vùng, ghi chú dán — đây là bản xuất "khung + chữ + đường
  * nối", không phải xuất đầy đủ mọi lớp trang trí.
+ * Nhóm trực quan (Khoanh vùng) CÓ được xuất, đúng theo kiểu vẽ của từng nhóm: hình chữ nhật cũ,
+ * nhiều vùng bao thích nghi (E, đường dẫn bo góc, tô evenodd) hoặc phân tán (F, viền + chip);
+ * thành viên bị ẩn sau nhánh thu gọn hiện thành chip ở node đại diện, y như trên canvas.
  * ---------------------------------------------------------------------
  */
 import type { MindMap } from "../core/types";
 import { isVerticalLayout } from "../core/types";
 import { collectVisibleNodeIds } from "../core/tree";
 import { parentChildEdgeAnchors, computeEdgeWidth } from "../render/geometry";
+import { computeGroupGeometry } from "../render/groupGeometry";
+import { effectiveVisual } from "../core/boundaryVisual";
 
 function escapeXml(text: string): string {
   return text
@@ -55,6 +60,15 @@ export function exportSvg(map: MindMap): string {
     maxX = 100;
     maxY = 100;
   }
+  // Nhóm trực quan có thể lòi ra ngoài các node (vùng bao, nhãn, chip) — mở rộng khung cho vừa.
+  const groupGeoms = map.boundaries.map((b) => ({ b, g: computeGroupGeometry(map, b) }));
+  for (const { g } of groupGeoms) {
+    if (!g) continue;
+    minX = Math.min(minX, g.x);
+    minY = Math.min(minY, g.y);
+    maxX = Math.max(maxX, g.x + g.width);
+    maxY = Math.max(maxY, g.y + g.height);
+  }
 
   const PADDING = 40;
   const width = Math.round(maxX - minX + PADDING * 2);
@@ -67,6 +81,43 @@ export function exportSvg(map: MindMap): string {
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" font-family="-apple-system, Segoe UI, Roboto, sans-serif">`
   );
   parts.push(`<rect x="0" y="0" width="${width}" height="${height}" fill="#f6f7f9"/>`);
+
+  // --- Nhóm trực quan (dưới đường nối và node, như canvas) ---
+  const groupParts: string[] = [];
+  const tr = (v: number, off: number): number => Math.round((v + off) * 100) / 100;
+  for (const { b, g } of groupGeoms) {
+    if (!g) continue;
+    const mode = g.mode ?? "rectangle";
+    const v = effectiveVisual(b);
+    const fill = b.fillColor || "#fdf2ce";
+    const border = b.borderColor || "#e8b923";
+    groupParts.push(`<g data-group="${escapeXml(b.id)}">`);
+    if (mode === "rectangle") {
+      groupParts.push(`<rect x="${tr(g.x, offsetX)}" y="${tr(g.y, offsetY)}" width="${g.width}" height="${g.height}" rx="16" fill="${fill}" stroke="${border}" stroke-width="1.6" stroke-dasharray="5,4"/>`);
+    } else if (mode === "multiContour") {
+      for (const region of g.regions ?? []) {
+        groupParts.push(
+          `<path d="${region.path}" transform="translate(${offsetX} ${offsetY})" fill-rule="evenodd" fill="${fill}" fill-opacity="${v.fillOpacity}" stroke="${border}" stroke-width="1.6" stroke-dasharray="5,4"/>`
+        );
+      }
+    } else {
+      for (const o of g.memberOutlines ?? []) {
+        groupParts.push(
+          `<rect x="${tr(o.x, offsetX)}" y="${tr(o.y, offsetY)}" width="${o.width}" height="${o.height}" rx="11" fill="${fill}" fill-opacity="${Math.min(0.5, v.fillOpacity * 0.6)}" stroke="${border}" stroke-width="1.8"/>`
+        );
+      }
+    }
+    for (const [p, q] of g.connectors ?? []) {
+      groupParts.push(`<line x1="${tr(p.x, offsetX)}" y1="${tr(p.y, offsetY)}" x2="${tr(q.x, offsetX)}" y2="${tr(q.y, offsetY)}" stroke="${border}" stroke-opacity="0.55" stroke-width="1" stroke-dasharray="3,5"/>`);
+    }
+    const chipSvg = (x: number, y: number, w: number, h: number, text: string, fs: number, r: number): string =>
+      `<rect x="${tr(x, offsetX)}" y="${tr(y, offsetY)}" width="${w}" height="${h}" rx="${r}" fill="${border}"/>` +
+      `<text x="${tr(x + w / 2, offsetX)}" y="${tr(y + h / 2, offsetY)}" text-anchor="middle" dominant-baseline="central" font-size="${fs}" font-weight="600" fill="#ffffff">${escapeXml(text)}</text>`;
+    groupParts.push(chipSvg(g.labelX, g.labelY, g.labelW, g.labelH, b.label || (mode === "rectangle" ? "Khoanh vùng" : "Nhóm"), 12, 7));
+    for (const c of g.chips ?? []) groupParts.push(chipSvg(c.x, c.y, c.w, c.h, c.text, 11, 9));
+    groupParts.push(`</g>`);
+  }
+  parts.push(`<g>${groupParts.join("")}</g>`);
 
   // --- Đường nối TRƯỚC (dưới node) — đúng thứ tự vẽ như canvas. ---
   const edgeParts: string[] = [];
