@@ -8,7 +8,7 @@
  * zip cùng file .md), "none" (bỏ ảnh). Hàm THUẦN, không cần DOM/zip.
  * ---------------------------------------------------------------------
  */
-import type { DocBlock, DocModel } from "../core/docModel";
+import { chartDocTable, type DocBlock, type DocModel } from "../core/docModel";
 
 export type MarkdownImageMode = "embed" | "files" | "none";
 
@@ -94,6 +94,9 @@ export function renderMarkdown(doc: DocModel, imageMode: MarkdownImageMode = "fi
       }
       case "table":
         parts.push({ text: tableMarkdown(b, "  ".repeat(b.indent)), tight: false });
+        break;
+      case "chart":
+        parts.push({ text: tableMarkdown(chartDocTable(b), "  ".repeat(b.indent)), tight: false });
         break;
       case "image": {
         if (imageMode === "none") break;

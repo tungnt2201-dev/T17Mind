@@ -221,3 +221,43 @@ describe("M5 — nhập Markdown (đi hai chiều)", () => {
     expect(m.nodes[root.children[0]!]!.children.map((id) => m.nodes[id]!.text)).toEqual(["Hai"]);
   });
 });
+
+describe("KW4 — biểu đồ trong tài liệu xuất", () => {
+  function chartMap(): MindMap {
+    const { map, ids } = buildMap();
+    const card = map.cards[map.nodes[ids.a!]!.cardId!]!;
+    const t = card.blocks.find((b) => b.type === "table")!;
+    card.blocks.push({ id: "ch1", type: "chart", title: "Ngân sách", kind: "bar", tableBlockId: t.id, labelColumn: 0, seriesColumns: [1] });
+    return map;
+  }
+  it("docModel có khối chart với nhãn và số liệu đã đọc từ bảng", () => {
+    const doc = buildDocModel(chartMap(), opts());
+    const ch = doc.blocks.find((b) => b.kind === "chart");
+    expect(ch).toMatchObject({ kind: "chart", title: "Ngân sách", chartKind: "bar", labels: ["Thiết kế", "Ghi chú | có gạch"] });
+    expect(ch && ch.kind === "chart" ? ch.series[0]!.values : null).toEqual([100, null]);
+  });
+  it("Markdown: biểu đồ thành bảng số liệu có tiêu đề", () => {
+    const md = renderMarkdown(buildDocModel(chartMap(), opts()), "none").markdown;
+    expect(md).toContain("**Biểu đồ: Ngân sách**");
+    expect(md).toContain("| Thiết kế | 100 |");
+  });
+  it("Word không có ảnh: biểu đồ thành bảng; có ảnh PNG: thành ảnh (thêm một ImageRun)", async () => {
+    const doc = buildDocModel(chartMap(), opts());
+    const plain = await Packer.toBuffer(buildDocxDocument(doc));
+    const zip1 = await JSZip.loadAsync(plain);
+    const xml1 = await zip1.file("word/document.xml")!.async("string");
+    expect(xml1).toContain("Biểu đồ: Ngân sách");
+    const withPng = { ...doc, blocks: doc.blocks.map((b) => (b.kind === "chart" ? { ...b, png: { dataBase64: PNG, width: 640, height: 360 } } : b)) };
+    const zip2 = await JSZip.loadAsync(await Packer.toBuffer(buildDocxDocument(withPng)));
+    const xml2 = await zip2.file("word/document.xml")!.async("string");
+    expect((xml2.match(/<w:drawing>/g) ?? []).length).toBe((xml1.match(/<w:drawing>/g) ?? []).length + 1);
+    expect(xml2).not.toContain("Biểu đồ: Ngân sách");
+  });
+  it("biểu đồ mồ côi (bảng nguồn mất) vẫn không làm hỏng xuất", () => {
+    const map = chartMap();
+    const card = Object.values(map.cards)[0]!;
+    card.blocks = card.blocks.filter((b) => b.type !== "table");
+    const doc = buildDocModel(map, opts());
+    expect(doc.blocks.some((b) => b.kind === "paragraph" && b.text.startsWith("[Biểu đồ"))).toBe(true);
+  });
+});

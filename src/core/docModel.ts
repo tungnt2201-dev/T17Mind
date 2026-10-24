@@ -9,7 +9,9 @@
  * file.
  * ---------------------------------------------------------------------
  */
-import type { MindMap, MindNode, TableAlign } from "./types";
+import type { ChartKind, MindMap, MindNode, TableAlign, TableBlock } from "./types";
+import { chartDataOf } from "./chartData";
+import { formatNumber } from "./numberParse";
 import { getRootIds } from "./tree";
 import { plainText } from "./links";
 
@@ -56,6 +58,17 @@ export type DocBlock =
       align: TableAlign[];
       colWidths: number[];
       cells: string[][];
+    }
+  | {
+      kind: "chart";
+      indent: number;
+      outline: number;
+      title: string;
+      chartKind: ChartKind;
+      labels: string[];
+      series: { name: string; values: (number | null)[] }[];
+      /** Ảnh PNG của biểu đồ — do tầng giao diện vẽ (canvas) rồi gắn vào trước khi xuất Word; không có thì xuất bảng số liệu. */
+      png?: { dataBase64: string; width: number; height: number };
     }
   | { kind: "image"; indent: number; outline: number; assetId: string; mimeType: string; dataBase64: string; caption: string; width: number | null; height: number | null }
   | { kind: "toc" };
@@ -121,7 +134,21 @@ export function buildDocModel(map: MindMap, opts: DocOptions): DocModel {
           height: typeof asset.height === "number" ? asset.height : null,
         });
       } else if (b.type === "chart") {
-        blocks.push({ kind: "paragraph", text: `[Biểu đồ${b.title ? `: ${b.title}` : ""}]`, indent, outline });
+        const src = card.blocks.find((x): x is TableBlock => x.type === "table" && x.id === b.tableBlockId);
+        if (!src) {
+          blocks.push({ kind: "paragraph", text: `[Biểu đồ${b.title ? `: ${b.title}` : ""}]`, indent, outline });
+          continue;
+        }
+        const d = chartDataOf(src, b);
+        blocks.push({
+          kind: "chart",
+          indent,
+          outline,
+          title: b.title,
+          chartKind: b.kind,
+          labels: d.labels,
+          series: d.series.map((x) => ({ name: x.name, values: x.values })),
+        });
       }
     }
   };
@@ -185,4 +212,22 @@ export function docStats(doc: DocModel): { headings: number; listItems: number; 
     } else if (b.kind === "image") images++;
   }
   return { headings, listItems, tables, tableRows, images };
+}
+
+
+/** Bảng số liệu của một khối biểu đồ — dùng khi xuất không có ảnh (Markdown, Word thiếu ảnh). */
+export function chartDocTable(b: Extract<DocBlock, { kind: "chart" }>): Extract<DocBlock, { kind: "table" }> {
+  const cols = b.series.length + 1;
+  const cells: string[][] = [["", ...b.series.map((s) => s.name)]];
+  b.labels.forEach((l, i) => cells.push([l, ...b.series.map((s) => (s.values[i] === null || s.values[i] === undefined ? "" : formatNumber(s.values[i]!, 4, "en-US")))]));
+  return {
+    kind: "table",
+    indent: b.indent,
+    outline: b.outline,
+    title: b.title ? `Biểu đồ: ${b.title}` : "Biểu đồ",
+    headerRow: true,
+    align: ["left", ...b.series.map((): TableAlign => "right")],
+    colWidths: Array.from({ length: cols }, () => 100),
+    cells,
+  };
 }

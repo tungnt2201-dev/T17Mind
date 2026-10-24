@@ -25,7 +25,7 @@ import {
   TextRun,
   WidthType,
 } from "docx";
-import { maxOutline, outlineIndentStep, type DocBlock, type DocModel } from "../core/docModel";
+import { chartDocTable, maxOutline, outlineIndentStep, type DocBlock, type DocModel } from "../core/docModel";
 import type { TableAlign } from "../core/types";
 
 /** Bề rộng vùng chữ trang A4/Letter lề 1 inch ≈ 6.5 inch = 9360 dxa (1/20 pt). */
@@ -43,7 +43,7 @@ const BULLET_HANG_DXA = 283;
  */
 type IndentOf = (b: Exclude<DocBlock, { kind: "toc" }>) => number;
 function indentPlan(doc: DocModel, byLevel: boolean): IndentOf {
-  if (!byLevel) return (b) => (b.kind === "paragraph" || b.kind === "image" || b.kind === "table" ? b.indent * INDENT_DXA : 0);
+  if (!byLevel) return (b) => (b.kind === "paragraph" || b.kind === "image" || b.kind === "table" || b.kind === "chart" ? b.indent * INDENT_DXA : 0);
   const step = outlineIndentStep(maxOutline(doc), TEXT_WIDTH_DXA);
   return (b) => b.outline * step;
 }
@@ -157,6 +157,20 @@ export function buildDocxDocument(doc: DocModel, indentByLevel = true): Document
         break;
       case "image":
         children.push(...imageFor(b, left));
+        break;
+      case "chart":
+        if (b.png) {
+          const img: Extract<DocBlock, { kind: "image" }> = {
+            kind: "image", indent: b.indent, outline: b.outline, assetId: "", mimeType: "image/png",
+            dataBase64: b.png.dataBase64, caption: b.title, width: b.png.width, height: b.png.height,
+          };
+          children.push(...imageFor(img, left));
+        } else {
+          const t = chartDocTable(b);
+          children.push(new Paragraph({ indent: left ? { left } : undefined, children: [new TextRun({ text: t.title, bold: true })] }));
+          children.push(tableFor(t, left));
+          children.push(new Paragraph({ children: [] }));
+        }
         break;
     }
   }

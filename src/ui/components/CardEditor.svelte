@@ -25,9 +25,10 @@
     RemoveBlockCommand,
     MoveBlockCommand,
   } from "../../core/cardCommands";
-  import { createTextBlock, createTableBlock, summarizeBlock } from "../../core/cards";
+  import { createTextBlock, createTableBlock, createChartForCard, summarizeBlock } from "../../core/cards";
   import type { Block, ImageDisplaySize } from "../../core/types";
   import MentionTextarea from "./MentionTextarea.svelte";
+  import ChartBlockEditor from "./ChartBlockEditor.svelte";
 
   export let store: Store;
   export let controller: AppController;
@@ -59,6 +60,15 @@
   }
   function addTable(cardId: string): void {
     store.dispatch(new AddBlockCommand(cardId, createTableBlock(3, 3)));
+  }
+  function addChart(): void {
+    if (!card) return;
+    const chart = createChartForCard(card);
+    if (!chart) {
+      void showAlert("Biểu đồ lấy số liệu từ một bảng — hãy thêm bảng vào card trước.");
+      return;
+    }
+    store.dispatch(new AddBlockCommand(card.id, chart));
   }
   function openTable(cardId: string, blockId: string): void {
     tableEditorStore.set({ cardId, blockId });
@@ -149,6 +159,8 @@
                 </select>
               </div>
             </div>
+          {:else if b.type === "chart"}
+            <ChartBlockEditor {store} {card} block={b} width={380} height={220} />
           {:else}
             <div class="muted">{summarizeBlock(b)}</div>
           {/if}
@@ -159,6 +171,8 @@
     <div class="card-add">
       <button type="button" class="btn small-btn" on:click={() => addText(card.id)}>+ Văn bản</button>
       <button type="button" class="btn small-btn" on:click={() => addTable(card.id)}>+ Bảng 3×3</button>
+      <button type="button" class="btn small-btn" title="Thêm biểu đồ vẽ từ số liệu của bảng trong card"
+        on:click={addChart}>+ Biểu đồ</button>
       <button type="button" class="btn small-btn" title="Thêm bảng từ file CSV/TSV (xuất từ Excel, Google Sheets)"
         on:click={() => csvInput?.click()}>Nhập CSV…</button>
       <input bind:this={csvInput} type="file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values" hidden

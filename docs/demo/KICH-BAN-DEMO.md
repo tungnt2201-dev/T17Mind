@@ -110,5 +110,21 @@ Mở **`T17Mind-nhom-truc-quan.t17m`** (cùng thư mục): cùng bản đồ Gi�
 
 ## Lưu ý khi trình diễn
 
-- Biểu đồ trong card *Doanh thu dự kiến* tạm hiện dạng chữ. Hình biểu đồ bên cạnh là ảnh minh họa; biểu đồ thật sẽ có ở bước M4.
+- Biểu đồ (KW4) vẽ thật từ số liệu bảng trong card — xem file `T17Mind-bieu-do.t17m` (cột / đường / tròn). Ảnh minh họa cũ trong demo chính chỉ là ảnh tĩnh.
 - Mỗi lần demo nên mở lại file gốc để có trạng thái sạch. Đừng bấm Lưu đè nếu muốn giữ nguyên file demo.
+
+
+## Bước 12 — Biểu đồ (KW4)
+Mở `T17Mind-bieu-do.t17m`: 3 node, mỗi node một card gồm bảng + biểu đồ (cột, đường, tròn); thẻ biểu đồ vẽ ngay trên node.
+1. Bấm vào biểu đồ trên node → trang card mở, thấy bảng và biểu đồ phía dưới.
+2. Sửa một số trong bảng ("Sửa bảng…") → biểu đồ và thẻ trên node đổi theo.
+3. Đổi "Biểu đồ Cột" → "Đường"; bỏ tick cột "Chi phí"; đổi tiêu đề. Đóng trang, Ctrl+Z từng bước.
+4. "Tải SVG", "Tải PNG"; Xuất → Word: biểu đồ là ảnh trong file .docx; Xuất → Markdown: biểu đồ thành bảng số liệu.
+5. Thêm biểu đồ mới: nút "Biểu đồ" cuối trang card (card cần có bảng).
+
+### Checklist kiểm thử tay (KW4)
+- [ ] Thẻ biểu đồ hiện trên node (cột/đường/tròn), kéo node nhỏ lại: biểu đồ co lại rồi chuyển thành biểu tượng
+- [ ] Ô không phải số (chữ, trống) được bỏ qua, không lỗi; số kiểu 1.234,5 và 1,234.5 đều đọc đúng
+- [ ] Chèn/xoá cột trong bảng: biểu đồ giữ đúng cột; xoá bảng thì biểu đồ đi theo
+- [ ] Mọi thao tác biểu đồ hoàn tác được; lưu/mở lại file vẫn còn
+- [ ] Word mở được, biểu đồ hiện rõ nét; Markdown có bảng số liệu
