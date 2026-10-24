@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeViewportWorldRect, isRectVisibleInViewport, computeDropTarget } from "./geometry";
+import { computeViewportWorldRect, isRectVisibleInViewport, computeDropTarget, summaryGeometry } from "./geometry";
 import { createEmptyMap, createNode } from "../core/tree";
 import type { MindMap, MindNode } from "../core/types";
 
@@ -135,3 +135,56 @@ describe("computeViewportWorldRect / isRectVisibleInViewport (P1.13)", () => {
     expect(isRectVisibleInViewport({ x: -50, y: 100, width: 170, height: 46 }, viewport, 0)).toBe(true);
   });
 });
+
+describe("summaryGeometry — ngoặc tóm tắt ra phía ngoài (cây hai bên)", () => {
+  /** Gốc ở x=500; hai node con bên phải (x=700) và hai bên trái (x=200, rộng 100 → mép phải 300 <= 500). */
+  function twoSided() {
+    const map = createEmptyMap("Gốc");
+    const root = map.nodes[map.rootId] as MindNode;
+    root.x = 500;
+    root.width = 100;
+    root.height = 40;
+    const mk = (text: string, x: number, y: number) => {
+      const n = createNode(text, root.id);
+      n.x = x;
+      n.y = y;
+      n.width = 100;
+      n.height = 40;
+      map.nodes[n.id] = n;
+      root.children.push(n.id);
+      return n;
+    };
+    return { map, r1: mk("R1", 700, 0), r2: mk("R2", 720, 60), l1: mk("L1", 200, 0), l2: mk("L2", 180, 60) };
+  }
+
+  it("node bên phải: ngoặc và nhãn nằm bên phải, như trước", () => {
+    const { map, r1, r2 } = twoSided();
+    const g = summaryGeometry(map, { id: "s", nodeIds: [r1.id, r2.id], label: "Nhóm", color: null })!;
+    expect(g.side).toBe("right");
+    expect(g.braceX).toBe(820 + 22);
+    expect(g.labelX).toBeGreaterThan(g.tipX);
+    expect(g.tipX).toBeGreaterThan(g.braceX);
+  });
+
+  it("node bên trái cha: ngoặc và nhãn nằm bên TRÁI các node (ra ngoài), đối xứng với bên phải", () => {
+    const { map, l1, l2 } = twoSided();
+    const label = "Nhóm";
+    const g = summaryGeometry(map, { id: "s", nodeIds: [l1.id, l2.id], label, color: null })!;
+    expect(g.side).toBe("left");
+    expect(g.braceX).toBe(180 - 22); // sau mép trái node trái nhất
+    expect(g.tipX).toBe(g.braceX - 16);
+    expect(g.labelX + g.labelW).toBe(g.tipX - 26); // hộp nhãn kết thúc trước mũi nhọn, nằm hẳn bên trái
+    expect(g.labelX + g.labelW).toBeLessThan(180); // không đè lên node
+    expect(g.minY).toBe(0);
+    expect(g.maxY).toBe(100);
+    expect(g.tipY).toBe(50);
+  });
+
+  it("lẫn hai phía: theo phía của đa số node; gốc/node không có cha coi là bên phải", () => {
+    const { map, r1, l1, l2 } = twoSided();
+    expect(summaryGeometry(map, { id: "s", nodeIds: [l1.id, l2.id, r1.id], label: "", color: null })!.side).toBe("left");
+    const root = map.nodes[map.rootId] as MindNode;
+    expect(summaryGeometry(map, { id: "s", nodeIds: [root.id, r1.id], label: "", color: null })!.side).toBe("right");
+  });
+});
+

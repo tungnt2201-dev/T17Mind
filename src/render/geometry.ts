@@ -190,6 +190,9 @@ export function cubicBezierTangent(p0: Point, p1: Point, p2: Point, p3: Point, t
 }
 
 export interface SummaryGeometry {
+  /** Phía của ngoặc so với các node được tóm tắt: "right" (mặc định) hoặc "left"
+   *  (node nằm bên trái cha — Logic Left, hoặc nửa trái của Logic Both Sides). */
+  side: "right" | "left";
   braceX: number;
   minY: number;
   maxY: number;
@@ -199,6 +202,12 @@ export interface SummaryGeometry {
   labelY: number;
   labelW: number;
   labelH: number;
+}
+
+/** Node nằm hoàn toàn bên trái node cha (cùng quy ước với CanvasRenderer#isNodeLeftOriented). */
+function isLeftOfParent(map: MindMap, n: MindNode): boolean {
+  const parent = n.parentId ? map.nodes[n.parentId] : null;
+  return parent ? n.x + n.width <= parent.x : false;
 }
 
 /** Tính hình học ngoặc + hộp nhãn cho một Summary, dựa trên vị trí
@@ -212,19 +221,27 @@ export function summaryGeometry(map: MindMap, s: Summary): SummaryGeometry | nul
   const nodes = visibleIds.map((id) => map.nodes[id]).filter((n): n is MindNode => Boolean(n));
   if (nodes.length < 2) return null;
 
-  const maxRight = Math.max(...nodes.map((n) => n.x + n.width));
+  // Node ở bên TRÁI cha của nó (cây trái / nửa trái của cây hai bên) thì ngoặc
+  // và hộp nhãn phải ra phía NGOÀI, tức bên trái — không đè lên phía cha.
+  const onLeft = nodes.filter((n) => isLeftOfParent(map, n)).length > nodes.length / 2;
+  const side: "right" | "left" = onLeft ? "left" : "right";
   const minY = Math.min(...nodes.map((n) => n.y));
   const maxY = Math.max(...nodes.map((n) => n.y + n.height));
-  const braceX = maxRight + 22;
   const mid = (minY + maxY) / 2;
-  const tipX = braceX + 16;
-  const tipY = mid;
   const labelW = Math.max(70, Math.min(220, (s.label || "Tóm tắt").length * 7.5 + 28));
   const labelH = 30;
-  const labelX = tipX + 26;
+  const tipY = mid;
   const labelY = tipY - labelH / 2;
-
-  return { braceX, minY, maxY, tipX, tipY, labelX, labelY, labelW, labelH };
+  if (onLeft) {
+    const minLeft = Math.min(...nodes.map((n) => n.x));
+    const braceX = minLeft - 22;
+    const tipX = braceX - 16;
+    return { side, braceX, minY, maxY, tipX, tipY, labelX: tipX - 26 - labelW, labelY, labelW, labelH };
+  }
+  const maxRight = Math.max(...nodes.map((n) => n.x + n.width));
+  const braceX = maxRight + 22;
+  const tipX = braceX + 16;
+  return { side, braceX, minY, maxY, tipX, tipY, labelX: tipX + 26, labelY, labelW, labelH };
 }
 
 // ---------------------------------------------------------------------
