@@ -19,7 +19,8 @@
   import { downloadText, downloadBlob } from "../dom";
   import { toDelimited } from "../../core/table";
   import { generateOptionId } from "../../core/tree";
-  import { AddTagFieldCommand, RemoveTagFieldCommand, SetFieldValueCommand, UpdateTagFieldCommand } from "../../core/tagDbCommands";
+  import { AddTagFieldCommand, RemoveTagFieldCommand, SetFieldValueCommand, SetTagOrderCommand, UpdateTagFieldCommand } from "../../core/tagDbCommands";
+  import { CompositeCommand } from "../../core/commands";
   import {
     FIELD_TYPE_LABEL,
     FILTER_OP_LABEL,
@@ -32,6 +33,8 @@
     displayValue,
     groupByAny,
     groupByField,
+    moveInOrder,
+    orderRows,
     hasOptions,
     normalizeFieldValue,
     opsFor,
@@ -72,6 +75,7 @@
   let bulkValue = "";
   let dragId: string | null = null;
   let overKey: string | null = null;
+  let overCard: string | null = null;
   let newFieldName = "";
   let newFieldType: TagFieldType = "text";
   let wasOpen = false;
@@ -117,7 +121,9 @@
   $: groupField = fields.find((f) => f.id === groupKey) ?? null;
   $: groups = groupField ? groupByAny(rows, groupField) : null;
   $: kanbanField = choiceFields.find((f) => f.id === kanbanFieldId) ?? choiceFields[0] ?? null;
-  $: columns = kanbanField ? groupByField(rows, kanbanField, true) : [];
+  // Kanban xếp thẻ theo thứ tự kéo-thả thủ công (tag.order), bỏ qua "sắp xếp" của Bảng; bộ lọc vẫn áp dụng.
+  $: kanbanRows = orderRows(applyFilters(allRows, filters, fields), tag?.order);
+  $: columns = kanbanField ? groupByField(kanbanRows, kanbanField, true) : [];
   $: chartField = choiceFields.find((f) => f.id === chartFieldId) ?? choiceFields[0] ?? null;
   $: measure = parseMeasure(chartMeasure);
   $: chartSvg = chartField
@@ -156,11 +162,27 @@
     if (!bulkField || visibleSelected.length === 0) return;
     if (setValue(visibleSelected.map((r) => r.nodeId), bulkField, bulkValue)) showNotice(`Đã đặt "${bulkField.name}" cho ${visibleSelected.length} dòng.`);
   }
-  function dropOn(g: DbGroup): void {
+  /** Thả thẻ vào cột `g`: trước thẻ `beforeId`, hoặc cuối cột nếu null. Đổi giá trị cột (nếu khác) và thứ tự trong MỘT bước hoàn tác. */
+  function dropCard(g: DbGroup, beforeId: string | null): void {
     const id = dragId;
     dragId = null;
     overKey = null;
-    if (id && kanbanField) setValue([id], kanbanField, g.key);
+    overCard = null;
+    if (!id || !kanbanField || !tag || id === beforeId) return;
+    const cur = $map.nodes[id]?.fieldValues?.[kanbanField.id] ?? "";
+    const lastInCol = [...g.rows].reverse().find((r) => r.nodeId !== id)?.nodeId ?? null;
+    const anchor = beforeId ? { before: beforeId } : lastInCol ? { after: lastInCol } : null;
+    const effective = orderRows(allRows, tag.order).map((r) => r.nodeId);
+    const next = moveInOrder(tag.order, allRows.map((r) => r.nodeId), id, anchor);
+    const orderChanged = next.length !== effective.length || next.some((x, i) => x !== effective[i]);
+    const valueChanged = cur !== g.key;
+    if (valueChanged && normalizeFieldValue(kanbanField, g.key) === null) return;
+    const cmds = [
+      ...(valueChanged ? [new SetFieldValueCommand([id], kanbanField.id, g.key)] : []),
+      ...(orderChanged ? [new SetTagOrderCommand(tag.id, next)] : []),
+    ];
+    if (cmds.length === 1) store.dispatch(cmds[0]!);
+    else if (cmds.length > 1) store.dispatch(new CompositeCommand(cmds, "Kéo thẻ Kanban"));
   }
 
   // ---------------------------------------------------------- Lọc / sắp xếp / chọn
@@ -308,6 +330,9 @@
               <div class="tdb-field">
                 <input type="text" value={f.name} aria-label="Tên thuộc tính" on:change={(e) => renameField(f, e.currentTarget.value)} />
                 <span class="muted">{FIELD_TYPE_LABEL[f.type]}</span>
+                <label class="tdb-show" title="Hiện giá trị của thuộc tính này thành thẻ nhỏ ngay trên node ở sơ đồ">
+                  <input type="checkbox" checked={f.showOnNode === true} on:change={(e) => tag && store.dispatch(new UpdateTagFieldCommand(tag.id, f.id, { showOnNode: e.currentTarget.checked }))} />
+                  Hiện trên node</label>
                 <button type="button" class="btn danger small-btn" on:click={() => void removeField(f)}>Xoá</button>
                 {#if hasOptions(f.type)}
                   <div class="tdb-options">
@@ -452,19 +477,21 @@
                   {#each choiceFields as f (f.id)}<option value={f.id}>{f.name}</option>{/each}
                 </select>
               </label>
-              <span class="muted">Kéo thẻ sang cột khác để đổi giá trị (Ctrl+Z hoàn tác).</span>
+              <span class="muted">Kéo thẻ sang cột khác để đổi giá trị, kéo lên/xuống để đổi thứ tự (Ctrl+Z hoàn tác).</span>
             </div>
             <div class="tdb-kanban">
               {#each columns as g (g.key)}
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <div class="tdb-col" class:over={overKey === g.key} data-col={g.key}
                   on:dragover|preventDefault={() => (overKey = g.key)} on:dragleave={() => { if (overKey === g.key) overKey = null; }}
-                  on:drop|preventDefault={() => dropOn(g)}>
+                  on:drop|preventDefault={() => dropCard(g, null)}>
                   <div class="tdb-colhead"><span class="tdb-dot" style="background:{g.color}"></span>{g.label} <span class="muted">{g.rows.length}</span></div>
                   {#each g.rows as r (r.nodeId)}
                     <!-- svelte-ignore a11y_no_static_element_interactions -->
-                    <div class="tdb-card" draggable="true" data-node={r.nodeId} class:dragging={dragId === r.nodeId}
-                      on:dragstart={(e) => { dragId = r.nodeId; e.dataTransfer?.setData("text/plain", r.nodeId); }} on:dragend={() => { dragId = null; overKey = null; }}>
+                    <div class="tdb-card" draggable="true" data-node={r.nodeId} class:dragging={dragId === r.nodeId} class:drop-before={overCard === r.nodeId && dragId !== r.nodeId}
+                      on:dragstart={(e) => { dragId = r.nodeId; e.dataTransfer?.setData("text/plain", r.nodeId); }} on:dragend={() => { dragId = null; overKey = null; overCard = null; }}
+                      on:dragover|preventDefault|stopPropagation={() => { overKey = g.key; overCard = r.nodeId; }}
+                      on:drop|preventDefault|stopPropagation={() => dropCard(g, r.nodeId)}>
                       <button type="button" class="tdb-name" on:click={() => goTo(r.nodeId)}>{r.name || "(trống)"}</button>
                       {#each fields.filter((f) => f.id !== kanbanField?.id && (r.values[f.id] ?? "") !== "").slice(0, 3) as f (f.id)}
                         <div class="tdb-meta"><span>{f.name}:</span> {displayValue(f, r.values[f.id])}</div>
@@ -522,6 +549,7 @@
     border: 1px solid #d8dce2; border-radius: 6px; padding: 4px 8px; font: inherit; font-size: 13px; background: #fff; color: #1f2933; min-width: 0;
   }
   .tdb-manage { border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 10px; background: #fafbfc; display: flex; flex-direction: column; gap: 8px; max-height: 32vh; overflow: auto; }
+  .tdb-show { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: #4b5563; }
   .tdb-field { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .tdb-options { flex-basis: 100%; display: flex; gap: 6px; flex-wrap: wrap; padding-left: 8px; }
   .tdb-opt { display: inline-flex; align-items: center; gap: 4px; border: 1px solid #e5e7eb; border-radius: 6px; padding: 2px 4px; background: #fff; }
@@ -554,6 +582,7 @@
   .tdb-colhead { font-weight: 600; font-size: 13px; color: #374151; padding: 2px 4px; }
   .tdb-card { background: #fff; border-radius: 8px; padding: 8px 10px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); cursor: grab; font-size: 13px; }
   .tdb-card.dragging { opacity: 0.45; }
+  .tdb-card.drop-before { box-shadow: 0 -3px 0 0 #2f6fed, 0 1px 3px rgba(0, 0, 0, 0.12); }
   .tdb-meta { font-size: 12px; color: #4b5563; margin-top: 3px; }
   .tdb-meta span { color: #9aa1ab; }
   .tdb-chart { flex: 1; overflow: auto; display: flex; justify-content: center; align-items: flex-start; line-height: 0; }
