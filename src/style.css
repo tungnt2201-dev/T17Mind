@@ -235,6 +235,13 @@ body {
   background: var(--accent-soft);
   color: var(--accent);
 }
+.tbar-icon-btn.danger:hover:not(:disabled) {
+  color: #c0392b;
+}
+.tbar-icon-btn .icon-text {
+  font-size: 15px;
+  line-height: 1;
+}
 .tbar-icon-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
