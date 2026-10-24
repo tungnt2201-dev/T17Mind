@@ -47,6 +47,7 @@
     type TableDraft,
     type CellNavKey,
   } from "../../core/table";
+  import { displayCells, evalTable, hasFormulas, isFormula, cellAddress, FORMULA_ERROR_HINT } from "../../core/formula";
   import type { TableAlign, TableBlock } from "../../core/types";
 
   export let store: Store;
@@ -57,6 +58,8 @@
   let original: TableBlock | null = null;
   let openedFor: string | null = null;
   let active = { r: 0, c: 0 };
+  /** Ô đang gõ: hiện CÔNG THỨC; các ô công thức còn lại hiện KẾT QUẢ (tính lười, chỉ khi bảng có công thức). */
+  let editing: { r: number; c: number } | null = null;
   let gridEl: HTMLDivElement | undefined;
   let modalEl: HTMLDivElement | undefined;
   let csvInput: HTMLInputElement | undefined;
@@ -65,6 +68,7 @@
   $: if (target && openedFor !== `${target.cardId}/${target.blockId}`) load(target.cardId, target.blockId);
   $: if (!target && openedFor !== null) reset();
   $: table = draft?.table ?? null;
+  $: ev = table && hasFormulas(table) ? evalTable(table) : null;
   $: dirty = !!draft && !!original && JSON.stringify(draft.table) !== JSON.stringify(original);
 
   function load(cardId: string, blockId: string): void {
@@ -241,7 +245,7 @@
     if (!draft) return;
     const name = (draft.table.title.trim() || "bang").replace(/[\\/:*?"<>|]+/g, "_");
     // BOM để Excel mở đúng tiếng Việt (UTF-8).
-    downloadText("﻿" + toDelimited(draft.table.cells, ","), `${name}.csv`, "text/csv;charset=utf-8");
+    downloadText("﻿" + toDelimited(displayCells(draft.table), ","), `${name}.csv`, "text/csv;charset=utf-8");
   }
 
   function onModalKeydown(e: KeyboardEvent): void {
@@ -347,10 +351,16 @@
                     on:mousedown={(e) => startResize("row", r, e)} on:dblclick={() => autoFit("row", r)}></span>
                 </th>
                 {#each row as cell, c}
+                  {@const res = ev && isFormula(cell) ? ev.at(r, c) : null}
+                  {@const showResult = res !== null && !(editing && editing.r === r && editing.c === c)}
                   <td class:te-active={r === active.r && c === active.c}>
-                    <textarea rows="1" data-r={r} data-c={c} value={cell} style="text-align:{table.align[c]};width:{table.colWidths[c]}px;height:{table.rowHeights[r]}px"
+                    <textarea rows="1" data-r={r} data-c={c} value={showResult && res ? res.text : cell}
+                      class:te-formula={res !== null} class:te-error={showResult && res?.error != null}
+                      title={res ? (res.error ? `${cell}\n${FORMULA_ERROR_HINT[res.error]}` : cell) : undefined}
+                      style="text-align:{res && !res.error ? 'right' : table.align[c]};width:{table.colWidths[c]}px;height:{table.rowHeights[r]}px"
                       aria-label="Ô {colName(c)}{r + 1}"
-                      on:focus={() => (active = { r, c })}
+                      on:focus={() => { active = { r, c }; editing = { r, c }; }}
+                      on:blur={() => { if (editing && editing.r === r && editing.c === c) editing = null; }}
                       on:input={(e) => onCellInput(r, c, e)}
                       on:keydown={(e) => onCellKeydown(r, c, e)}
                       on:paste={(e) => onCellPaste(r, c, e)}></textarea>
@@ -364,6 +374,7 @@
 
       <p class="te-hint">
         Tab/Shift+Tab: sang ô kế/trước · Enter/Shift+Enter: xuống/lên · Alt+Enter: xuống dòng trong ô ·
+        Công thức: gõ <code>=SUM(B2:B6)</code> (SUM, MIN, MAX, COUNT, AVERAGE, COUNTA, MEDIAN, ROUND, IF; + − × ÷; ô như {cellAddress(1, 1)}, vùng {cellAddress(1, 1)}:{cellAddress(5, 1)}) ·
         Dán vùng ô copy từ Excel/Google Sheets vào ô bất kỳ để rải dữ liệu từ ô đó · Kéo mép tiêu đề cột/số hàng
         để đổi cỡ (bấm đúp: vừa khít chữ) · Ctrl+Enter: lưu
       </p>
@@ -405,6 +416,8 @@
   .te-col-handle:hover, .te-row-handle:hover { background: rgba(47, 111, 237, 0.35); }
   .te-header-row td textarea { font-weight: 600; background: #f8f9fb; }
   .te-grid td.te-active { outline: 2px solid #2f6fed; outline-offset: -2px; }
+  .te-grid td textarea.te-formula { background: #f4f8ff; }
+  .te-grid td textarea.te-error { color: #c0392b; font-weight: 600; }
   .te-hint { margin: 0; font-size: 12px; color: #6b7280; }
   .te-actions { align-items: center; gap: 8px; margin-top: 0; }
   .te-size { margin-right: auto; font-size: 12px; color: #6b7280; }

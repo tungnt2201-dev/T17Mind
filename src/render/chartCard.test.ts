@@ -92,3 +92,14 @@ describe("KW4 — thẻ biểu đồ trên node", () => {
     expect(cardContentOf(map, map.nodes[map.rootId]!)!.chart).toBeNull();
   });
 });
+
+describe("thẻ bảng trên node với ô công thức", () => {
+  it("tableThumbnail hiện kết quả; ô lỗi hiện mã lỗi; dữ liệu gốc giữ nguyên", async () => {
+    const { tableThumbnail } = await import("../core/table");
+    const t = tableFromGrid("t", [["a", "b"], ["10", "=A2*2"], ["1", "=1/0"]]);
+    const th = tableThumbnail(t);
+    expect(th.cells[1]![1]).toBe("20");
+    expect(th.cells[2]![1]).toBe("#DIV/0");
+    expect(t.cells[1]![1]).toBe("=A2*2");
+  });
+});

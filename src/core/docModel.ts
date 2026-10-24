@@ -11,6 +11,7 @@
  */
 import type { ChartKind, MindMap, MindNode, TableAlign, TableBlock } from "./types";
 import { chartDataOf } from "./chartData";
+import { displayCells } from "./formula";
 import { formatNumber } from "./numberParse";
 import { getRootIds } from "./tree";
 import { plainText } from "./links";
@@ -117,7 +118,7 @@ export function buildDocModel(map: MindMap, opts: DocOptions): DocModel {
           headerRow: b.headerRow,
           align: [...b.align],
           colWidths: [...b.colWidths],
-          cells: b.cells.map((r) => [...r]),
+          cells: displayCells(b).map((r) => [...r]), // ô công thức xuất KẾT QUẢ đã tính
         });
       } else if (b.type === "image") {
         const asset = map.assets[b.assetId];

@@ -3952,3 +3952,18 @@ Nhánh `feat/adaptive-multi-boundary`, từ `main` (70b85b7, schema 21). **Khôn
 **Giới hạn:** biểu đồ tròn chỉ dùng cột số liệu đầu; giá trị âm/0 bị bỏ khỏi biểu đồ tròn; không có biểu đồ cột chồng, trục kép, hay chú thích tuỳ chỉnh màu. Ctrl+Z khi con trỏ đang ở trong trang card (modal) chưa hoàn tác thay đổi — đóng trang rồi Ctrl+Z (hành vi sẵn có của modal, không đổi ở KW4).
 
 **Test:** `numberParse.test.ts` (26), `chartData.test.ts` (4), `chartModel.test.ts` (11), `chartCard.test.ts` (8), thêm 4 ca vào `docExport.test.ts`.
+
+
+## Công thức trong bảng (SUM, MIN, MAX, COUNT, AVERAGE, COUNTA, MEDIAN, ROUND, IF)
+
+Quyết định (theo lựa chọn của người dùng): nhập kiểu Excel `=…` trong ô (1a); bộ hàm mở rộng gồm cả `IF` và phép `+ − × ÷` giữa các ô (2); chỉ vùng liền kề A1:B3 (3); ô không phải số bị bỏ qua, nhận số kiểu Việt lẫn Anh, lưu CHUỖI công thức trong ô (không lưu kết quả, không đổi schema), xuất giá trị đã tính, biểu đồ đọc giá trị đã tính (4).
+
+- `core/formula.ts` (thuần): tách từ → phân tích đệ quy (ưu tiên toán tử, ngoặc, so sánh) → tính LƯỜI có nhớ theo từng ô (`evalTable(table).at(r,c)`); phát hiện vòng (#CYCLE), lỗi lan theo tham chiếu. Mã lỗi: #SYNTAX #REF #CYCLE #DIV/0 #VALUE #NAME #ARGS (đưa chuột vào ô xem giải thích).
+- Địa chỉ: cột chữ (A…Z, AA…), HÀNG 1 = hàng đầu của lưới (kể cả hàng tiêu đề), giống Excel; ngăn đối số bằng `,` hoặc `;`; chữ trong "…".
+- Chèn/xoá hàng/cột (`insertRow/deleteRow/insertColumn/deleteColumn`) tự viết lại tham chiếu trong mọi công thức (`shiftFormulaRefs`): chèn giữa vùng thì vùng nở, xoá thì dịch/co, ô bị xoá → `#REF`. Chuỗi trong "…" và tên hàm giống địa chỉ (LOG10) không bị đụng.
+- Hiển thị: trình sửa bảng hiện công thức khi đang gõ ô, hiện KẾT QUẢ ở các ô công thức còn lại (nền xanh nhạt, lỗi màu đỏ); thẻ bảng trên node, trang card, xem trước ở panel Card đều hiện kết quả; số hiển thị theo kiểu Việt (1.234,5), tối đa 6 chữ số lẻ, sạch sai số (0,1+0,2 = 0,3).
+- Xuất: Word/Markdown/CSV nhận kết quả đã tính (dữ liệu gốc trong file giữ nguyên công thức). Biểu đồ KW4 đọc giá trị đã tính (ô lỗi = bỏ qua).
+
+**Giới hạn:** chưa có tham chiếu cột nguyên (B:B), tham chiếu sang bảng khác, kéo-điền công thức, % trong biểu thức (`=A1*10%`), và một ô văn bản thật sự bắt đầu bằng "=" sẽ bị hiểu là công thức. Ô công thức có kết quả số luôn canh phải.
+
+**Test:** `core/formula.test.ts` (40: hàm, phép tính, lỗi, vòng, chèn/xoá hàng-cột trên bảng thật, hiệu năng 1000×10), thêm ca vào `chartData.test.ts`, `chartCard.test.ts`, `docExport.test.ts`.

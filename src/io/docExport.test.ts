@@ -261,3 +261,18 @@ describe("KW4 — biểu đồ trong tài liệu xuất", () => {
     expect(doc.blocks.some((b) => b.kind === "paragraph" && b.text.startsWith("[Biểu đồ"))).toBe(true);
   });
 });
+
+describe("Bảng có công thức khi xuất", () => {
+  it("Markdown/Word nhận KẾT QUẢ đã tính, không phải chuỗi công thức", () => {
+    const { map, ids } = buildMap();
+    const card = map.cards[map.nodes[ids.a!]!.cardId!]!;
+    const t = card.blocks.find((b) => b.type === "table")!;
+    if (t.type !== "table") throw new Error();
+    t.cells = [["Hạng mục", "Số tiền"], ["Thiết kế", "1.200"], ["Tổng", "=SUM(B2:B2)*2"]];
+    const doc = buildDocModel(map, opts());
+    const md = renderMarkdown(doc, "none").markdown;
+    expect(md).toContain("| Tổng | 2.400 |");
+    expect(md).not.toContain("=SUM");
+    expect(t.cells[2]![1]).toBe("=SUM(B2:B2)*2"); // dữ liệu gốc không bị đổi
+  });
+});
