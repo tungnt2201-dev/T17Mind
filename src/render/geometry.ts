@@ -9,6 +9,8 @@
  */
 import type { MindMap, MindNode, Summary, Boundary } from "../core/types";
 import { isVerticalLayout } from "../core/types";
+import { visibleRepresentativeId } from "../core/tree";
+export { visibleRepresentativeId };
 import { collectSubtreeIds, collectVisibleNodeIds, getRootIds, getNodeDepth } from "../core/tree";
 
 export interface Point {
@@ -227,25 +229,6 @@ export function summaryGeometry(map: MindMap, s: Summary): SummaryGeometry | nul
 // khi node đầu kia bị ẩn bên trong một nhánh đã thu gọn
 // ---------------------------------------------------------------------
 
-/**
- * Nếu nodeId đang hiển thị bình thường (không tổ tiên nào thu gọn),
- * trả về chính nó. Nếu bị ẩn bên trong một nhánh đã thu gọn, trả về id
- * của tổ tiên thu gọn CAO NHẤT (gần gốc nhất) trong chuỗi tổ tiên — đó
- * là node THẬT SỰ đang hiển thị trên canvas thay cho nó. Dùng để vẽ
- * đường liên kết chéo/ngoặc tóm tắt "gom" về đúng node cha đang hiện,
- * thay vì trôi tới vị trí cũ của node đã ẩn.
- */
-export function visibleRepresentativeId(map: MindMap, nodeId: string): string {
-  let result = nodeId;
-  let parentId = map.nodes[nodeId]?.parentId ?? null;
-  while (parentId) {
-    const parent = map.nodes[parentId];
-    if (!parent) break;
-    if (parent.collapsed) result = parentId; // đi tiếp lên cao hơn để tìm tổ tiên thu gọn cao nhất
-    parentId = parent.parentId;
-  }
-  return result;
-}
 
 // ---------------------------------------------------------------------
 // P1.8 — kéo thả đổi cấu trúc cây
