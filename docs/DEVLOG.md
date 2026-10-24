@@ -3936,3 +3936,19 @@ Nhánh `feat/adaptive-multi-boundary`, từ `main` (70b85b7, schema 21). **Khôn
 - [ ] Mở file nhóm cũ (hình chữ nhật): hiển thị y như trước; chủ động đổi sang E/F
 - [ ] Xuất PNG và SVG: có nhóm, đủ khung; nhánh thu gọn có chip
 - [ ] Bản đồ 100+ node với vài nhóm: kéo node mượt; chỉ pan/zoom không giật
+
+
+## KW4 — Biểu đồ (cột / đường / tròn)
+
+**Mô hình dữ liệu có sẵn từ M2/M3** (`ChartBlock` trỏ tới một bảng cùng card, chọn cột nhãn + cột số liệu, `remapChartColumns` khi chèn/xoá cột). KW4 bổ sung phần còn thiếu: đọc số liệu, VẼ, sửa, thẻ trên node, xuất.
+
+- `core/numberParse.ts`: `parseNumber` nhận "1.234,5" / "1,234.5" / "12%" / "5.000₫"…; chữ → null. Sẽ dùng lại cho hàm tính trong bảng.
+- `core/chartData.ts`: `chartDataOf(table, chart, valueOf)` (ô không phải số = null; `valueOf` thay được khi có ô công thức), `defaultChartColumns`, `createChartForCard` (cards.ts).
+- `render/chartModel.ts`: bộ vẽ tự viết, hàm thuần → danh sách hình nguyên thủy; hai bộ xuất dùng chung mô hình: SVG (trình sửa, tải SVG, PNG cho Word) và Canvas (thẻ trên node, chế độ compact không chữ).
+- Thẻ trên node: `render/cardLayout.ts` thêm slot `chart` (220×100, co tới 48 khi node kéo thấp; quá thấp → biểu tượng như cũ); bấm thẻ mở trang card tại khối biểu đồ. Mô hình vẽ được cache theo tham chiếu khối/bảng.
+- Trình sửa `ChartBlockEditor.svelte` (cả trang card lẫn panel Card): loại, bảng nguồn, cột nhãn, cột số liệu, tiêu đề, Tải SVG/PNG; mọi thay đổi qua `ReplaceBlockCommand`.
+- Xuất: `docModel` có khối `chart`; Word nhận ảnh PNG (`io/chartPng.ts` vẽ bằng canvas trước khi đóng gói, không vẽ được thì rơi về bảng số liệu); Markdown xuất bảng số liệu. Không đổi schema.
+
+**Giới hạn:** biểu đồ tròn chỉ dùng cột số liệu đầu; giá trị âm/0 bị bỏ khỏi biểu đồ tròn; không có biểu đồ cột chồng, trục kép, hay chú thích tuỳ chỉnh màu. Ctrl+Z khi con trỏ đang ở trong trang card (modal) chưa hoàn tác thay đổi — đóng trang rồi Ctrl+Z (hành vi sẵn có của modal, không đổi ở KW4).
+
+**Test:** `numberParse.test.ts` (26), `chartData.test.ts` (4), `chartModel.test.ts` (11), `chartCard.test.ts` (8), thêm 4 ca vào `docExport.test.ts`.

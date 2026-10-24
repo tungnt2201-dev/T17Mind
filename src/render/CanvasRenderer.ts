@@ -41,8 +41,10 @@ import { effectiveVisual } from "../core/boundaryVisual";
 import { computeGroupGeometry, hitTestGroup } from "./groupGeometry";
 import { collectVisibleNodeIds, getRootIds } from "../core/tree";
 import type { NodeMeasurer } from "../layout";
+import { buildChartModel, drawChartOnCanvas, type ChartModel } from "./chartModel";
+import { chartDataOf } from "../core/chartData";
 import { THUMB_ROW_H, THUMB_MORE_W, THUMB_FONT, type ThumbLayout } from "./tableThumb";
-import type { ImageAsset, TableBlock } from "../core/types";
+import type { ChartBlock, ImageAsset, TableBlock } from "../core/types";
 import { assetDims, IMAGE_THUMB_HEIGHT, type ImageDims, type ImageThumbLayout } from "./imageThumb";
 import {
   cardContentOf,
@@ -1454,6 +1456,7 @@ export class CanvasRenderer {
     if (placed.preview) this.drawCardPreview(node, placed.preview.lines, placed.preview.rect, isRoot);
     if (placed.image) this.drawImageThumb(map, placed.image.layout, placed.image.rect, isRoot);
     if (placed.table) this.drawTableThumb(node, placed.table.layout, placed.table.rect, isRoot);
+    if (placed.chart) this.drawChartThumb(placed.chart.block, placed.chart.table, placed.chart.rect, isRoot);
     for (const chip of placed.chips) this.drawCardChip(node, chip.kind, chip.count, chip.rect, isRoot);
   }
 
@@ -1556,6 +1559,28 @@ export class CanvasRenderer {
       else hi = mid - 1;
     }
     return lo === 0 ? "" : oneLine.slice(0, lo) + "…";
+  }
+
+  /** KW4 — thẻ biểu đồ thu nhỏ (chế độ compact của render/chartModel.ts). Mô hình
+   *  dựng lại khi số liệu/kích thước đổi (theo tham chiếu khối/bảng), không dựng lại mỗi khung hình. */
+  private chartModelCache = new WeakMap<ChartBlock, { table: TableBlock; size: string; model: ChartModel }>();
+  private drawChartThumb(block: ChartBlock, table: TableBlock, rect: Rect, isRoot: boolean): void {
+    const ctx = this.ctx;
+    // Khối/bảng là đối tượng bất biến (Command thay cả đối tượng), nên so sánh theo tham chiếu là đủ.
+    const size = `${rect.width}x${rect.height}`;
+    let hit = this.chartModelCache.get(block);
+    if (!hit || hit.table !== table || hit.size !== size) {
+      hit = { table, size, model: buildChartModel(chartDataOf(table, block), block.kind, rect.width, rect.height, { compact: true }) };
+      this.chartModelCache.set(block, hit);
+    }
+    ctx.save();
+    ctx.fillStyle = isRoot ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.7)";
+    ctx.beginPath();
+    ctx.roundRect(rect.x, rect.y, rect.width, rect.height, 4);
+    ctx.fill();
+    ctx.clip();
+    drawChartOnCanvas(ctx, hit.model, rect.x, rect.y);
+    ctx.restore();
   }
 
   /** M2 — vẽ thẻ thu nhỏ của bảng (tối đa 5×4 ô, phần ẩn hiện "…").

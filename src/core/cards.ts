@@ -6,6 +6,7 @@
  * core/cardCommands.ts.
  * ---------------------------------------------------------------------
  */
+import { defaultChartColumns } from "./chartData";
 import type { Block, Card, ChartBlock, ImageBlock, ImageDisplaySize, MindMap, TableAlign, TableBlock, TextBlock } from "./types";
 import { generateBlockId, generateCardId } from "./tree";
 import { TABLE_DEFAULT_COL_W, TABLE_DEFAULT_ROW_H } from "./table";
@@ -48,6 +49,13 @@ export function createChartBlock(tableBlockId: string, kind: ChartBlock["kind"] 
     labelColumn: 0,
     seriesColumns: [1],
   };
+}
+
+/** Biểu đồ mới cho card: lấy bảng ĐẦU TIÊN của card (null nếu card chưa có bảng). */
+export function createChartForCard(card: Card, kind: ChartBlock["kind"] = "bar"): ChartBlock | null {
+  const table = card.blocks.find((b): b is TableBlock => b.type === "table");
+  if (!table) return null;
+  return { ...createChartBlock(table.id, kind), ...defaultChartColumns(table) };
 }
 
 /** Một dòng mô tả ngắn của khối (dùng ở danh sách khối, tìm kiếm...). */

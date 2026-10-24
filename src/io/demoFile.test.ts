@@ -29,3 +29,18 @@ describe("File demo docs/demo/T17Mind-demo.t17m", () => {
     expect((await Packer.toBuffer(buildDocxDocument(doc))).length).toBeGreaterThan(10_000);
   });
 });
+
+describe("File demo docs/demo/T17Mind-bieu-do.t17m (KW4)", () => {
+  it("mở được, có 3 biểu đồ (cột/đường/tròn) đọc ra số liệu thật", async () => {
+    const buf = readFileSync(new URL("../../docs/demo/T17Mind-bieu-do.t17m", import.meta.url));
+    const res = await parseT17mFile(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const charts = Object.values(res.map.cards).flatMap((c) => c.blocks.filter((b) => b.type === "chart"));
+    expect(charts.map((c) => (c.type === "chart" ? c.kind : "")).sort()).toEqual(["bar", "line", "pie"]);
+    const doc = buildDocModel(res.map, { ...DEFAULT_DOC_OPTIONS, headingDepth: 3 });
+    const exported = doc.blocks.filter((b) => b.kind === "chart");
+    expect(exported).toHaveLength(3);
+    expect(exported.every((b) => b.kind === "chart" && b.series.some((s) => s.values.some((v) => v !== null)))).toBe(true);
+  });
+});

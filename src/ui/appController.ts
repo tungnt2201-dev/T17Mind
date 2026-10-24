@@ -729,7 +729,10 @@ export class AppController {
           `${this.suggestedBase()}.md`
         );
       case "docx":
-        return (await import("../io/docx")).exportDocx(buildDocModel(map, this.docOptions), this.docOptions.indentByLevel);
+        return (await import("../io/docx")).exportDocx(
+          await (await import("../io/chartPng")).attachChartPngs(buildDocModel(map, this.docOptions)),
+          this.docOptions.indentByLevel
+        );
       case "svg":
         return exportSvg(map);
       case "png":
@@ -1912,6 +1915,7 @@ export class AppController {
       if (part && hitNode.cardId) {
         this.selection.selectSingleNode(hitId);
         if (part.kind === "image") this.openNodeImages(hitId, part.blockId);
+        else if (part.kind === "chart") this.openCardPage(hitNode.cardId, part.blockId);
         else if (part.kind === "table") tableEditorStore.set({ cardId: hitNode.cardId, blockId: part.blockId });
         else this.openCardPage(hitNode.cardId, part.blockId);
         return;

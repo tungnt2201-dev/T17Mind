@@ -29,9 +29,10 @@
     RemoveBlockCommand,
     MoveBlockCommand,
   } from "../../core/cardCommands";
-  import { createTextBlock, createTableBlock, summarizeBlock } from "../../core/cards";
+  import { createTextBlock, createTableBlock, createChartForCard, summarizeBlock } from "../../core/cards";
   import CardGlyph from "./CardGlyph.svelte";
   import MentionTextarea from "./MentionTextarea.svelte";
+  import ChartBlockEditor from "./ChartBlockEditor.svelte";
   import LinkedText from "./LinkedText.svelte";
   import BacklinksList from "./BacklinksList.svelte";
   import { knowledgeIndex, refreshKnowledgeIndex } from "../knowledgeController";
@@ -113,6 +114,15 @@
   }
   function addTable(): void {
     if (card) store.dispatch(new AddBlockCommand(card.id, createTableBlock(3, 3)));
+  }
+  function addChart(): void {
+    if (!card) return;
+    const chart = createChartForCard(card);
+    if (!chart) {
+      void showAlert("Biểu đồ lấy số liệu từ một bảng — hãy thêm bảng vào card trước.");
+      return;
+    }
+    store.dispatch(new AddBlockCommand(card.id, chart));
   }
   function addImages(e: Event): void {
     const input = e.currentTarget as HTMLInputElement;
@@ -257,6 +267,8 @@
               <button type="button" class="btn small-btn pg-edit-table" on:click={() => card && tableEditorStore.set({ cardId: card.id, blockId: b.id })}>
                 Sửa bảng…</button>
             </div>
+          {:else if b.type === "chart"}
+            <ChartBlockEditor {store} {card} block={b} width={460} height={260} />
           {:else}
             <p class="pg-empty">{summarizeBlock(b)}</p>
           {/if}
@@ -266,6 +278,7 @@
       <div class="pg-add">
         <button type="button" on:click={() => void addTextAt(null)}><CardGlyph kind="text" /> Đoạn văn</button>
         <button type="button" on:click={addTable}><CardGlyph kind="table" /> Bảng</button>
+        <button type="button" on:click={addChart}><CardGlyph kind="chart" /> Biểu đồ</button>
         <button type="button" on:click={() => csvInput?.click()}><CardGlyph kind="table" /> Nhập CSV…</button>
         <button type="button" on:click={() => imageInput?.click()}><CardGlyph kind="image" /> Ảnh…</button>
         <input bind:this={imageInput} type="file" accept="image/*" multiple hidden on:change={addImages} />
