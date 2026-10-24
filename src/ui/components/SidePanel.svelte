@@ -46,6 +46,8 @@
   } from "../../core/commands";
   import type { NodeStylePatch, RelationshipPatch, SummaryPatch, BoundaryPatch, StickyNotePatch } from "../../core/commands";
   import { lightenHex } from "../../core/theme";
+  import { BOUNDARY_LIMITS, BOUNDARY_MODES, BOUNDARY_MODE_LABEL, defaultVisual, effectiveVisual } from "../../core/boundaryVisual";
+  import type { Boundary, BoundaryMode, BoundaryVisualOptions } from "../../core/types";
   import { showConfirm } from "../dialog";
   import CardSection from "./CardSection.svelte";
   import type { BorderStyle, EdgeShape, TextAlign, TextFit } from "../../core/types";
@@ -308,6 +310,19 @@
     selection.resetToRoot(store.getMap().rootId);
   }
 
+  /** Đổi kiểu vẽ: giữ thông số đang có nếu đã có `visual`, ngược lại dùng mặc định của kiểu mới. */
+  function setBoundaryMode(boundaryId: string, mode: BoundaryMode): void {
+    const b = store.getMap().boundaries.find((x) => x.id === boundaryId);
+    if (!b) return;
+    const next = b.visual ? { ...b.visual, mode } : defaultVisual(mode);
+    // đổi sang/khỏi hình chữ nhật: độ mờ nền theo mặc định của kiểu mới (chữ nhật cũ tô đặc)
+    if (!b.visual || b.visual.mode === "rectangle" || mode === "rectangle") next.fillOpacity = defaultVisual(mode).fillOpacity;
+    store.dispatch(new UpdateBoundaryCommand(boundaryId, { visual: next }));
+  }
+  function patchVisual(b: Boundary, patch: Partial<BoundaryVisualOptions>): void {
+    store.dispatch(new UpdateBoundaryCommand(b.id, { visual: { ...effectiveVisual(b), ...patch } }));
+  }
+
   function patchBoundary(boundaryId: string, patch: BoundaryPatch): void {
     store.dispatch(new UpdateBoundaryCommand(boundaryId, patch));
   }
@@ -375,10 +390,20 @@
     <button class="btn danger small-btn" on:click={() => deleteSummary(sum.id)}>Xoá tóm tắt</button>
   {:else if boundary}
     {@const bd = boundary}
-    <h4>Khoanh vùng (Boundary)</h4>
+    <h4>Nhóm trực quan (Khoanh vùng)</h4>
+    {@const vis = effectiveVisual(bd)}
+    {@const geo = $map && $sel ? controller.getBoundaryGeometry(bd.id) : null}
     <div class="row">
       <label for="p-bd-label">Nhãn</label>
       <input id="p-bd-label" type="text" value={bd.label || ""} on:input={(e) => patchBoundary(bd.id, { label: e.currentTarget.value })} />
+    </div>
+    <div class="row">
+      <label for="p-bd-mode" title="Cách vẽ nhóm. Đổi qua lại bất kỳ lúc nào — thành viên, nhãn và màu giữ nguyên, hoàn tác được.">Kiểu vẽ</label>
+      <select id="p-bd-mode" value={vis.mode} on:change={(e) => setBoundaryMode(bd.id, e.currentTarget.value as BoundaryMode)}>
+        {#each BOUNDARY_MODES as m (m)}
+          <option value={m}>{BOUNDARY_MODE_LABEL[m]}</option>
+        {/each}
+      </select>
     </div>
     <div class="row">
       <label for="p-bd-fill">Màu nền</label>
@@ -388,9 +413,46 @@
       <label for="p-bd-border">Màu viền</label>
       <input id="p-bd-border" type="color" value={bd.borderColor || "#e8b923"} on:input={(e) => patchBoundary(bd.id, { borderColor: e.currentTarget.value })} />
     </div>
+    {#if bd.visual && vis.mode !== "rectangle"}
+      {#if vis.mode === "multiContour"}
+        <div class="row">
+          <label for="p-bd-gap" title="Hai node cách nhau (mép tới mép) không quá giá trị này thì được nối vào cùng một vùng; xa hơn thì tách thành vùng riêng.">Ngưỡng nối vùng</label>
+          <input id="p-bd-gap" type="range" min={BOUNDARY_LIMITS.connectionGap.min} max={BOUNDARY_LIMITS.connectionGap.max} step="4" value={vis.connectionGap}
+            on:change={(e) => patchVisual(bd, { connectionGap: Number(e.currentTarget.value) })} />
+          <span class="muted">{Math.round(vis.connectionGap)}</span>
+        </div>
+        <div class="row">
+          <label for="p-bd-smooth" title="Độ bo tròn góc của đường bao (0 = góc vuông).">Độ mượt</label>
+          <input id="p-bd-smooth" type="range" min="0" max="1" step="0.05" value={vis.smoothness}
+            on:change={(e) => patchVisual(bd, { smoothness: Number(e.currentTarget.value) })} />
+        </div>
+      {/if}
+      <div class="row">
+        <label for="p-bd-pad" title="Khoảng đệm giữa node và đường bao (đơn vị thế giới).">Độ đệm</label>
+        <input id="p-bd-pad" type="range" min={BOUNDARY_LIMITS.padding.min} max={BOUNDARY_LIMITS.padding.max} step="2" value={vis.padding}
+          on:change={(e) => patchVisual(bd, { padding: Number(e.currentTarget.value) })} />
+        <span class="muted">{Math.round(vis.padding)}</span>
+      </div>
+      <div class="row">
+        <label for="p-bd-op" title="Độ đậm của màu nền (thấp = trong suốt, dễ đọc chữ).">Độ mờ nền</label>
+        <input id="p-bd-op" type="range" min={BOUNDARY_LIMITS.fillOpacity.min} max="0.6" step="0.02" value={Math.min(vis.fillOpacity, 0.6)}
+          on:change={(e) => patchVisual(bd, { fillOpacity: Number(e.currentTarget.value) })} />
+      </div>
+      <div class="row">
+        <label for="p-bd-conn" title="Vẽ nét đứt mảnh nối các vùng (hoặc các thành viên) của nhóm.">Nét nối phụ</label>
+        <input id="p-bd-conn" type="checkbox" checked={vis.showConnectors} on:change={(e) => patchVisual(bd, { showConnectors: e.currentTarget.checked })} />
+      </div>
+      <button class="btn small-btn" on:click={() => patchBoundary(bd.id, { visual: defaultVisual(vis.mode) })}>Đặt lại mặc định</button>
+      {#if geo?.fragmented}
+        <p class="muted" style="color:#b7791f">⚠ Nhóm đang tách thành {geo.regions?.length} vùng. Nếu thấy rối, thử kiểu vẽ “Phân tán (F)” hoặc tăng ngưỡng nối vùng.</p>
+      {:else if geo?.mode === "multiContour" && geo.regions}
+        <p class="muted">Đang vẽ {geo.regions.length} vùng{geo.approximate ? " (rút gọn thành hộp bao vì dữ liệu lớn)" : ""}.</p>
+      {/if}
+    {/if}
     <p class="muted">Gồm {bd.nodeIds.length} mục — không cần cùng node cha.</p>
+    <button class="btn small-btn" title="Chọn tất cả node thuộc nhóm (thành viên đang ẩn thì chọn node đại diện đang hiện)" on:click={() => controller.selectBoundaryMembers(bd.id)}>Chọn các thành viên</button>
     <div class="divider"></div>
-    <button class="btn danger small-btn" on:click={() => deleteBoundary(bd.id)}>Xoá khoanh vùng</button>
+    <button class="btn danger small-btn" on:click={() => deleteBoundary(bd.id)}>Xoá nhóm</button>
   {:else if stickyNote}
     {@const sn = stickyNote}
     <h4>Ghi chú dán</h4>

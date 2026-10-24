@@ -26,7 +26,6 @@ import {
   computeViewportWorldRect,
   isRectVisibleInViewport,
   summaryGeometry,
-  boundaryGeometry,
   gapIndicatorGeometry,
   visibleRepresentativeId,
   type Point,
@@ -34,10 +33,12 @@ import {
   type BoundaryGeometry,
   type DropTarget,
 } from "./geometry";
-import type { MindMap, MindNode, StickyNote, TagDef } from "../core/types";
+import type { Boundary, MindMap, MindNode, StickyNote, TagDef } from "../core/types";
 import { lightenHex } from "../core/theme";
 import { isVerticalLayout } from "../core/types";
-import { getRootIds } from "../core/tree";
+import { effectiveVisual } from "../core/boundaryVisual";
+import { computeGroupGeometry, hitTestGroup } from "./groupGeometry";
+import { collectVisibleNodeIds, getRootIds } from "../core/tree";
 import type { NodeMeasurer } from "../layout";
 import { THUMB_ROW_H, THUMB_MORE_W, THUMB_FONT, type ThumbLayout } from "./tableThumb";
 import type { ImageAsset, TableBlock } from "../core/types";
@@ -155,6 +156,7 @@ export class CanvasRenderer {
   private relInfo = new Map<string, RelRenderInfo>();
   private summaryInfo = new Map<string, SummaryGeometry>();
   private boundaryInfo = new Map<string, BoundaryGeometry>();
+  private groupCache = new Map<string, { sig: string; geom: BoundaryGeometry | null }>();
   private stickyNoteInfo = new Map<string, StickyNoteBox>();
 
   constructor(canvas: HTMLCanvasElement) {
@@ -1020,31 +1022,109 @@ export class CanvasRenderer {
     }
   }
 
+  /**
+   * Hình học nhóm có cache theo "chữ ký" mọi thứ ảnh hưởng tới hình dạng (vị trí/kích thước node,
+   * thu gọn, thành viên, tuỳ chọn, nhãn). Zoom/pan thuần KHÔNG đổi chữ ký nên không tính lại đường bao.
+   */
+  private groupGeometryFor(map: MindMap, b: Boundary, mapHash: number): BoundaryGeometry | null {
+    const v = effectiveVisual(b);
+    let sig = `${v.mode}|${v.padding}|${v.connectionGap}|${v.smoothness}|${v.showConnectors}|${b.label}|${b.nodeIds.join(",")}`;
+    if (v.mode !== "rectangle") sig += `|${mapHash}`;
+    else for (const id of b.nodeIds) { const n = map.nodes[id]; if (n) sig += `|${Math.round(n.x)},${Math.round(n.y)},${Math.round(n.width)},${Math.round(n.height)}`; }
+    const hit = this.groupCache.get(b.id);
+    if (hit && hit.sig === sig) return hit.geom;
+    const geom = computeGroupGeometry(map, b, { prevLinks: hit?.geom?.links });
+    this.groupCache.set(b.id, { sig, geom });
+    return geom;
+  }
+
   private drawBoundaries(map: MindMap, sel: SelectionState): void {
     const ctx = this.ctx;
     this.boundaryInfo.clear();
+    // băm vị trí mọi node đang hiện — chỉ tính khi có nhóm không phải hình chữ nhật
+    let mapHash = 0;
+    if (map.boundaries.some((b) => effectiveVisual(b).mode !== "rectangle")) {
+      for (const id of collectVisibleNodeIds(map)) {
+        const n = map.nodes[id];
+        if (n) mapHash = (mapHash * 31 + Math.round(n.x) * 7 + Math.round(n.y) * 13 + Math.round(n.width) * 17 + Math.round(n.height) * 19) % 2147483647;
+      }
+    }
+    const alive = new Set(map.boundaries.map((b) => b.id));
+    for (const id of [...this.groupCache.keys()]) if (!alive.has(id)) this.groupCache.delete(id);
 
     for (const b of map.boundaries) {
-      const g = boundaryGeometry(map, b);
+      const g = this.groupGeometryFor(map, b, mapHash);
       if (!g) continue;
       this.boundaryInfo.set(b.id, g);
       const selected = sel.selectedBoundaryId === b.id;
+      const mode = g.mode ?? "rectangle";
+      const v = effectiveVisual(b);
+      const fill = b.fillColor || "#fdf2ce";
+      const border = b.borderColor || "#e8b923";
 
-      ctx.save();
-      ctx.beginPath();
-      this.roundRectPath(g.x, g.y, g.width, g.height, 16);
-      ctx.fillStyle = b.fillColor || "#fdf2ce";
-      ctx.fill();
-      ctx.strokeStyle = selected ? "#2f6fed" : b.borderColor || "#e8b923";
-      ctx.lineWidth = selected ? 2.4 : 1.6;
-      ctx.setLineDash(selected ? [] : [5, 4]);
-      ctx.stroke();
-      ctx.restore();
+      if (mode === "rectangle") {
+        ctx.save();
+        ctx.beginPath();
+        this.roundRectPath(g.x, g.y, g.width, g.height, 16);
+        ctx.fillStyle = fill;
+        ctx.fill();
+        ctx.strokeStyle = selected ? "#2f6fed" : border;
+        ctx.lineWidth = selected ? 2.4 : 1.6;
+        ctx.setLineDash(selected ? [] : [5, 4]);
+        ctx.stroke();
+        ctx.restore();
+      } else if (mode === "multiContour") {
+        ctx.save();
+        for (const region of g.regions ?? []) {
+          const path = new Path2D(region.path);
+          ctx.globalAlpha = v.fillOpacity;
+          ctx.fillStyle = fill;
+          ctx.fill(path, "evenodd");
+          ctx.globalAlpha = 1;
+          ctx.strokeStyle = selected ? "#2f6fed" : border;
+          ctx.lineWidth = selected ? 2.4 : 1.6;
+          ctx.setLineDash(selected ? [] : [5, 4]);
+          ctx.stroke(path);
+        }
+        ctx.restore();
+      } else {
+        ctx.save();
+        for (const o of g.memberOutlines ?? []) {
+          ctx.beginPath();
+          this.roundRectPath(o.x, o.y, o.width, o.height, 11);
+          ctx.globalAlpha = Math.min(0.5, v.fillOpacity * 0.6);
+          ctx.fillStyle = fill;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.strokeStyle = selected ? "#2f6fed" : border;
+          ctx.lineWidth = selected ? 2.6 : 1.8;
+          ctx.setLineDash([]);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
 
+      // nét nối phụ (mảnh, nét đứt, dưới node, không bắt chuột)
+      if (g.connectors && g.connectors.length > 0) {
+        ctx.save();
+        ctx.strokeStyle = selected ? "#2f6fed" : border;
+        ctx.globalAlpha = 0.55;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 5]);
+        for (const [p, q] of g.connectors) {
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(q.x, q.y);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      // nhãn chính
       ctx.save();
       ctx.beginPath();
       this.roundRectPath(g.labelX, g.labelY, g.labelW, g.labelH, 7);
-      ctx.fillStyle = b.borderColor || "#e8b923";
+      ctx.fillStyle = border;
       ctx.fill();
       if (selected) {
         ctx.lineWidth = 2;
@@ -1055,8 +1135,28 @@ export class CanvasRenderer {
       ctx.font = "600 12px -apple-system, Segoe UI, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(b.label || "Khoanh vùng", g.labelX + g.labelW / 2, g.labelY + g.labelH / 2 + 1, g.labelW - 12);
+      ctx.fillText(b.label || (mode === "rectangle" ? "Khoanh vùng" : "Nhóm"), g.labelX + g.labelW / 2, g.labelY + g.labelH / 2 + 1, g.labelW - 12);
       ctx.restore();
+
+      // chip nhỏ cùng màu: nhãn vùng phụ, số thành viên bị ẩn
+      for (const c of g.chips ?? []) {
+        ctx.save();
+        ctx.beginPath();
+        this.roundRectPath(c.x, c.y, c.w, c.h, 9);
+        ctx.fillStyle = border;
+        ctx.fill();
+        if (selected) {
+          ctx.lineWidth = 1.6;
+          ctx.strokeStyle = "#2f6fed";
+          ctx.stroke();
+        }
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "600 11px -apple-system, Segoe UI, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(c.text, c.x + c.w / 2, c.y + c.h / 2 + 0.5, c.w - 8);
+        ctx.restore();
+      }
     }
   }
 
@@ -1882,13 +1982,13 @@ export class CanvasRenderer {
    */
   hitTestBoundary(screenX: number, screenY: number, view: ViewTransform): string | null {
     const { x: wx, y: wy } = this.toWorld(screenX, screenY, view);
-    for (const [id, g] of this.boundaryInfo) {
-      if (wx >= g.labelX && wx <= g.labelX + g.labelW && wy >= g.labelY && wy <= g.labelY + g.labelH) return id;
-      const nearLeftOrRight =
-        (Math.abs(wx - g.x) < 6 || Math.abs(wx - (g.x + g.width)) < 6) && wy >= g.y && wy <= g.y + g.height;
-      const nearTopOrBottom =
-        (Math.abs(wy - g.y) < 6 || Math.abs(wy - (g.y + g.height)) < 6) && wx >= g.x && wx <= g.x + g.width;
-      if (nearLeftOrRight || nearTopOrBottom) return id;
+    // ~8px màn hình, quy ra đơn vị thế giới (không để quá nhỏ ở zoom lớn hay quá to ở zoom nhỏ)
+    const tol = Math.min(40, Math.max(4, 8 / view.scale));
+    // nhóm vẽ sau nằm trên → ưu tiên khi chồng nhau
+    const ids = [...this.boundaryInfo.keys()].reverse();
+    for (const id of ids) {
+      const g = this.boundaryInfo.get(id) as BoundaryGeometry;
+      if (hitTestGroup(g, wx, wy, tol)) return id;
     }
     return null;
   }
