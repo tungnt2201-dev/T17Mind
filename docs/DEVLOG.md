@@ -3874,6 +3874,16 @@ Nhánh `feat/zoom-to-rect`. Giữ **Alt** rồi nhấn chuột trái kéo một 
 - [ ] Kéo một vùng rất nhỏ: dừng ở 300%; kéo vùng cực lớn: thu nhỏ, không dưới 15%
 - [ ] Sau khi zoom, bấm F vẫn vừa khung bình thường; minimap theo khung nhìn mới
 
+## Sửa: ngoặc tóm tắt ra phía ngoài ở cây hai bên (22/10/2026)
+
+Nhánh `fix/summary-side`. Trước đây ngoặc `{ }` và hộp nhãn của **Tóm tắt** luôn vẽ bên phải các node được tóm tắt; ở bố cục Logic Both Sides (nửa trái) và Logic Left, ngoặc đè lên phía node cha. Giờ `summaryGeometry` (`render/geometry.ts`) xét các node thành viên: nếu phần lớn nằm hẳn bên trái cha của chúng thì ngoặc, mũi nhọn và hộp nhãn nằm bên **trái** (đối xứng), ngược lại giữ nguyên như cũ. `SummaryGeometry` có thêm trường `side`; bộ vẽ đảo chiều phình của ngoặc và điểm nối nhãn; xuất ảnh PNG tính thêm phần nhãn lòi ra bên trái. Có 3 test mới trong `render/geometry.test.ts`; đã chụp thử thật với cây hai bên.
+
+### Checklist kiểm thử tay
+- [ ] Logic Both Sides: tóm tắt vài node ở nửa trái → ngoặc và nhãn nằm bên trái; nửa phải → bên phải
+- [ ] Logic Left: ngoặc luôn bên trái; Logic Right: bên phải như cũ
+- [ ] Bấm vào ngoặc/nhãn ở bên trái vẫn chọn được; bấm đúp sửa nhãn mở đúng chỗ
+- [ ] Xuất PNG: hộp nhãn bên trái không bị cắt
+
 ## Nhóm trực quan: Adaptive Multi-Contour (E) + Distributed Group (F) (24/10/2026)
 
 Nhánh `feat/adaptive-multi-boundary`, từ `main` (70b85b7, schema 21). **Không đổi schema** (`visual` là trường tuỳ chọn thêm vào Boundary; file cũ không có = hình chữ nhật như trước; làm sạch khi đọc file). Làm theo đặc tả `T17Mind_Prompt_Adaptive_Multi_Boundary_EF` (4 chặng; AB2 và AB3 gộp một commit vì F dùng chung hình học/render/hit-test với E).

@@ -900,6 +900,7 @@ export class AppController {
       const g = summaryGeometry(map, s);
       if (g) {
         maxX = Math.max(maxX, g.labelX + g.labelW);
+        minX = Math.min(minX, g.labelX); // ngoặc bên trái: hộp nhãn có thể vượt ra ngoài các node
         minY = Math.min(minY, g.minY);
         maxY = Math.max(maxY, g.maxY);
       }
