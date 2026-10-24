@@ -9,7 +9,7 @@
  * ---------------------------------------------------------------------
  */
 import type { ChartBlock, TableBlock } from "./types";
-import { parseNumber } from "./numberParse";
+import { evalTable } from "./formula";
 
 export interface ChartSeries {
   name: string;
@@ -24,22 +24,28 @@ export interface ChartData {
 
 export type CellValueOf = (table: TableBlock, row: number, col: number) => number | null;
 
-export const rawCellNumber: CellValueOf = (t, r, c) => parseNumber(t.cells[r]?.[c] ?? "");
+/** Cách đọc ô mặc định: giá trị ĐÃ TÍNH (ô công thức → kết quả; ô thường → số đọc từ chữ). */
+export function computedCellNumber(table: TableBlock): CellValueOf {
+  const ev = evalTable(table);
+  return (_t, r, c) => ev.at(r, c).num;
+}
 
-export function chartDataOf(table: TableBlock, chart: Pick<ChartBlock, "labelColumn" | "seriesColumns">, valueOf: CellValueOf = rawCellNumber): ChartData {
+export function chartDataOf(table: TableBlock, chart: Pick<ChartBlock, "labelColumn" | "seriesColumns">, valueOf?: CellValueOf): ChartData {
+  const ev = evalTable(table);
+  const value: CellValueOf = valueOf ?? ((_t, r, c) => ev.at(r, c).num);
   const first = table.headerRow ? 1 : 0;
   const cols = table.align.length;
   const rows: number[] = [];
   for (let r = first; r < table.cells.length; r++) rows.push(r);
   const labels = rows.map((r) => {
-    const t = (table.cells[r]?.[chart.labelColumn] ?? "").trim();
+    const t = ev.at(r, chart.labelColumn).text.trim();
     return t === "" ? String(r - first + 1) : t;
   });
   const series: ChartSeries[] = chart.seriesColumns
     .filter((c) => Number.isInteger(c) && c >= 0 && c < cols)
     .map((column) => {
-      const head = table.headerRow ? (table.cells[0]?.[column] ?? "").trim() : "";
-      return { name: head || `Cột ${column + 1}`, column, values: rows.map((r) => valueOf(table, r, column)) };
+      const head = table.headerRow ? ev.at(0, column).text.trim() : "";
+      return { name: head || `Cột ${column + 1}`, column, values: rows.map((r) => value(table, r, column)) };
     });
   return { labels, series };
 }
@@ -51,7 +57,7 @@ export function chartHasData(d: ChartData): boolean {
 
 /** Cột nhãn/cột số liệu mặc định cho một bảng: nhãn = cột 0, số liệu = các cột sau có ít nhất một số
  *  (không có cột nào → cột 1, hoặc cột 0 nếu bảng chỉ có một cột). Luôn hợp lệ với `validateCard`. */
-export function defaultChartColumns(table: TableBlock, valueOf: CellValueOf = rawCellNumber): { labelColumn: number; seriesColumns: number[] } {
+export function defaultChartColumns(table: TableBlock, valueOf: CellValueOf = computedCellNumber(table)): { labelColumn: number; seriesColumns: number[] } {
   const cols = table.align.length;
   const first = table.headerRow ? 1 : 0;
   const numeric: number[] = [];

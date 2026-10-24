@@ -129,6 +129,22 @@ Mở `T17Mind-bieu-do.t17m`: 3 node, mỗi node một card gồm bảng + biểu
 - [ ] Mọi thao tác biểu đồ hoàn tác được; lưu/mở lại file vẫn còn
 - [ ] Word mở được, biểu đồ hiện rõ nét; Markdown có bảng số liệu
 
+## Bước 13 — Công thức trong bảng
+Trong `T17Mind-bieu-do.t17m`: node "Doanh thu & chi phí" có cột *Lợi nhuận* = công thức `=B2-C2`; node "Bảng tính nhanh" có Tổng, Trung bình, Cao nhất, Đánh giá.
+1. Bấm thẻ bảng của node "Bảng tính nhanh" → trình sửa bảng. Ô nền xanh nhạt là ô công thức; bấm vào ô để thấy công thức.
+2. Sửa Doanh thu của T2 thành 3000 → các ô Tổng/Trung bình/Cao nhất đổi ngay; lưu → thẻ trên node đổi theo.
+3. Gõ công thức sai (thiếu ngoặc) → ô hiện `#SYNTAX` đỏ; đưa chuột vào xem giải thích.
+4. "+ Hàng trên" phía trên vùng số liệu → công thức tự dịch đúng ô. "− Cột" cột nằm trong vùng → vùng co lại.
+5. Xuất Word / Markdown / CSV: ô công thức xuất ra giá trị.
+
+### Checklist kiểm thử tay (công thức)
+- [ ] `=SUM(B2:B5)`, `=MIN`, `=MAX`, `=COUNT`, `=AVERAGE`, `=COUNTA`, `=MEDIAN`, `=ROUND(x,1)`, `=IF(B2>10,"a","b")`, `=B2*C2+1` cho kết quả đúng
+- [ ] Ô chữ/ô trống trong vùng bị bỏ qua; số "1.234,5" và "1,234.5" đều đọc đúng
+- [ ] `=1/0` → #DIV/0; `=A1` trong chính ô A1 → #CYCLE; `=FOO(1)` → #NAME
+- [ ] Chèn/xoá hàng/cột: tham chiếu cập nhật; xoá hàng chứa ô được tham chiếu → #REF
+- [ ] Ctrl+Z / Hủy trong trình sửa bảng hoàn tác đúng; lưu rồi mở lại file: công thức còn, kết quả đúng
+- [ ] Biểu đồ vẽ từ cột công thức; bảng 1000 hàng gõ mượt
+
 ## Bước 14 — Cơ sở dữ liệu Tag (KW5)
 Mở `T17Mind-tag-database.t17m`: Tag "Công việc" gắn trên 8 việc, có 4 thuộc tính (Trạng thái, Giờ ước tính, Hạn, Người làm).
 1. Bấm "Bảng Tag" → tab Bảng: sửa trực tiếp trạng thái/giờ/hạn/người làm; bấm tên cột để sắp xếp.

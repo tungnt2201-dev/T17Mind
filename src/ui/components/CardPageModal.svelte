@@ -33,6 +33,7 @@
   import CardGlyph from "./CardGlyph.svelte";
   import MentionTextarea from "./MentionTextarea.svelte";
   import ChartBlockEditor from "./ChartBlockEditor.svelte";
+  import { displayCells } from "../../core/formula";
   import LinkedText from "./LinkedText.svelte";
   import BacklinksList from "./BacklinksList.svelte";
   import { knowledgeIndex, refreshKnowledgeIndex } from "../knowledgeController";
@@ -250,7 +251,7 @@
                 <table class="pg-table">
                   <colgroup>{#each b.colWidths as w}<col style="width:{w}px" />{/each}</colgroup>
                   <tbody>
-                    {#each b.cells as row, r}
+                    {#each displayCells(b) as row, r}
                       <tr style="height:{b.rowHeights[r]}px">
                         {#each row as cell, c}
                           {#if r === 0 && b.headerRow}
