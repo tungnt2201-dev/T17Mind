@@ -16,6 +16,7 @@
  * ---------------------------------------------------------------------
  */
 import type { ChartBlock, TableAlign, TableBlock } from "./types";
+import { evalTable, hasFormulas, shiftCells } from "./formula";
 import { deepClone } from "./tree";
 
 /** Giới hạn kích thước để một lần dán nhầm cả trang tính không làm đơ app. */
@@ -105,14 +106,14 @@ export function insertRow(d: TableDraft, at: number): TableDraft {
   const i = clampIndex(at, cells.length);
   cells.splice(i, 0, Array.from({ length: colCount(d.table) }, () => ""));
   rowHeights.splice(i, 0, TABLE_DEFAULT_ROW_H);
-  return withTable(d, { cells, rowHeights });
+  return withTable(d, { cells: shiftCells(cells, "row", i, "insert"), rowHeights });
 }
 
 /** Xoá hàng `at` — luôn giữ lại ít nhất 1 hàng. */
 export function deleteRow(d: TableDraft, at: number): TableDraft {
   if (d.table.cells.length <= 1 || at < 0 || at >= d.table.cells.length) return d;
   const keep = (_: unknown, i: number): boolean => i !== at;
-  return withTable(d, { cells: d.table.cells.filter(keep), rowHeights: d.table.rowHeights.filter(keep) });
+  return withTable(d, { cells: shiftCells(d.table.cells, "row", at, "delete").filter(keep), rowHeights: d.table.rowHeights.filter(keep) });
 }
 
 /** Chèn một cột trống tại vị trí `at` (0 = trái cùng, cols = cuối). */
@@ -125,7 +126,7 @@ export function insertColumn(d: TableDraft, at: number): TableDraft {
     d,
     {
       align: ins<TableAlign>(d.table.align, "left"),
-      cells: d.table.cells.map((row) => ins(row, "")),
+      cells: shiftCells(d.table.cells.map((row) => ins(row, "")), "col", i, "insert"),
       colWidths: ins(d.table.colWidths, TABLE_DEFAULT_COL_W),
     },
     ins<number | null>(d.colOrigin, null)
@@ -139,7 +140,7 @@ export function deleteColumn(d: TableDraft, at: number): TableDraft {
   const del = <T>(arr: T[]): T[] => arr.filter((_, j) => j !== at);
   return withTable(
     d,
-    { align: del(d.table.align), cells: d.table.cells.map(del), colWidths: del(d.table.colWidths) },
+    { align: del(d.table.align), cells: shiftCells(d.table.cells, "col", at, "delete").map(del), colWidths: del(d.table.colWidths) },
     del(d.colOrigin)
   );
 }
@@ -343,8 +344,10 @@ export interface TableThumbnail {
 /** Cắt bảng còn tối đa `maxRows` × `maxCols` ô để vẽ thẻ thu nhỏ trên
  *  node; `moreRows`/`moreCols` báo còn phần bị ẩn (vẽ "…"). */
 export function tableThumbnail(t: TableBlock, maxRows = 4, maxCols = 5): TableThumbnail {
+  // Ô công thức hiện KẾT QUẢ; chỉ tính các ô thấy được (tính lười) nên bảng lớn vẫn nhẹ.
+  const ev = hasFormulas(t) ? evalTable(t) : null;
   return {
-    cells: t.cells.slice(0, maxRows).map((row) => row.slice(0, maxCols)),
+    cells: t.cells.slice(0, maxRows).map((row, r) => row.slice(0, maxCols).map((raw, c) => (ev ? ev.at(r, c).text : raw))),
     headerRow: t.headerRow,
     align: t.align.slice(0, maxCols),
     colWidths: t.colWidths.slice(0, maxCols),

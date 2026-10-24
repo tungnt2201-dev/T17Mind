@@ -29,6 +29,7 @@
   import type { Block, ImageDisplaySize } from "../../core/types";
   import MentionTextarea from "./MentionTextarea.svelte";
   import ChartBlockEditor from "./ChartBlockEditor.svelte";
+  import { displayCells } from "../../core/formula";
 
   export let store: Store;
   export let controller: AppController;
@@ -132,7 +133,7 @@
               on:click={() => openTable(card.id, b.id)}
               on:keydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openTable(card.id, b.id); } }}>
               <table><tbody>
-                {#each b.cells.slice(0, 4) as row, r}
+                {#each displayCells(b).slice(0, 4) as row, r}
                   <tr>
                     {#each row.slice(0, 4) as cell}
                       {#if r === 0 && b.headerRow}<th>{cell}</th>{:else}<td>{cell}</td>{/if}

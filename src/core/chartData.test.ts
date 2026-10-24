@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chartDataOf, chartHasData } from "./chartData";
+import { chartDataOf, chartHasData, defaultChartColumns } from "./chartData";
 import { tableFromGrid } from "./table";
 
 const table = tableFromGrid("t", [
@@ -33,5 +33,22 @@ describe("chartDataOf", () => {
   it("toàn chữ → không có dữ liệu", () => {
     const d = chartDataOf(table, { labelColumn: 1, seriesColumns: [0] });
     expect(chartHasData(d)).toBe(false);
+  });
+});
+
+describe("chartDataOf với ô công thức", () => {
+  it("biểu đồ đọc giá trị ĐÃ TÍNH; nhãn/tiêu đề cũng lấy kết quả", () => {
+    const t = tableFromGrid("t", [
+      ["Mục", "A", "B", "Tổng"],
+      ["x", "1", "2", "=B2+C2"],
+      ["y", "3", "4", "=SUM(B3:C3)"],
+      ["z", "5", "oops", "=B4/0"],
+    ]);
+    const d = chartDataOf(t, { labelColumn: 0, seriesColumns: [3] });
+    expect(d.series[0]!.values).toEqual([3, 7, null]); // ô lỗi → null, không vẽ
+  });
+  it("cột mặc định tính cả cột chỉ có công thức", () => {
+    const t = tableFromGrid("t", [["a", "b"], ["x", "=1+1"]]);
+    expect(defaultChartColumns(t).seriesColumns).toEqual([1]);
   });
 });
