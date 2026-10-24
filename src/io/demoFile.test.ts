@@ -62,3 +62,20 @@ describe("File demo docs/demo/T17Mind-tag-database.t17m (KW5)", () => {
     expect(grid[1]).toEqual(["Wireframe trang chủ", "Xong", "6", "20/10/2026", "An"]);
   });
 });
+
+describe("File demo docs/demo/T17Mind-card-editor.t17m (KW6)", () => {
+  it("mở được, hợp lệ; có văn bản định dạng và khối nhúng đọc ra nội dung nguồn", async () => {
+    const buf = readFileSync(new URL("../../docs/demo/T17Mind-card-editor.t17m", import.meta.url));
+    const res = await parseT17mFile(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const blocks = Object.values(res.map.cards).flatMap((c) => c.blocks);
+    expect(blocks.some((b) => b.type === "embed")).toBe(true);
+    expect(blocks.some((b) => b.type === "text" && b.text.includes("- [x]") && b.text.includes("```"))).toBe(true);
+    const { renderMarkdown } = await import("./markdownDoc");
+    const md = renderMarkdown(buildDocModel(res.map, { ...DEFAULT_DOC_OPTIONS, headingDepth: 2 }), "none").markdown;
+    expect(md).toContain("*Nhúng từ: Ngân sách*");
+    expect(md).toContain("| Tổng | 4.600 |");
+    expect(md).toContain("- [x] Chốt wireframe");
+  });
+});

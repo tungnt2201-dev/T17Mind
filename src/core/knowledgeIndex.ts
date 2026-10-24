@@ -14,7 +14,8 @@
  * ---------------------------------------------------------------------
  */
 import type { Block, MindMap } from "./types";
-import { describeBlock, linksIn, plainText, type LinkRef } from "./links";
+import { describeBlock, linksIn, type LinkRef } from "./links";
+import { displayText } from "./richText";
 import { normalizeForSearch } from "./search";
 import { mapDisplayTitle } from "./workspace";
 
@@ -62,13 +63,18 @@ function make(base: Omit<IndexEntry, "titleN" | "bodyN">): IndexEntry {
 export function blockSearchText(map: MindMap, block: Block): string {
   switch (block.type) {
     case "text":
-      return plainText(block.text, map);
+      return displayText(block.text, map);
     case "table":
       return [block.title, ...block.cells.map((row) => row.join(" · "))].filter(Boolean).join("\n");
     case "image":
       return block.caption;
     case "chart":
       return block.title;
+    case "embed": {
+      // Khối nhúng chỉ ghi nhận TÊN card nguồn (nội dung đã được lập chỉ mục ở chính card nguồn).
+      const src = map.cards[block.cardId];
+      return src ? `Nhúng: ${src.title}` : "";
+    }
   }
 }
 

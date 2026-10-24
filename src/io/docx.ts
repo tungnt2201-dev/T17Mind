@@ -12,6 +12,7 @@
  */
 import {
   AlignmentType,
+  BorderStyle,
   Document,
   HeadingLevel,
   ImageRun,
@@ -25,7 +26,7 @@ import {
   TextRun,
   WidthType,
 } from "docx";
-import { chartDocTable, maxOutline, outlineIndentStep, type DocBlock, type DocModel } from "../core/docModel";
+import { chartDocTable, maxOutline, outlineIndentStep, type DocBlock, type DocModel, type DocRun } from "../core/docModel";
 import type { TableAlign } from "../core/types";
 
 /** Bề rộng vùng chữ trang A4/Letter lề 1 inch ≈ 6.5 inch = 9360 dxa (1/20 pt). */
@@ -43,7 +44,7 @@ const BULLET_HANG_DXA = 283;
  */
 type IndentOf = (b: Exclude<DocBlock, { kind: "toc" }>) => number;
 function indentPlan(doc: DocModel, byLevel: boolean): IndentOf {
-  if (!byLevel) return (b) => (b.kind === "paragraph" || b.kind === "image" || b.kind === "table" || b.kind === "chart" ? b.indent * INDENT_DXA : 0);
+  if (!byLevel) return (b) => (b.kind === "paragraph" || b.kind === "image" || b.kind === "table" || b.kind === "chart" || b.kind === "quote" || b.kind === "code" || b.kind === "cardItem" ? b.indent * INDENT_DXA : 0);
   const step = outlineIndentStep(maxOutline(doc), TEXT_WIDTH_DXA);
   return (b) => b.outline * step;
 }
@@ -74,6 +75,21 @@ function b64ToBytes(b64: string): Uint8Array {
 // `bold` chỉ đặt khi true — đặt false sẽ ghi đè in đậm sẵn có của kiểu Heading.
 const runs = (text: string, bold = false): TextRun[] =>
   text.split("\n").map((line, i) => new TextRun({ text: line, ...(bold ? { bold: true } : {}), ...(i > 0 ? { break: 1 } : {}) }));
+
+/** Các đoạn chữ có kiểu (KW6) → TextRun; thiếu `runs` thì dùng `text` thường. */
+function styledRuns(text: string, rs: DocRun[] | undefined, extra: { italics?: boolean } = {}): TextRun[] {
+  if (!rs) return runs(text);
+  return rs.map(
+    (r) =>
+      new TextRun({
+        text: r.text,
+        ...(r.bold ? { bold: true } : {}),
+        ...(r.italic || extra.italics ? { italics: true } : {}),
+        ...(r.strike ? { strike: true } : {}),
+        ...(r.code ? { font: "Consolas", shading: { type: ShadingType.CLEAR, fill: "F3F4F6", color: "auto" } } : {}),
+      })
+  );
+}
 
 const IMAGE_TYPE: Record<string, "png" | "jpg" | "gif" | "bmp"> = {
   "image/png": "png",
@@ -148,8 +164,40 @@ export function buildDocxDocument(doc: DocModel, indentByLevel = true): Document
         break;
       }
       case "paragraph":
-        children.push(new Paragraph({ indent: left ? { left } : undefined, children: runs(b.text) }));
+        children.push(new Paragraph({ indent: left ? { left } : undefined, children: styledRuns(b.text, b.runs) }));
         break;
+      case "quote":
+        children.push(
+          new Paragraph({
+            indent: { left: left + 360 },
+            border: { left: { style: BorderStyle.SINGLE, size: 12, color: "CBD5E1", space: 8 } },
+            children: styledRuns(b.text, b.runs, { italics: true }),
+          })
+        );
+        break;
+      case "code":
+        for (const line of b.lines.length ? b.lines : [""]) {
+          children.push(
+            new Paragraph({
+              indent: left ? { left } : undefined,
+              spacing: { after: 0 },
+              shading: { type: ShadingType.CLEAR, fill: "F3F4F6", color: "auto" },
+              children: [new TextRun({ text: line, font: "Consolas", size: 20 })],
+            })
+          );
+        }
+        children.push(new Paragraph({ spacing: { after: 80 }, children: [] }));
+        break;
+      case "cardItem": {
+        const mark = b.marker === "number" ? `${b.n}. ` : b.marker === "check" ? (b.checked ? "☑ " : "☐ ") : "";
+        const pad = left + b.depth * 360;
+        if (b.marker === "bullet") {
+          children.push(new Paragraph({ bullet: { level: Math.min(8, b.depth) }, indent: { left: pad + BULLET_HANG_DXA, hanging: BULLET_HANG_DXA }, children: styledRuns(b.text, b.runs) }));
+        } else {
+          children.push(new Paragraph({ indent: { left: pad + BULLET_HANG_DXA, hanging: BULLET_HANG_DXA }, children: [new TextRun({ text: mark }), ...styledRuns(b.text, b.runs)] }));
+        }
+        break;
+      }
       case "table":
         if (b.title) children.push(new Paragraph({ indent: left ? { left } : undefined, children: [new TextRun({ text: b.title, bold: true })] }));
         children.push(tableFor(b, left));

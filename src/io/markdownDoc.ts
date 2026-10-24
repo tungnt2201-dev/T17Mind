@@ -8,6 +8,7 @@
  * zip cùng file .md), "none" (bỏ ảnh). Hàm THUẦN, không cần DOM/zip.
  * ---------------------------------------------------------------------
  */
+import { inlineToMarkdown } from "../core/richText";
 import { chartDocTable, type DocBlock, type DocModel } from "../core/docModel";
 
 export type MarkdownImageMode = "embed" | "files" | "none";
@@ -89,7 +90,26 @@ export function renderMarkdown(doc: DocModel, imageMode: MarkdownImageMode = "fi
       }
       case "paragraph": {
         const pad = "  ".repeat(b.indent);
-        parts.push({ text: b.text.split("\n").map((l) => `${pad}${escapeLineStart(l)}`).join("  \n"), tight: false });
+        // Có đoạn chữ có kiểu (KW6): dựng lại ký hiệu **đậm**/*nghiêng*… thay vì chữ thuần.
+        const body = b.runs ? inlineToMarkdown(b.runs) : b.text;
+        parts.push({ text: body.split("\n").map((l) => `${pad}${escapeLineStart(l)}`).join("  \n"), tight: false });
+        break;
+      }
+      case "quote": {
+        const pad = "  ".repeat(b.indent);
+        parts.push({ text: `${pad}> ${(b.runs ? inlineToMarkdown(b.runs) : b.text).replace(/\n/g, `\n${pad}> `)}`, tight: false });
+        break;
+      }
+      case "code": {
+        const pad = "  ".repeat(b.indent);
+        const fence = b.lines.some((l) => l.includes("```")) ? "````" : "```";
+        parts.push({ text: [`${pad}${fence}`, ...b.lines.map((l) => `${pad}${l}`), `${pad}${fence}`].join("\n"), tight: false });
+        break;
+      }
+      case "cardItem": {
+        const pad = "  ".repeat(b.indent + b.depth);
+        const lead = b.marker === "number" ? `${b.n}. ` : b.marker === "check" ? `- [${b.checked ? "x" : " "}] ` : "- ";
+        parts.push({ text: `${pad}${lead}${b.runs ? inlineToMarkdown(b.runs) : b.text}`, tight: true });
         break;
       }
       case "table":

@@ -3989,3 +3989,20 @@ Biến Tag thành một "bảng dữ liệu": mỗi Tag có thể có THUỘC T�
 Hàng công cụ thứ hai dài ~1900 px (phải cuộn ngang). Rút còn ~800 px, không bỏ chức năng nào: Vừa khung, Về gốc, Sắp xếp lại, Tự nhiên, Áp dụng theme, Theme riêng, Sao chép, Nhân bản, Định dạng, Xoá chuyển thành nút CHỈ-BIỂU-TƯỢNG (có `title` đầy đủ + `aria-label`; nút bật/tắt có trạng thái nổi và `aria-pressed`). Ghi chú dán / Liên kết chéo / Tóm tắt / Nhóm trực quan gộp vào menu "Chèn ▾" (nút sáng lên khi chế độ liên kết đang bật); Tạo / Tách nhánh trôi gộp vào menu "Nhánh trôi ▾"; "Bảng Tag" thành biểu tượng ▦ trong cụm biểu tượng bên phải hàng 1. Logic gọi AppController giữ nguyên, chỉ đổi cách trình bày. Phím tắt không đổi.
 
 Kiểm tra tay: mọi nút hàng 2 còn hoạt động và còn tooltip; menu Chèn/Nhánh trôi đóng sau khi chọn; nút Liên kết chéo đổi trạng thái; cửa sổ 1280 px không còn thanh cuộn ngang.
+
+## KW6 — Card Editor nâng cao (Markdown rút gọn, thanh định dạng, menu "/", khối nhúng)
+
+**Quyết định thư viện:** KHÔNG thêm thư viện editor ngoài (ProseMirror/TipTap ~100–150 KB). Khối văn bản vẫn là MỘT CHUỖI (`TextBlock.text`) và định dạng là "Markdown rút gọn" nằm ngay trong chuỗi đó. Lý do: không đổi schema/định dạng file, chữ cũ hiện y nguyên, token liên kết `[[card:…]]` và `@` giữ nguyên, tìm kiếm/trích đoạn/xuất đều đọc chuỗi, undo vẫn là `ReplaceBlockCommand` từng lần chỉnh, bản exe và PWA không nặng thêm. Đổi lại ô sửa là ô chữ có thanh định dạng (không phải WYSIWYG); chế độ xem hiển thị đã định dạng.
+
+- **Cú pháp** (`core/richText.ts`, thuần): `#`/`##`/`###` tiêu đề, `- `/`* ` danh sách (thụt 2 dấu cách/bậc), `1. ` danh sách số, `- [ ]`/`- [x]` việc cần làm, `> ` trích dẫn, hàng rào ``` khối mã; trong dòng `**đậm**`, `*nghiêng*`, `~~gạch~~`, `` `mã` `` (kể cả `***cả hai***` và định dạng bao quanh liên kết). Ký hiệu phải ôm sát chữ nên "5 * 3 * 2" hay "9:00 - mang laptop" vẫn là chữ thường.
+- **Phép sửa** (`core/richEdit.ts`, thuần): bao/bỏ bao vùng chọn, đặt/bỏ kiểu dòng cho nhiều dòng (đánh số tự động), chèn khối mã, Enter nối tiếp danh sách (tick luôn trống, số tăng dần, Enter ở dòng rỗng thì thoát danh sách), menu "/" (lọc không dấu).
+- **Ô sửa** (`MentionTextarea` có `toolbar`): thanh B / I / S / mã / H1 / H2 / danh sách / số / tick / trích dẫn / khối mã, Ctrl+B, Ctrl+I, gõ "/" ở đầu dòng mở menu chèn khối (Tiêu đề, Danh sách, Việc cần làm, Trích dẫn, Khối mã, Liên kết, Nhúng). Mỗi lần định dạng LƯU NGAY = một bước hoàn tác.
+- **Xem** (`RichText.svelte`): hiển thị định dạng, bấm ô tick để đổi (lưu ngay, hoàn tác được), liên kết bấm được như trước.
+- **Khối nhúng** (`EmbedBlock`: `cardId`, `blockId | null`): hiện nội dung HIỆN TẠI của một card khác (cả card hoặc một khối), không sao chép. Thêm bằng nút "Nhúng…" hoặc "/" → "Nhúng card hoặc khối"; có thẻ "Mở nguồn". Không nhúng chính mình (validate); nguồn bị xoá thì báo "đã bị xoá"; nhúng lồng chỉ một tầng (không vòng lặp). Ghép map ánh xạ lại `cardId`.
+- **Hiển thị khác:** đoạn trích trên node, tìm kiếm, Thư viện, mô tả liên kết khối đều dùng chữ đã bỏ ký hiệu (`displayText`).
+- **Xuất:** Word có chữ đậm/nghiêng/gạch/mã thật, danh sách (gạch đầu dòng, số, ☐/☑), trích dẫn có vạch, khối mã nền xám; Markdown dựng lại đúng ký hiệu; khối nhúng được bung ra (kèm công thức đã tính) với nhãn "Nhúng từ …". Văn bản không có ký hiệu đi đường cũ (giữ nguyên).
+- **Nhập Markdown:** khối mã ```, trích dẫn và đoạn có định dạng thành khối văn bản của card (giữ ký hiệu); đoạn chữ thường vẫn là ghi chú của node như trước. Khứ hồi xuất→nhập giữ định dạng.
+
+**Giới hạn:** không có chế độ sửa WYSIWYG (sửa trong ô chữ, xem đã định dạng); danh sách số đánh lại thứ tự khi hiển thị chứ không tự đánh lại trong chuỗi khi chèn/xoá giữa chừng; chưa có bảng/ảnh nằm trong dòng văn bản (vẫn là khối riêng); Ctrl+Z khi con trỏ đang trong ô chữ của trang card vẫn là hoàn tác của trình duyệt cho đến khi rời ô (hành vi sẵn có).
+
+**Test:** `core/richText.test.ts` (23: phân tích, ký hiệu hỏng, chữ cũ không đổi, phép sửa, menu "/"), `io/richExport.test.ts` (12: docModel/Markdown/Word, văn bản thường không đổi, nhập Markdown + khứ hồi, khối nhúng: validate, Command, xuất, vòng lặp, ghép map).
