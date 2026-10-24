@@ -288,7 +288,7 @@ export interface ImageAsset {
  * M1 (Card & Block) — NỘI DUNG của một Card là danh sách khối có thứ tự.
  * Mỗi khối có `id` duy nhất TRONG card đó (không cần duy nhất toàn map).
  */
-export type BlockType = "text" | "table" | "image" | "chart";
+export type BlockType = "text" | "table" | "image" | "chart" | "embed";
 
 interface BlockBase {
   id: string;
@@ -343,7 +343,16 @@ export interface ChartBlock extends BlockBase {
   seriesColumns: number[];
 }
 
-export type Block = TextBlock | TableBlock | ImageBlock | ChartBlock;
+/** KW6 — khối NHÚNG: hiện nội dung của một card khác (cả card, hoặc một khối của card đó) ngay trong card này, luôn là
+ *  bản mới nhất (không sao chép). Đích bị xoá thì hiện thông báo "nguồn đã bị xoá". Không nhúng chính card mình. */
+export interface EmbedBlock extends BlockBase {
+  type: "embed";
+  cardId: string;
+  /** null = nhúng cả card. */
+  blockId: string | null;
+}
+
+export type Block = TextBlock | TableBlock | ImageBlock | ChartBlock | EmbedBlock;
 
 /**
  * M1 — Card: một "tờ ghi chú" độc lập với vị trí trên sơ đồ. `id` duy
