@@ -11,9 +11,17 @@ const TYPES: TagFieldType[] = ["text", "number", "date", "select", "status"];
 const isRec = (v: unknown): v is Rec => typeof v === "object" && v !== null && !Array.isArray(v);
 const hex = (v: unknown): string => (typeof v === "string" && /^#[0-9a-fA-F]{3,8}$/.test(v) ? v : "#6c757d");
 
+const MAX_ORDER = 5000;
+
 export function sanitizeTagFields(tags: Rec[]): void {
   const usedFieldIds = new Set<string>();
   for (const tag of tags) {
+    if (isRec(tag) && "order" in tag) {
+      const seen = new Set<string>();
+      const ord = (Array.isArray(tag.order) ? tag.order : []).filter((x): x is string => typeof x === "string" && x !== "" && !seen.has(x) && !!seen.add(x));
+      if (ord.length > 0) tag.order = ord.slice(0, MAX_ORDER);
+      else delete tag.order;
+    }
     if (!isRec(tag) || !("fields" in tag)) continue;
     const out: TagField[] = [];
     if (Array.isArray(tag.fields)) {
@@ -23,6 +31,7 @@ export function sanitizeTagFields(tags: Rec[]): void {
         if (typeof f.name !== "string" || !TYPES.includes(f.type as TagFieldType)) continue;
         const type = f.type as TagFieldType;
         const field: TagField = { id: f.id, name: f.name, type };
+        if (f.showOnNode === true) field.showOnNode = true;
         if (hasOptions(type)) {
           const seen = new Set<string>();
           field.options = [];

@@ -3989,3 +3989,13 @@ Biến Tag thành một "bảng dữ liệu": mỗi Tag có thể có THUỘC T�
 Hàng công cụ thứ hai dài ~1900 px (phải cuộn ngang). Rút còn ~800 px, không bỏ chức năng nào: Vừa khung, Về gốc, Sắp xếp lại, Tự nhiên, Áp dụng theme, Theme riêng, Sao chép, Nhân bản, Định dạng, Xoá chuyển thành nút CHỈ-BIỂU-TƯỢNG (có `title` đầy đủ + `aria-label`; nút bật/tắt có trạng thái nổi và `aria-pressed`). Ghi chú dán / Liên kết chéo / Tóm tắt / Nhóm trực quan gộp vào menu "Chèn ▾" (nút sáng lên khi chế độ liên kết đang bật); Tạo / Tách nhánh trôi gộp vào menu "Nhánh trôi ▾"; "Bảng Tag" thành biểu tượng ▦ trong cụm biểu tượng bên phải hàng 1. Logic gọi AppController giữ nguyên, chỉ đổi cách trình bày. Phím tắt không đổi.
 
 Kiểm tra tay: mọi nút hàng 2 còn hoạt động và còn tooltip; menu Chèn/Nhánh trôi đóng sau khi chọn; nút Liên kết chéo đổi trạng thái; cửa sổ 1280 px không còn thanh cuộn ngang.
+
+## Bảng Tag: giá trị hiện trên node + thứ tự thẻ Kanban
+
+Xử lý hai giới hạn còn lại của KW5.
+
+- **Hiện giá trị trên node:** mỗi thuộc tính có tuỳ chọn `showOnNode` ("Hiện trên node" trong "Thuộc tính…", đổi qua `UpdateTagFieldCommand`, hoàn tác được). Thuộc tính bật và có giá trị thì hiện thành thẻ nhỏ ở hàng dưới cùng của node, ngay sau viên Tag: Chọn một/Trạng thái mang màu lựa chọn, kiểu khác là thẻ xám "Tên: giá trị". Tối đa 4 thẻ; hàng rộng tối đa 420 px, thẻ nào không vừa bị thay bằng "…". `core/tagDb.ts#nodeFieldChips` (thuần) + `CanvasRenderer.labelItems` dùng chung cho đo node và vẽ nên bề rộng node luôn khớp.
+- **Thứ tự thẻ Kanban:** `TagDef.order?: string[]` (id node) lưu thứ tự thủ công. Kanban xếp thẻ trong cột theo đó (node chưa xếp đi sau, theo thứ tự cây); kéo thẻ thả LÊN một thẻ khác = chèn trước thẻ đó, thả vào vùng trống của cột = xuống cuối cột. Đổi cột + đổi vị trí gộp trong MỘT bước hoàn tác (`CompositeCommand` của `SetFieldValueCommand` + `SetTagOrderCommand`). Bảng vẫn dùng "sắp xếp" riêng, không bị ảnh hưởng. `orderRows` / `moveInOrder` là hàm thuần có test.
+- Cả hai là dữ liệu tuỳ chọn, không đổi schema, làm sạch khi đọc file (`showOnNode` chỉ nhận đúng `true`, `order` bỏ trùng/rác).
+
+**Test:** thêm 7 ca vào `core/tagDb.test.ts` (thẻ trên node, giới hạn số thẻ, JSON/làm sạch, orderRows, moveInOrder, SetTagOrderCommand, kéo thẻ một bước hoàn tác).

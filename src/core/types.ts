@@ -236,6 +236,9 @@ export interface TagDef {
    *  schema: thiếu = Tag chưa có thuộc tính. Giá trị nằm ở
    *  `MindNode.fieldValues` của từng node mang Tag này. */
   fields?: TagField[];
+  /** KW5 — thứ tự thủ công của các node mang Tag này (id node), do kéo thẻ Kanban đặt. Node không có
+   *  trong danh sách xếp sau, theo thứ tự cây. Tuỳ chọn. */
+  order?: string[];
 }
 
 export type TagFieldType = "text" | "number" | "date" | "select" | "status";
@@ -254,6 +257,8 @@ export interface TagField {
   type: TagFieldType;
   /** Chỉ có với "select" / "status". */
   options?: TagFieldOption[];
+  /** Hiện giá trị của thuộc tính này thành một thẻ nhỏ ngay trên node ở sơ đồ (cạnh viên thuốc Tag). */
+  showOnNode?: boolean;
 }
 
 /**
