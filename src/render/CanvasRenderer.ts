@@ -112,7 +112,23 @@ const LABEL_ROW_HEIGHT = 22;
 const LABEL_PILL_HEIGHT = 16;
 const LABEL_PILL_PAD_X = 8;
 const LABEL_PILL_GAP = 5;
-const LABEL_ROW_MAX_WIDTH = 420;
+const LABEL_ROW_MAX_WIDTH = 480;
+const LABEL_CHIP_GAP = 4;
+const LABEL_GROUP_GAP = 12;
+const LABEL_DOT_W = 10;
+
+interface LabelItem {
+  text: string;
+  kind: "tag" | "chip";
+  fg: string;
+  bg: string;
+  border: string | null;
+  /** Chấm màu lựa chọn đứng trước chữ (thẻ giá trị Chọn một/Trạng thái). */
+  dot: string | null;
+  /** Khoảng cách tới viên kế tiếp (rộng hơn giữa hai nhóm Tag). */
+  gapAfter: number;
+}
+
 
 /** P2.7h (Phần 4) — "Kiểu cây tự nhiên": độ rộng ĐẦU đường (phía cha)
  *  = computeEdgeWidth() nhân với hệ số này (phóng to hẳn so với nét
@@ -310,9 +326,7 @@ export class CanvasRenderer {
       // chứa trọn hàng viên thuốc đó nếu nó rộng hơn phần chữ chính.
       if (node.tagIds.length > 0) {
         this.ctx.font = FONT_LABEL;
-        const items = this.labelItems(map, node);
-        const pillsWidth =
-          items.reduce((sum, it) => sum + this.ctx.measureText(it.text).width + LABEL_PILL_PAD_X * 2, 0) + LABEL_PILL_GAP * (items.length - 1);
+        const pillsWidth = this.labelRowWidth(this.labelItems(map, node));
         width = Math.max(width, Math.min(LABEL_ROW_MAX_WIDTH, pillsWidth + 20));
         height += LABEL_ROW_HEIGHT;
       }
@@ -1768,24 +1782,39 @@ export class CanvasRenderer {
    *  màu Tag qua lightenHex, chữ giữ nguyên màu gốc) — trước đây mọi
    *  nhãn dùng chung một màu xanh cố định. */
   /**
-   * Các viên trong hàng dưới cùng của node: viên Tag (màu Tag), rồi các thẻ GIÁ TRỊ thuộc tính (KW5, bật
-   * "Hiện trên node"): lựa chọn/trạng thái mang màu lựa chọn, giá trị khác là thẻ xám "Tên: giá trị".
-   * Viên nào không còn vừa bề rộng tối đa thì bị bỏ, thay bằng một viên "…".
+   * Các viên trong hàng dưới cùng của node, GOM THEO TỪNG TAG để phân biệt rõ:
+   *  - viên TAG: hình thuốc (capsule) nền nhạt màu Tag, chữ đậm màu Tag — giữ đúng kiểu cũ;
+   *  - thẻ GIÁ TRỊ thuộc tính (KW5, bật "Hiện trên node") của Tag đó: hình chữ nhật bo nhỏ, nền sáng, VIỀN màu Tag,
+   *    đứng ngay sau viên Tag của nó; thuộc tính Chọn một/Trạng thái thêm chấm màu lựa chọn.
+   * Giữa hai nhóm Tag có khoảng cách rộng hơn. Viên nào không còn vừa bề rộng tối đa bị bỏ, thay bằng "…".
    */
-  private labelItems(map: MindMap, node: MindNode): { text: string; fg: string; bg: string; capsule: boolean }[] {
-    const items: { text: string; fg: string; bg: string; capsule: boolean }[] = [];
+  private labelItems(map: MindMap, node: MindNode): LabelItem[] {
+    const items: LabelItem[] = [];
     for (const id of node.tagIds) {
       const tag = map.tags.find((t) => t.id === id);
-      items.push({ text: tag?.name ?? "?", fg: tag?.color ?? "#6b7480", bg: lightenHex(tag?.color ?? "#6b7480", 0.82), capsule: true });
-    }
-    for (const chip of nodeFieldChips(map, node)) {
-      items.push(
-        chip.color
-          ? { text: chip.text, fg: chip.color, bg: lightenHex(chip.color, 0.82), capsule: false }
-          : { text: chip.text, fg: "#4b5563", bg: "#eef0f3", capsule: false }
-      );
+      const color = tag?.color ?? "#6b7480";
+      items.push({ text: tag?.name ?? "?", kind: "tag", fg: color, bg: lightenHex(color, 0.82), border: null, dot: null, gapAfter: LABEL_PILL_GAP });
+      for (const chip of nodeFieldChips(map, node, id)) {
+        items.push({
+          text: chip.text,
+          kind: "chip",
+          fg: "#1f2933",
+          bg: chip.color ? lightenHex(chip.color, 0.85) : "#ffffff",
+          border: lightenHex(color, 0.35),
+          dot: chip.color,
+          gapAfter: LABEL_CHIP_GAP,
+        });
+      }
+      items[items.length - 1]!.gapAfter = LABEL_GROUP_GAP;
     }
     return items;
+  }
+
+  private labelItemWidth(it: LabelItem): number {
+    return this.ctx.measureText(it.text).width + LABEL_PILL_PAD_X * 2 + (it.dot ? LABEL_DOT_W : 0);
+  }
+  private labelRowWidth(items: LabelItem[]): number {
+    return items.reduce((a, it, i) => a + this.labelItemWidth(it) + (i < items.length - 1 ? it.gapAfter : 0), 0);
   }
 
   private drawLabelPills(map: MindMap, node: MindNode): void {
@@ -1796,28 +1825,43 @@ export class CanvasRenderer {
     if (items.length === 0) return;
 
     ctx.font = FONT_LABEL;
-    const widthOf = (text: string): number => ctx.measureText(text).width + LABEL_PILL_PAD_X * 2;
     const maxW = Math.max(40, Math.min(LABEL_ROW_MAX_WIDTH, node.width) - 8);
-    const total = (list: typeof items): number => list.reduce((a, it) => a + widthOf(it.text), 0) + LABEL_PILL_GAP * (list.length - 1);
-    if (total(items) > maxW) {
+    if (this.labelRowWidth(items) > maxW) {
+      const more: LabelItem = { text: "…", kind: "chip", fg: "#6b7480", bg: "#eef0f3", border: null, dot: null, gapAfter: 0 };
       const kept = [...items];
-      while (kept.length > 1 && total([...kept, { text: "…", fg: "#6b7480", bg: "#eef0f3", capsule: false }]) > maxW) kept.pop();
-      items = kept.length < items.length ? [...kept, { text: "…", fg: "#6b7480", bg: "#eef0f3", capsule: false }] : kept;
+      while (kept.length > 1 && this.labelRowWidth([...kept, more]) > maxW) kept.pop();
+      kept[kept.length - 1]!.gapAfter = LABEL_CHIP_GAP;
+      items = [...kept, more];
     }
-    let x = node.x + node.width / 2 - total(items) / 2;
+    let x = node.x + node.width / 2 - this.labelRowWidth(items) / 2;
 
     ctx.save();
-    ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     for (const it of items) {
-      const w = widthOf(it.text);
+      const w = this.labelItemWidth(it);
+      const h = it.kind === "tag" ? LABEL_PILL_HEIGHT : LABEL_PILL_HEIGHT - 2;
       ctx.beginPath();
-      this.roundRectPath(x, y - LABEL_PILL_HEIGHT / 2, w, LABEL_PILL_HEIGHT, it.capsule ? LABEL_PILL_HEIGHT / 2 : 4);
+      this.roundRectPath(x, y - h / 2, w, h, it.kind === "tag" ? h / 2 : 4);
       ctx.fillStyle = it.bg;
       ctx.fill();
+      if (it.border) {
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = it.border;
+        ctx.stroke();
+      }
+      let tx = x + w / 2;
+      if (it.dot) {
+        ctx.beginPath();
+        ctx.arc(x + LABEL_PILL_PAD_X + 2.5, y, 3, 0, Math.PI * 2);
+        ctx.fillStyle = it.dot;
+        ctx.fill();
+        tx += LABEL_DOT_W / 2;
+      }
+      ctx.textAlign = "center";
       ctx.fillStyle = it.fg;
-      ctx.fillText(it.text, x + w / 2, y + 1);
-      x += w + LABEL_PILL_GAP;
+      ctx.font = FONT_LABEL;
+      ctx.fillText(it.text, tx, y + 1);
+      x += w + it.gapAfter;
     }
     ctx.restore();
   }

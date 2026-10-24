@@ -334,16 +334,25 @@ export interface NodeChip {
   color: string | null;
 }
 
-/** Thẻ giá trị hiện trên node: các thuộc tính bật `showOnNode` của các Tag node đang mang, chỉ những ô có giá trị. */
-export function nodeFieldChips(map: Pick<MindMap, "tags">, node: { tagIds: readonly string[]; fieldValues?: Record<string, string> }): NodeChip[] {
+/**
+ * Thẻ giá trị hiện trên node: các thuộc tính bật `showOnNode`, chỉ những ô có giá trị. Có `tagId` thì chỉ lấy của Tag đó
+ * (để sơ đồ đặt mỗi thẻ ngay sau ĐÚNG Tag của nó). Trạng thái chỉ hiện giá trị (Chưa làm/Đang làm/Xong đã rõ nghĩa); các
+ * kiểu khác hiện "Tên thuộc tính: giá trị" để không lẫn thuộc tính này với thuộc tính kia.
+ */
+export function nodeFieldChips(
+  map: Pick<MindMap, "tags">,
+  node: { tagIds: readonly string[]; fieldValues?: Record<string, string> },
+  tagId?: string
+): NodeChip[] {
   if (!node.fieldValues) return [];
   const out: NodeChip[] = [];
-  for (const { field } of fieldsForNode(map, node.tagIds)) {
+  for (const { field } of fieldsForNode(map, tagId ? node.tagIds.filter((t) => t === tagId) : node.tagIds)) {
     if (!field.showOnNode) continue;
     const raw = node.fieldValues[field.id];
     const shown = displayValue(field, raw);
     if (shown === "") continue;
-    if (hasOptions(field.type)) out.push({ text: shown, color: optionOf(field, raw!)?.color ?? null });
+    if (field.type === "status") out.push({ text: shown, color: optionOf(field, raw!)?.color ?? null });
+    else if (field.type === "select") out.push({ text: `${field.name}: ${shown}`, color: optionOf(field, raw!)?.color ?? null });
     else out.push({ text: `${field.name}: ${shown}`, color: null });
     if (out.length >= MAX_NODE_CHIPS) break;
   }

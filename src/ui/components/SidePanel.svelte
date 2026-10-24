@@ -604,7 +604,7 @@
     <div class="divider"></div>
 
     <button type="button" class="section-header" on:click={() => (sectionOpen.work = !sectionOpen.work)}>
-      <span class="chevron" class:collapsed={!sectionOpen.work}>▾</span> Thuộc tính công việc
+      <span class="chevron" class:collapsed={!sectionOpen.work}>▾</span> Tiến độ, ưu tiên & Tag
     </button>
     {#if sectionOpen.work}
       <div class="row">

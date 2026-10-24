@@ -354,3 +354,25 @@ describe("thứ tự thẻ Kanban", () => {
     expect(m().nodes[s.ids[1]!]!.fieldValues![s.status]).toBe(doing); // bước trước đó vẫn còn
   });
 });
+
+describe("thẻ trên node theo từng Tag", () => {
+  it("lọc theo tagId: mỗi thẻ thuộc đúng Tag của nó; Chọn một có tên thuộc tính, Trạng thái chỉ có giá trị", () => {
+    const s = setup();
+    const m = () => s.store.getMap();
+    const second = new AddTagCommand("phương án", "#2bd44a");
+    s.store.dispatch(second);
+    s.store.dispatch(new ToggleNodeTagCommand(s.ids[0]!, second.newTagId));
+    const pick = new AddTagFieldCommand(second.newTagId, "mức", "select", makeOptions(["A22", "B7"]));
+    s.store.dispatch(pick);
+    const done = s.field(s.status).options![2]!;
+    s.store.dispatch(new SetFieldValueCommand([s.ids[0]!], s.status, done.id));
+    s.store.dispatch(new SetFieldValueCommand([s.ids[0]!], pick.newFieldId, m().tags.find((t) => t.id === second.newTagId)!.fields![0]!.options![0]!.id));
+    s.store.dispatch(new UpdateTagFieldCommand(s.tagId, s.status, { showOnNode: true }));
+    s.store.dispatch(new UpdateTagFieldCommand(second.newTagId, pick.newFieldId, { showOnNode: true }));
+    const node = m().nodes[s.ids[0]!]!;
+    expect(nodeFieldChips(m(), node, s.tagId).map((c) => c.text)).toEqual(["Xong"]);
+    expect(nodeFieldChips(m(), node, second.newTagId).map((c) => c.text)).toEqual(["mức: A22"]);
+    expect(nodeFieldChips(m(), node).map((c) => c.text)).toEqual(["Xong", "mức: A22"]);
+    expect(nodeFieldChips(m(), node, "khong-co")).toEqual([]);
+  });
+});
