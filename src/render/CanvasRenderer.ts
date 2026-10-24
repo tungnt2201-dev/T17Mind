@@ -43,6 +43,7 @@ import { collectVisibleNodeIds, getRootIds } from "../core/tree";
 import type { NodeMeasurer } from "../layout";
 import { buildChartModel, drawChartOnCanvas, type ChartModel } from "./chartModel";
 import { chartDataOf } from "../core/chartData";
+import { packLabelRows } from "./labelRows";
 import { nodeFieldChips } from "../core/tagDb";
 import { THUMB_ROW_H, THUMB_MORE_W, THUMB_FONT, type ThumbLayout } from "./tableThumb";
 import type { ChartBlock, ImageAsset, TableBlock } from "../core/types";
@@ -113,6 +114,23 @@ const LABEL_PILL_HEIGHT = 16;
 const LABEL_PILL_PAD_X = 8;
 const LABEL_PILL_GAP = 5;
 const LABEL_ROW_MAX_WIDTH = 420;
+const LABEL_MAX_ROWS = 4;
+const LABEL_CHIP_GAP = 4;
+const LABEL_GROUP_GAP = 12;
+const LABEL_DOT_W = 10;
+
+interface LabelItem {
+  text: string;
+  kind: "tag" | "chip";
+  fg: string;
+  bg: string;
+  border: string | null;
+  /** Chấm màu lựa chọn đứng trước chữ (thẻ giá trị Chọn một/Trạng thái). */
+  dot: string | null;
+  /** Khoảng cách tới viên kế tiếp (rộng hơn giữa hai nhóm Tag). */
+  gapAfter: number;
+}
+
 
 /** P2.7h (Phần 4) — "Kiểu cây tự nhiên": độ rộng ĐẦU đường (phía cha)
  *  = computeEdgeWidth() nhân với hệ số này (phóng to hẳn so với nét
@@ -293,7 +311,7 @@ export class CanvasRenderer {
     const content = this.cardContent(map, node);
     if (!content) return null;
     const textHeight = this.measureTextBox(node, node.parentId === null).height;
-    const tagRow = node.tagIds.length > 0 ? LABEL_ROW_HEIGHT : 0;
+    const tagRow = this.labelBlockHeight(map, node, node.width);
     return placeCard(content, node, textHeight, tagRow, this.wrapPreview);
   }
 
@@ -302,6 +320,7 @@ export class CanvasRenderer {
    *  P2.7e — nhận thêm map để tra TÊN Tag qua tagIds (trước đây
    *  node.labels tự nó đã là chữ, giờ chỉ là id, cần tra ngược). */
   getMeasurer(map: MindMap): NodeMeasurer {
+    this.labelRowsCache.clear();
     this.pruneImageCache(map);
     return (node: MindNode, isRoot: boolean) => {
       let { width, height } = this.measureTextBox(node, isRoot);
@@ -310,11 +329,10 @@ export class CanvasRenderer {
       // chứa trọn hàng viên thuốc đó nếu nó rộng hơn phần chữ chính.
       if (node.tagIds.length > 0) {
         this.ctx.font = FONT_LABEL;
-        const items = this.labelItems(map, node);
-        const pillsWidth =
-          items.reduce((sum, it) => sum + this.ctx.measureText(it.text).width + LABEL_PILL_PAD_X * 2, 0) + LABEL_PILL_GAP * (items.length - 1);
+        const pillsWidth = this.labelRowWidth(this.labelItems(map, node));
         width = Math.max(width, Math.min(LABEL_ROW_MAX_WIDTH, pillsWidth + 20));
-        height += LABEL_ROW_HEIGHT;
+        // Nhiều Tag/thẻ giá trị hơn bề rộng cho phép thì xuống DÒNG (mỗi dòng một hàng LABEL_ROW_HEIGHT).
+        height += this.labelBlockHeight(map, node, node.manualWidth ?? width);
       }
 
       // M2 — thẻ thu nhỏ của bảng (xem render/tableThumb.ts): node cao
@@ -343,6 +361,7 @@ export class CanvasRenderer {
     searchPulse: SearchPulse | null = null
   ): void {
     const ctx = this.ctx;
+    this.labelRowsCache.clear();
     ctx.save();
     ctx.clearRect(0, 0, this.cssWidth, this.cssHeight);
     ctx.translate(view.offsetX, view.offsetY);
@@ -1278,7 +1297,7 @@ export class CanvasRenderer {
     // P2.2 — có nhãn thì chữ chính chỉ căn giữa trong PHẦN TRÊN của
     // node (bỏ chừa hàng nhãn ở đáy), không phải giữa toàn bộ chiều cao.
     // M2 — thẻ bảng (nếu có) nằm ngay trên hàng Tag, cũng bị trừ ra.
-    const tagRowHeight = node.tagIds.length > 0 ? LABEL_ROW_HEIGHT : 0;
+    const tagRowHeight = this.labelBlockHeight(map, node, node.width);
     const placed = this.placedCard(map, node);
     const textAreaHeight = node.height - tagRowHeight - (placed?.reserved ?? 0);
     // P2.3 — chừa chỗ cho CẢ HAI icon góc (ghi chú bên trái, link bên
@@ -1768,57 +1787,117 @@ export class CanvasRenderer {
    *  màu Tag qua lightenHex, chữ giữ nguyên màu gốc) — trước đây mọi
    *  nhãn dùng chung một màu xanh cố định. */
   /**
-   * Các viên trong hàng dưới cùng của node: viên Tag (màu Tag), rồi các thẻ GIÁ TRỊ thuộc tính (KW5, bật
-   * "Hiện trên node"): lựa chọn/trạng thái mang màu lựa chọn, giá trị khác là thẻ xám "Tên: giá trị".
-   * Viên nào không còn vừa bề rộng tối đa thì bị bỏ, thay bằng một viên "…".
+   * Các viên trong hàng dưới cùng của node, GOM THEO TỪNG TAG để phân biệt rõ:
+   *  - viên TAG: hình thuốc (capsule) nền nhạt màu Tag, chữ đậm màu Tag — giữ đúng kiểu cũ;
+   *  - thẻ GIÁ TRỊ thuộc tính (KW5, bật "Hiện trên node") của Tag đó: hình chữ nhật bo nhỏ, nền sáng, VIỀN màu Tag,
+   *    đứng ngay sau viên Tag của nó; thuộc tính Chọn một/Trạng thái thêm chấm màu lựa chọn.
+   * Giữa hai nhóm Tag có khoảng cách rộng hơn. Viên nào không còn vừa bề rộng tối đa bị bỏ, thay bằng "…".
    */
-  private labelItems(map: MindMap, node: MindNode): { text: string; fg: string; bg: string; capsule: boolean }[] {
-    const items: { text: string; fg: string; bg: string; capsule: boolean }[] = [];
+  private labelItems(map: MindMap, node: MindNode): LabelItem[] {
+    const items: LabelItem[] = [];
     for (const id of node.tagIds) {
       const tag = map.tags.find((t) => t.id === id);
-      items.push({ text: tag?.name ?? "?", fg: tag?.color ?? "#6b7480", bg: lightenHex(tag?.color ?? "#6b7480", 0.82), capsule: true });
-    }
-    for (const chip of nodeFieldChips(map, node)) {
-      items.push(
-        chip.color
-          ? { text: chip.text, fg: chip.color, bg: lightenHex(chip.color, 0.82), capsule: false }
-          : { text: chip.text, fg: "#4b5563", bg: "#eef0f3", capsule: false }
-      );
+      const color = tag?.color ?? "#6b7480";
+      items.push({ text: tag?.name ?? "?", kind: "tag", fg: color, bg: lightenHex(color, 0.82), border: null, dot: null, gapAfter: LABEL_PILL_GAP });
+      for (const chip of nodeFieldChips(map, node, id)) {
+        items.push({
+          text: chip.text,
+          kind: "chip",
+          fg: "#1f2933",
+          bg: chip.color ? lightenHex(chip.color, 0.85) : "#ffffff",
+          border: lightenHex(color, 0.35),
+          dot: chip.color,
+          gapAfter: LABEL_CHIP_GAP,
+        });
+      }
+      items[items.length - 1]!.gapAfter = LABEL_GROUP_GAP;
     }
     return items;
+  }
+
+  private labelItemWidth(it: LabelItem): number {
+    return this.ctx.measureText(it.text).width + LABEL_PILL_PAD_X * 2 + (it.dot ? LABEL_DOT_W : 0);
+  }
+  private labelRowWidth(items: LabelItem[]): number {
+    return items.reduce((a, it, i) => a + this.labelItemWidth(it) + (i < items.length - 1 ? it.gapAfter : 0), 0);
+  }
+
+  /**
+   * Chia các viên thành NHIỀU DÒNG vừa bề rộng `width` của node. Viên Tag luôn đi cùng thẻ giá trị đầu tiên của nó
+   * (không tách rời Tag khỏi thẻ ngay sau), thẻ giá trị quá dài tự rút gọn bằng "…"; tối đa LABEL_MAX_ROWS dòng,
+   * phần dư thay bằng một viên "…" ở cuối dòng cuối. Cần đã đặt `ctx.font = FONT_LABEL`.
+   */
+  private labelRowsCache = new Map<string, LabelItem[][]>();
+  private labelRows(map: MindMap, node: MindNode, width: number): LabelItem[][] {
+    // Dữ liệu không đổi trong một lần vẽ/đo (cache xoá ở đầu draw() và getMeasurer()) — tránh đo chữ lặp mỗi khung hình.
+    const key = `${node.id}|${Math.round(width)}`;
+    const hit = this.labelRowsCache.get(key);
+    if (hit) return hit;
+    const rows = this.computeLabelRows(map, node, width);
+    this.labelRowsCache.set(key, rows);
+    return rows;
+  }
+  private computeLabelRows(map: MindMap, node: MindNode, width: number): LabelItem[][] {
+    const ctx = this.ctx;
+    ctx.font = FONT_LABEL;
+    const avail = Math.max(60, width - 16);
+    const items = this.labelItems(map, node).map((it) => {
+      const maxText = avail - LABEL_PILL_PAD_X * 2 - (it.dot ? LABEL_DOT_W : 0);
+      if (ctx.measureText(it.text).width <= maxText) return it;
+      let t = it.text;
+      while (t.length > 1 && ctx.measureText(`${t}…`).width > maxText) t = t.slice(0, -1);
+      return { ...it, text: `${t}…` };
+    });
+    const more: LabelItem = { text: "…", kind: "chip", fg: "#6b7480", bg: "#eef0f3", border: null, dot: null, gapAfter: 0 };
+    return packLabelRows(items, (it) => this.labelItemWidth(it), avail, LABEL_MAX_ROWS, more);
+  }
+
+  /** Chiều cao khối Tag/thẻ giá trị ở đáy node (0 nếu node không có Tag). */
+  private labelBlockHeight(map: MindMap, node: MindNode, width: number): number {
+    if (node.tagIds.length === 0) return 0;
+    return Math.max(1, this.labelRows(map, node, width).length) * LABEL_ROW_HEIGHT;
   }
 
   private drawLabelPills(map: MindMap, node: MindNode): void {
     if (node.tagIds.length === 0) return;
     const ctx = this.ctx;
-    const y = node.y + node.height - LABEL_ROW_HEIGHT / 2;
-    let items = this.labelItems(map, node);
-    if (items.length === 0) return;
-
-    ctx.font = FONT_LABEL;
-    const widthOf = (text: string): number => ctx.measureText(text).width + LABEL_PILL_PAD_X * 2;
-    const maxW = Math.max(40, Math.min(LABEL_ROW_MAX_WIDTH, node.width) - 8);
-    const total = (list: typeof items): number => list.reduce((a, it) => a + widthOf(it.text), 0) + LABEL_PILL_GAP * (list.length - 1);
-    if (total(items) > maxW) {
-      const kept = [...items];
-      while (kept.length > 1 && total([...kept, { text: "…", fg: "#6b7480", bg: "#eef0f3", capsule: false }]) > maxW) kept.pop();
-      items = kept.length < items.length ? [...kept, { text: "…", fg: "#6b7480", bg: "#eef0f3", capsule: false }] : kept;
-    }
-    let x = node.x + node.width / 2 - total(items) / 2;
+    const rows = this.labelRows(map, node, node.width);
+    if (rows.length === 0) return;
 
     ctx.save();
-    ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    for (const it of items) {
-      const w = widthOf(it.text);
-      ctx.beginPath();
-      this.roundRectPath(x, y - LABEL_PILL_HEIGHT / 2, w, LABEL_PILL_HEIGHT, it.capsule ? LABEL_PILL_HEIGHT / 2 : 4);
-      ctx.fillStyle = it.bg;
-      ctx.fill();
-      ctx.fillStyle = it.fg;
-      ctx.fillText(it.text, x + w / 2, y + 1);
-      x += w + LABEL_PILL_GAP;
-    }
+    rows.forEach((row, r) => {
+      // Dòng cuối nằm sát đáy node; các dòng trước chồng lên phía trên.
+      const y = node.y + node.height - (rows.length - r) * LABEL_ROW_HEIGHT + LABEL_ROW_HEIGHT / 2;
+      if (row.length > 0) row[row.length - 1] = { ...row[row.length - 1]!, gapAfter: 0 };
+      let x = node.x + node.width / 2 - this.labelRowWidth(row) / 2;
+      for (const it of row) {
+        const w = this.labelItemWidth(it);
+        const h = it.kind === "tag" ? LABEL_PILL_HEIGHT : LABEL_PILL_HEIGHT - 2;
+        ctx.beginPath();
+        this.roundRectPath(x, y - h / 2, w, h, it.kind === "tag" ? h / 2 : 4);
+        ctx.fillStyle = it.bg;
+        ctx.fill();
+        if (it.border) {
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = it.border;
+          ctx.stroke();
+        }
+        let tx = x + w / 2;
+        if (it.dot) {
+          ctx.beginPath();
+          ctx.arc(x + LABEL_PILL_PAD_X + 2.5, y, 3, 0, Math.PI * 2);
+          ctx.fillStyle = it.dot;
+          ctx.fill();
+          tx += LABEL_DOT_W / 2;
+        }
+        ctx.textAlign = "center";
+        ctx.fillStyle = it.fg;
+        ctx.font = FONT_LABEL;
+        ctx.fillText(it.text, tx, y + 1);
+        x += w + it.gapAfter;
+      }
+    });
     ctx.restore();
   }
 
@@ -1975,7 +2054,7 @@ export class CanvasRenderer {
   hitTestCheckbox(map: MindMap, node: MindNode, screenX: number, screenY: number, view: ViewTransform): boolean {
     if (node.checked === null) return false;
     const { x: wx, y: wy } = this.toWorld(screenX, screenY, view);
-    const textAreaHeight = node.height - (node.tagIds.length > 0 ? LABEL_ROW_HEIGHT : 0) - (this.placedCard(map, node)?.reserved ?? 0);
+    const textAreaHeight = node.height - this.labelBlockHeight(map, node, node.width) - (this.placedCard(map, node)?.reserved ?? 0);
     const CHECKBOX_SIZE = 14;
     const TEXT_PADDING_X = 10;
     const cbX = node.x + TEXT_PADDING_X;

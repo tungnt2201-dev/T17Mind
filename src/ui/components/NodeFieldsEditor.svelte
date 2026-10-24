@@ -12,6 +12,7 @@
   import { SetFieldValueCommand } from "../../core/tagDbCommands";
   import { fieldsForNode, hasOptions, normalizeFieldValue } from "../../core/tagDb";
   import { tagDbStore, showNotice } from "../uiStores";
+  import { lightenHex } from "../../core/theme";
 
   export let store: Store;
   export let map: MindMap;
@@ -38,10 +39,12 @@
 {#if groups.length > 0}
   <div class="nfe" data-testid="node-fields">
     {#each groups as g (g.tag.id)}
+      <section class="nfe-group" style="border-left-color:{g.tag.color}" aria-label="Thuộc tính của Tag {g.tag.name}">
       <div class="nfe-tag">
-        <span class="nfe-name" style="color:{g.tag.color}">{g.tag.name}</span>
-        <button type="button" class="btn small-btn" title="Mở bảng / Kanban / biểu đồ của Tag này" on:click={() => tagDbStore.set({ tagId: g.tag.id })}>Mở bảng</button>
+        <span class="nfe-pill" style="background:{lightenHex(g.tag.color, 0.82)};color:{g.tag.color}">{g.tag.name}</span>
+        <button type="button" class="btn small-btn nfe-open" style="width:auto;flex:0 0 auto;white-space:nowrap" title="Mở bảng / Kanban / biểu đồ của Tag này" on:click={() => tagDbStore.set({ tagId: g.tag.id })}>Mở bảng</button>
       </div>
+      <div class="nfe-cap">{g.fields.length > 0 ? "Thuộc tính của Tag này:" : "Tag này chưa có thuộc tính — bấm Mở bảng để thêm."}</div>
       {#each g.fields as f (f.id)}
         <div class="row nfe-row">
           <label for="nfe-{f.id}">{f.name}</label>
@@ -57,12 +60,17 @@
           {/if}
         </div>
       {/each}
+      </section>
     {/each}
   </div>
 {/if}
 
 <style>
   .nfe { margin: 6px 0 4px; display: flex; flex-direction: column; gap: 4px; }
-  .nfe-tag { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 600; margin-top: 4px; }
+  .nfe-group { border: 1px solid #e5e7eb; border-left: 4px solid #6b7480; border-radius: 6px; padding: 6px 8px 6px 8px; background: #fbfcfe; display: flex; flex-direction: column; gap: 4px; }
+  .nfe-tag { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 12px; }
+  .nfe-pill { border-radius: 999px; padding: 1px 9px; font-size: 11.5px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .nfe-tag :global(.nfe-open) { width: auto; flex: 0 0 auto; white-space: nowrap; }
+  .nfe-cap { color: #6b7480; font-size: 11.5px; }
   .nfe-row { margin: 0; }
 </style>
