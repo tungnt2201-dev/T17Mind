@@ -16,17 +16,20 @@ function requireSource(map: MindMap, id: string): Source {
   return s;
 }
 
-/** Thêm một nguồn PDF cùng dữ liệu file (ghi vào map.assets). */
+/** Thêm một nguồn PDF: nhúng (kèm dữ liệu file, ghi vào map.assets) hoặc liên kết (`asset` = null, chỉ có `source.path`). */
 export class AddSourceCommand implements Command {
   readonly label = "Thêm nguồn PDF";
-  constructor(private readonly source: Source, private readonly asset: ImageAsset) {}
+  constructor(private readonly source: Source, private readonly asset: ImageAsset | null) {
+    if ((source.assetId === null) !== (asset === null)) throw new Error("Nguồn nhúng cần dữ liệu file; nguồn liên kết thì không.");
+    if (source.assetId === null && !source.path) throw new Error("Nguồn liên kết cần đường dẫn.");
+  }
   apply(map: MindMap): void {
     if (map.sources?.[this.source.id]) throw new Error(`Nguồn trùng id: ${this.source.id}`);
-    map.assets[this.source.assetId] = this.asset;
+    if (this.source.assetId && this.asset) map.assets[this.source.assetId] = this.asset;
     map.sources = { ...(map.sources ?? {}), [this.source.id]: deepClone(this.source) };
   }
   revert(map: MindMap): void {
-    delete map.assets[this.source.assetId];
+    if (this.source.assetId) delete map.assets[this.source.assetId];
     if (map.sources) {
       delete map.sources[this.source.id];
       if (Object.keys(map.sources).length === 0) delete map.sources;
@@ -44,8 +47,8 @@ export class RemoveSourceCommand implements Command {
   apply(map: MindMap): void {
     const s = requireSource(map, this.sourceId);
     this.removed = s;
-    this.asset = map.assets[s.assetId];
-    delete map.assets[s.assetId];
+    this.asset = s.assetId ? map.assets[s.assetId] : undefined;
+    if (s.assetId) delete map.assets[s.assetId];
     delete map.sources![this.sourceId];
     if (Object.keys(map.sources!).length === 0) delete map.sources;
     this.unlinked = [];
@@ -59,7 +62,7 @@ export class RemoveSourceCommand implements Command {
   }
   revert(map: MindMap): void {
     if (!this.removed) return;
-    if (this.asset) map.assets[this.removed.assetId] = this.asset;
+    if (this.asset && this.removed.assetId) map.assets[this.removed.assetId] = this.asset;
     map.sources = { ...(map.sources ?? {}), [this.sourceId]: this.removed };
     for (const u of this.unlinked) {
       const c = map.cards[u.cardId];
@@ -165,5 +168,58 @@ export class RenameSourceCommand implements Command {
   revert(map: MindMap): void {
     const s = map.sources?.[this.sourceId];
     if (s) s.name = this.old;
+  }
+}
+
+/** Cách lưu mới của một nguồn (sau khi chọn lại file, nhận bản đã đổi, hoặc chuyển nhúng ↔ liên kết). */
+export interface SourceStorage {
+  /** null = liên kết (chỉ có `path`). */
+  assetId: string | null;
+  path: string | null;
+  sha256: string | null;
+  size: number | null;
+  pages: number;
+}
+
+/**
+ * Đổi cách lưu / trỏ lại file của một nguồn trong MỘT bước hoàn tác. `newAsset` bắt buộc khi `next.assetId` khác null và
+ * khác asset cũ (chuyển sang nhúng); asset cũ bị gỡ khi không còn dùng (chuyển sang liên kết). Vùng tô sáng và card giữ nguyên.
+ */
+export class ChangeSourceStorageCommand implements Command {
+  readonly label = "Đổi cách lưu nguồn PDF";
+  private before: { assetId: string | null; path: string | undefined; sha256: string | undefined; size: number | undefined; pages: number } | null = null;
+  private oldAsset: ImageAsset | undefined;
+  constructor(private readonly sourceId: string, private readonly next: SourceStorage, private readonly newAsset: ImageAsset | null = null) {
+    if (next.assetId === null && !next.path) throw new Error("Nguồn liên kết cần đường dẫn.");
+  }
+  apply(map: MindMap): void {
+    const s = requireSource(map, this.sourceId);
+    this.before = { assetId: s.assetId, path: s.path, sha256: s.sha256, size: s.size, pages: s.pages };
+    this.oldAsset = s.assetId ? map.assets[s.assetId] : undefined;
+    if (s.assetId && s.assetId !== this.next.assetId) delete map.assets[s.assetId];
+    if (this.next.assetId && this.newAsset) map.assets[this.next.assetId] = this.newAsset;
+    s.assetId = this.next.assetId;
+    if (this.next.path) s.path = this.next.path;
+    else delete s.path;
+    if (this.next.sha256) s.sha256 = this.next.sha256;
+    else delete s.sha256;
+    if (this.next.size !== null) s.size = this.next.size;
+    else delete s.size;
+    s.pages = this.next.pages;
+  }
+  revert(map: MindMap): void {
+    const s = map.sources?.[this.sourceId];
+    const b = this.before;
+    if (!s || !b) return;
+    if (this.next.assetId && this.next.assetId !== b.assetId) delete map.assets[this.next.assetId];
+    if (b.assetId && this.oldAsset) map.assets[b.assetId] = this.oldAsset;
+    s.assetId = b.assetId;
+    if (b.path !== undefined) s.path = b.path;
+    else delete s.path;
+    if (b.sha256 !== undefined) s.sha256 = b.sha256;
+    else delete s.sha256;
+    if (b.size !== undefined) s.size = b.size;
+    else delete s.size;
+    s.pages = b.pages;
   }
 }

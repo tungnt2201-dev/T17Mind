@@ -4047,3 +4047,10 @@ Phản hồi từ bản dùng thử: node mang 2 Tag có bật "Hiện trên nod
 **Giới hạn:** chưa có tìm kiếm chữ trong PDF; chưa có mục lục/dấu trang của PDF; PDF có mật khẩu không mở được; chỉ một trang một lúc (không cuộn liên tục); vùng tô sáng chữ chỉ tạo bằng chuột (chưa hỗ trợ cảm ứng); PWA chưa cache sẵn các file pdf.js để dùng offline lần đầu (service worker hiện chỉ cache lõi). Chưa kiểm trên Windows thật.
 
 **Test:** `core/sources.test.ts` (17: chuẩn hoá, gộp dòng, Command + undo, JSON/.t17m round-trip byte-chính-xác, làm sạch dữ liệu hỏng), `io/demoFile.test.ts` (+1), `ui/htmlRoots.test.ts` (2).
+
+### KW3b — Chống trùng PDF và chế độ "chỉ giữ đường dẫn"
+- Mỗi nguồn PDF có `sha256` + `size`. Thêm PDF trùng nội dung với nguồn đã có trong map → hộp chọn "Dùng lại nguồn đã có" / "Vẫn thêm bản mới".
+- Chế độ liên kết (chỉ exe): `assetId = null`, lưu `path`; file không nằm trong map/.t17m. Trạng thái ok / đã đổi (hash lệch) / mất, kèm "Chọn lại file…", "Chấp nhận bản hiện tại".
+- `ChangeSourceStorageCommand` gói relink, chấp nhận bản mới, nhúng↔liên kết thành một bước undo.
+- Sửa lỗi: mở lại trình xem từ menu Chèn bị rỗng (ghi đè `sourceId` bằng null).
+- Chưa thử trên Windows thật: đọc/ghi file ngoài bằng Neutralino.

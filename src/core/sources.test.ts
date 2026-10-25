@@ -87,10 +87,10 @@ describe("Command nguồn", () => {
   it("thêm nguồn ghi cả file PDF vào assets; undo/redo", () => {
     const { store, source, m } = setup();
     expect(m().sources![source.id]!.name).toBe("Giáo trình.pdf");
-    expect(m().assets[source.assetId]!.mimeType).toBe("application/pdf");
+    expect(m().assets[source.assetId!]!.mimeType).toBe("application/pdf");
     store.undo();
     expect(m().sources).toBeUndefined();
-    expect(m().assets[source.assetId]).toBeUndefined();
+    expect(m().assets[source.assetId!]).toBeUndefined();
     store.redo();
     expect(m().sources![source.id]).toBeDefined();
   });
@@ -148,11 +148,11 @@ describe("Command nguồn", () => {
     store.dispatch(new AddHighlightCommand(source.id, h, card));
     store.dispatch(new RemoveSourceCommand(source.id));
     expect(m().sources).toBeUndefined();
-    expect(m().assets[source.assetId]).toBeUndefined();
+    expect(m().assets[source.assetId!]).toBeUndefined();
     expect(m().cards[card.id]!.source).toBeUndefined();
     expect((m().cards[card.id]!.blocks[0] as { text: string }).text).toContain("Đoạn văn cần ghi nhớ");
     store.undo();
-    expect(m().assets[source.assetId]).toBeDefined();
+    expect(m().assets[source.assetId!]).toBeDefined();
     expect(m().cards[card.id]!.source).toBeDefined();
     expect(m().sources![source.id]!.highlights).toHaveLength(1);
   });
@@ -199,7 +199,7 @@ describe("lưu / đọc", () => {
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(res.map.sources![source.id]!.highlights[0]!.rects).toEqual(h.rects);
-    expect(res.map.assets[source.assetId]!.dataBase64).toBe(PDF_B64);
+    expect(res.map.assets[source.assetId!]!.dataBase64).toBe(PDF_B64);
     const card = Object.values(res.map.cards)[0]!;
     expect(sourceOfCard(res.map, card)).not.toBeNull();
   });
@@ -209,8 +209,8 @@ describe("lưu / đọc", () => {
     const res = await parseT17mFile(await blob.arrayBuffer());
     expect(res.ok).toBe(true);
     if (!res.ok) return;
-    expect(res.map.assets[source.assetId]!.mimeType).toBe("application/pdf");
-    expect(res.map.assets[source.assetId]!.dataBase64).toBe(PDF_B64);
+    expect(res.map.assets[source.assetId!]!.mimeType).toBe("application/pdf");
+    expect(res.map.assets[source.assetId!]!.dataBase64).toBe(PDF_B64);
     expect(res.map.sources![source.id]!.pages).toBe(12);
   });
   it("làm sạch dữ liệu hỏng: nguồn thiếu PDF, vùng sai hình, id trùng, liên kết card mồ côi, màu sai", () => {
@@ -244,5 +244,126 @@ describe("lưu / đọc", () => {
     if (res.ok) expect(Object.values(res.map.cards)[0]!.source).toBeUndefined();
     const plain = parseJsonFile(exportFlatJson(createEmptyMap("X")));
     expect(plain.ok && plain.map.sources === undefined).toBe(true);
+  });
+});
+
+import { isLinkedSource, sourceFileState } from "./sources";
+import { ChangeSourceStorageCommand } from "./sourceCommands";
+import { isHash, sameHash, sha256Hex } from "./hash";
+
+describe("mã băm", () => {
+  it("SHA-256 đúng giá trị chuẩn; cùng nội dung → cùng mã, khác → khác", async () => {
+    const a = await sha256Hex(new TextEncoder().encode("abc"));
+    expect(a).toBe("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+    expect(await sha256Hex(new TextEncoder().encode("abc"))).toBe(a);
+    expect(await sha256Hex(new TextEncoder().encode("abd"))).not.toBe(a);
+    expect(isHash(a)).toBe(true);
+  });
+  it("sameHash chỉ đúng khi cùng nội dung và cùng kiểu băm; rác/thiếu → false", () => {
+    const h = "a".repeat(64);
+    expect(sameHash(h, h)).toBe(true);
+    expect(sameHash(h, "b".repeat(64))).toBe(false);
+    expect(sameHash(h, "fnv:0123456789abcdef")).toBe(false);
+    expect(sameHash("fnv:0123456789abcdef", "fnv:0123456789abcdef")).toBe(true);
+    expect(sameHash(undefined, h)).toBe(false);
+    expect(sameHash("xyz", "xyz")).toBe(false);
+  });
+});
+
+describe("nguồn liên kết (chỉ giữ đường dẫn)", () => {
+  const linked = (): Source => ({ id: generateSourceId(), kind: "pdf", name: "Ngoài.pdf", assetId: null, path: "D:\\Tài liệu\\Ngoài.pdf", sha256: "c".repeat(64), size: 1234, pages: 7, highlights: [] });
+
+  it("thêm nguồn liên kết KHÔNG ghi dữ liệu PDF vào map; undo/redo; chặn cấu hình sai", () => {
+    const map = createEmptyMap("G");
+    const store = new Store(map);
+    const s = linked();
+    store.dispatch(new AddSourceCommand(s, null));
+    expect(Object.keys(store.getMap().assets)).toEqual([]);
+    expect(isLinkedSource(store.getMap().sources![s.id]!)).toBe(true);
+    store.undo();
+    expect(store.getMap().sources).toBeUndefined();
+    store.redo();
+    expect(store.getMap().sources![s.id]!.path).toBe("D:\\Tài liệu\\Ngoài.pdf");
+    expect(() => new AddSourceCommand(s, { mimeType: "application/pdf", dataBase64: "QQ==" })).toThrow();
+    expect(() => new AddSourceCommand({ ...s, assetId: "a1" }, null)).toThrow();
+    expect(() => new AddSourceCommand({ ...s, path: undefined }, null)).toThrow();
+  });
+  it("trạng thái file: ok / missing / changed; nguồn nhúng luôn ok", () => {
+    const s = linked();
+    expect(sourceFileState(s, { found: true, sha256: s.sha256 })).toBe("ok");
+    expect(sourceFileState(s, { found: false })).toBe("missing");
+    expect(sourceFileState(s, { found: true, sha256: "d".repeat(64) })).toBe("changed");
+    expect(sourceFileState({ assetId: null }, { found: true })).toBe("ok"); // nguồn cũ không có mã băm → không kết luận "đã đổi"
+    expect(sourceFileState({ assetId: "a", sha256: "e".repeat(64) }, { found: false })).toBe("ok");
+  });
+  it("xoá nguồn liên kết và hoàn tác không đụng assets", () => {
+    const map = createEmptyMap("G");
+    const store = new Store(map);
+    const s = linked();
+    store.dispatch(new AddSourceCommand(s, null));
+    store.dispatch(new RemoveSourceCommand(s.id));
+    expect(store.getMap().sources).toBeUndefined();
+    store.undo();
+    expect(store.getMap().sources![s.id]).toBeDefined();
+    expect(Object.keys(store.getMap().assets)).toEqual([]);
+  });
+  it("chuyển liên kết → nhúng: ghi asset, bỏ path; undo trả lại đúng như cũ (giữ vùng tô sáng)", () => {
+    const map = createEmptyMap("G");
+    const store = new Store(map);
+    const s = linked();
+    store.dispatch(new AddSourceCommand(s, null));
+    store.dispatch(new AddHighlightCommand(s.id, { id: "h1", page: 2, kind: "text", rects: [{ x: 0, y: 0, w: 0.1, h: 0.1 }], text: "t", color: "#fff", cardId: null, createdAt: 0 }));
+    store.dispatch(new ChangeSourceStorageCommand(s.id, { assetId: "asset_new", path: null, sha256: "f".repeat(64), size: 99, pages: 7 }, { mimeType: "application/pdf", dataBase64: PDF_B64 }));
+    const m = () => store.getMap().sources![s.id]!;
+    expect(m().assetId).toBe("asset_new");
+    expect(m().path).toBeUndefined();
+    expect(store.getMap().assets.asset_new!.dataBase64).toBe(PDF_B64);
+    expect(m().highlights).toHaveLength(1);
+    store.undo();
+    expect(m().assetId).toBeNull();
+    expect(m().path).toBe("D:\\Tài liệu\\Ngoài.pdf");
+    expect(m().sha256).toBe("c".repeat(64));
+    expect(store.getMap().assets.asset_new).toBeUndefined();
+  });
+  it("chuyển nhúng → liên kết: gỡ asset, ghi path; undo khôi phục asset", () => {
+    const map = createEmptyMap("G");
+    const store = new Store(map);
+    const s: Source = { id: generateSourceId(), kind: "pdf", name: "X", assetId: "asset_x", pages: 3, highlights: [] };
+    store.dispatch(new AddSourceCommand(s, { mimeType: "application/pdf", dataBase64: PDF_B64 }));
+    store.dispatch(new ChangeSourceStorageCommand(s.id, { assetId: null, path: "E:\\x.pdf", sha256: "a".repeat(64), size: 10, pages: 3 }));
+    expect(store.getMap().assets.asset_x).toBeUndefined();
+    expect(store.getMap().sources![s.id]).toMatchObject({ assetId: null, path: "E:\\x.pdf", size: 10 });
+    store.undo();
+    expect(store.getMap().assets.asset_x!.dataBase64).toBe(PDF_B64);
+    expect(store.getMap().sources![s.id]!.path).toBeUndefined();
+    expect(store.getMap().sources![s.id]!.sha256).toBeUndefined();
+  });
+  it("trỏ lại đường dẫn khác (chọn lại file): chỉ đổi path/mã băm/trang, undo trả lại", () => {
+    const map = createEmptyMap("G");
+    const store = new Store(map);
+    const s = linked();
+    store.dispatch(new AddSourceCommand(s, null));
+    store.dispatch(new ChangeSourceStorageCommand(s.id, { assetId: null, path: "F:\\moi\\Ngoai.pdf", sha256: "b".repeat(64), size: 5, pages: 9 }));
+    expect(store.getMap().sources![s.id]).toMatchObject({ path: "F:\\moi\\Ngoai.pdf", pages: 9 });
+    store.undo();
+    expect(store.getMap().sources![s.id]).toMatchObject({ path: "D:\\Tài liệu\\Ngoài.pdf", pages: 7, sha256: "c".repeat(64) });
+  });
+  it("JSON/.t17m round-trip nguồn liên kết; làm sạch: thiếu path bị loại, mã băm rác bị bỏ", async () => {
+    const map = createEmptyMap("G");
+    const store = new Store(map);
+    const s = linked();
+    store.dispatch(new AddSourceCommand(s, null));
+    const res = parseJsonFile(exportFlatJson(store.getMap()));
+    expect(res.ok && res.map.sources![s.id]!.path).toBe("D:\\Tài liệu\\Ngoài.pdf");
+    const t = await parseT17mFile(await (await exportT17mFile(store.getMap())).arrayBuffer());
+    expect(t.ok && t.map.sources![s.id]!.sha256).toBe("c".repeat(64));
+    const raw = JSON.parse(exportFlatJson(store.getMap())) as Record<string, any>;
+    raw.sources.src_a = { id: "src_a", kind: "pdf", name: "a", assetId: null, pages: 1, highlights: [] };
+    raw.sources[s.id].sha256 = "không phải mã băm";
+    raw.sources[s.id].size = "x";
+    sanitizeSources(raw);
+    expect(Object.keys(raw.sources)).toEqual([s.id]);
+    expect(raw.sources[s.id].sha256).toBeUndefined();
+    expect(raw.sources[s.id].size).toBeUndefined();
   });
 });

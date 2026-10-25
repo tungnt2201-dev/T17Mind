@@ -200,3 +200,9 @@ Mở `T17Mind-nguon-pdf.t17m` (đã có PDF mẫu `Giao-trinh-mau.pdf`, 3 vùng 
 - [ ] Vùng chọn thành ảnh: ảnh nét, card có khối ảnh + chú thích nguồn
 - [ ] Xoá vùng/xoá nguồn: card còn đoạn trích; Ctrl+Z khôi phục đầy đủ (kể cả liên kết "Mở trong PDF")
 - [ ] Bản exe: thêm PDF, tô sáng, lưu .t17m, mở lại — chạy offline, không cần file phụ
+
+## Bước 16b — PDF trùng và liên kết đường dẫn (KW3b)
+1. Thêm lại cùng một PDF → hộp hỏi "Dùng lại nguồn đã có" hay "Vẫn thêm bản mới".
+2. Bản exe: Chèn → "Liên kết PDF (chỉ giữ đường dẫn)…" → map không phình ra; đổi tên/di chuyển file rồi mở lại → báo "Mất file", bấm "Chọn lại file…".
+3. Sửa nội dung file liên kết → báo "đã thay đổi", chọn "Chấp nhận bản hiện tại".
+4. "Nhúng vào map" / "Chuyển sang liên kết…" đổi qua lại; Ctrl+Z hoàn tác.

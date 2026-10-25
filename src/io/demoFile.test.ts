@@ -89,7 +89,7 @@ describe("File demo docs/demo/T17Mind-nguon-pdf.t17m (KW3)", () => {
     if (!res.ok) return;
     const [src] = sourcesOf(res.map);
     expect(src!.pages).toBe(4);
-    expect(Buffer.from(res.map.assets[src!.assetId]!.dataBase64, "base64").subarray(0, 5).toString()).toBe("%PDF-");
+    expect(Buffer.from(res.map.assets[src!.assetId!]!.dataBase64, "base64").subarray(0, 5).toString()).toBe("%PDF-");
     expect(src!.highlights.map((h) => h.kind)).toEqual(["text", "text", "text", "area"]);
     const linked = Object.values(res.map.cards).filter((c) => sourceOfCard(res.map, c));
     expect(linked).toHaveLength(4);
