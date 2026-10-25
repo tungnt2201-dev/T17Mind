@@ -4054,3 +4054,7 @@ Phản hồi từ bản dùng thử: node mang 2 Tag có bật "Hiện trên nod
 - `ChangeSourceStorageCommand` gói relink, chấp nhận bản mới, nhúng↔liên kết thành một bước undo.
 - Sửa lỗi: mở lại trình xem từ menu Chèn bị rỗng (ghi đè `sourceId` bằng null).
 - Chưa thử trên Windows thật: đọc/ghi file ngoài bằng Neutralino.
+
+### Tài liệu chuyên đề PDF (docs/huong-dan-pdf)
+- `HDSD-Chuyen-de-PDF.docx` (14 trang, 11 hình): nhu cầu, tình huống PDF rải rác nhiều thư mục/ổ đĩa, nhúng vs liên kết, chống trùng, mất file/đã đổi, hỏi–đáp, bài tập.
+- `demo/NMDMT-PDF-nguon.t17m` (3 nguồn nhúng, 7 vùng chữ + 2 vùng hình, card gắn node) và `demo/pdf-mau/` (4 PDF ở 4 thư mục, một cặp trùng byte). Test giữ file đúng như tài liệu: `src/io/huongDanPdf.test.ts`.
