@@ -13,7 +13,7 @@ import type { MindMap, MindNode, Relationship, Summary, Boundary } from "./types
 import { CURRENT_SCHEMA_VERSION } from "./types";
 
 /** Sinh id ngẫu nhiên đủ ngắn để đọc, đủ dài để không trùng trong một tài liệu. */
-export function generateId(prefix: "n" | "r" | "s" | "b" | "k" | "m" | "tag" | "img" | "card" | "blk" | "fld" | "opt"): string {
+export function generateId(prefix: "n" | "r" | "s" | "b" | "k" | "m" | "tag" | "img" | "card" | "blk" | "fld" | "opt" | "src" | "hl"): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
 }
 

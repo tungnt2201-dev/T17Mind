@@ -27,6 +27,7 @@
   "dependencies": {
     "docx": "^9.13.0",
     "jszip": "^3.10.2",
+    "pdfjs-dist": "^4.10.38",
     "xlsx": "^0.18.5"
   },
   "description": "T17Mind - phan mem so do tu duy (mindmap) chay offline tren trinh duyet, PWA va Windows portable",

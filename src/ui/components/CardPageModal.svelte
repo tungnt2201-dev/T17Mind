@@ -16,7 +16,8 @@
   import type { Store } from "../../core/store";
   import type { AppController } from "../appController";
   import { mapStore } from "../svelteBridge";
-  import { cardPageStore, tableEditorStore, showNotice } from "../uiStores";
+  import { cardPageStore, tableEditorStore, showNotice, pdfViewerStore } from "../uiStores";
+  import { sourceOfCard } from "../../core/sources";
   import { showAlert } from "../dialog";
   import { imageFilesFrom } from "../imageImport";
   import { parseDelimited, tableFromGrid } from "../../core/table";
@@ -76,6 +77,7 @@
   $: card = target ? $map.cards[target.cardId] ?? null : null;
   $: if (target && !card) cardPageStore.set(null); // card bị xoá / hoàn tác việc tạo
   $: usages = card ? cardUsages($map, card.id) : [];
+  $: cardSource = card ? sourceOfCard($map, card) : null;
   $: backlinks = card ? findBacklinks($map, { type: "card", id: card.id }).filter((b) => b.cardId !== card?.id) : [];
   // KW2 — liên kết ngược từ card ở map khác: lập (hoặc làm tươi) chỉ mục rồi tính lại.
   let indexVersion = 0;
@@ -216,6 +218,12 @@
           {/each}
         {/if}
       </div>
+      {#if cardSource}
+        <div class="pg-source">
+          <span>📄 Nguồn: <b>{cardSource.source.name}</b>, tr. {cardSource.highlight.page}</span>
+          <button type="button" class="btn small-btn" on:click={() => { if (!cardSource) return; const t = { sourceId: cardSource.source.id, page: cardSource.highlight.page, highlightId: cardSource.highlight.id }; close(); pdfViewerStore.set(t); }}>Mở trong PDF</button>
+        </div>
+      {/if}
       {#if backlinks.length > 0 || cross.length > 0}
         <div class="pg-backlinks"><BacklinksList map={$map} {backlinks} {cross} {controller} /></div>
       {/if}
@@ -317,6 +325,7 @@
   }
   .pg-close { position: absolute; top: 10px; right: 14px; border: none; background: transparent; font-size: 24px; color: #9aa1ab; cursor: pointer; }
   .pg-title { width: 100%; border: none; outline: none; font-size: 28px; font-weight: 700; color: #111827; padding: 0; margin-bottom: 6px; font-family: inherit; }
+  .pg-source { display: flex; align-items: center; gap: 10px; margin: -12px 0 16px; font-size: 12.5px; color: #4b5563; background: #f6f8fc; border: 1px solid #e3e8f2; border-radius: 8px; padding: 6px 10px; }
   .pg-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; color: #6b7280; font-size: 12.5px; margin-bottom: 22px; }
   .pg-inbox { color: #e0563b; }
   .pg-empty { color: #9aa1ab; font-style: italic; }

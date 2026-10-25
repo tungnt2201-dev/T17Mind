@@ -26,6 +26,7 @@ export interface CommandHost {
   toggleLibrary(): void;
   toggleMinimap(): void;
   openTagDatabase(): void;
+  openPdfSources(): void;
   toggleLinking(): void;
   addSticky(): void;
   addFloatingBranch(): void;
@@ -70,6 +71,7 @@ export const PALETTE_COMMANDS: PaletteCommand[] = [
   { id: "explorer", title: "Bật/tắt khung Explorer", keywords: "duyet cay tag loc", run: (h) => h.toggleExplorer() },
   { id: "library", title: "Bật/tắt Thư viện card", keywords: "card the inbox", run: (h) => h.toggleLibrary() },
   { id: "tagDatabase", title: "Cơ sở dữ liệu Tag (bảng, Kanban, biểu đồ)", keywords: "tag thuoc tinh bang kanban database loc nhom", run: (h) => h.openTagDatabase() },
+  { id: "pdfSources", title: "Nguồn PDF (đọc, tô sáng, tạo card)", keywords: "pdf tai lieu nguon to sang highlight doc", run: (h) => h.openPdfSources() },
   { id: "minimap", title: "Bật/tắt Minimap", keywords: "ban do nho", run: (h) => h.toggleMinimap() },
   { id: "linking", title: "Tạo liên kết chéo giữa hai node", keywords: "relationship noi", run: (h) => h.toggleLinking() },
   { id: "sticky", title: "Thêm ghi chú dán", keywords: "giay nho sticky", run: (h) => h.addSticky() },

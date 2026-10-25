@@ -39,13 +39,14 @@
   import type { SelectionModel } from "../selection";
   import type { AppController } from "../appController";
   import { mapStore, selectionStore } from "../svelteBridge";
-  import { linkingModeStore, helpModalOpenStore, searchOpenStore, formatPainterModeStore, mapsModalOpenStore, explorerStore, minimapStore, hasLinkedFileStore, libraryStore, exportDocStore, paletteOpenStore, tagDbStore } from "../uiStores";
+  import { linkingModeStore, helpModalOpenStore, searchOpenStore, formatPainterModeStore, mapsModalOpenStore, explorerStore, minimapStore, hasLinkedFileStore, libraryStore, exportDocStore, paletteOpenStore, tagDbStore, pdfViewerStore } from "../uiStores";
   import { THEMES } from "../../core/theme";
   import { customThemesStore } from "../userLibrary";
   import { settingsOfRoot } from "../../core/treeSettings";
   import { themeEditorStore } from "../uiStores";
   import { toggleShortcutsModal } from "../shortcutsModal";
   import Icon from "./Icon.svelte";
+  import { addPdfFile } from "../pdf/pdfController";
   import type { FileFormat } from "../../io/fileFormats";
 
   export let store: Store;
@@ -97,6 +98,7 @@
   let opmlInput: HTMLInputElement;
   let mdInput: HTMLInputElement;
   let t17mInput: HTMLInputElement;
+  let pdfInput: HTMLInputElement;
 
   function onImportJsonChange(): void {
     const file = jsonInput.files?.[0];
@@ -398,6 +400,11 @@
             title="Nhóm trực quan (còn gọi là Khoanh vùng): gom các node ở bất kỳ nhánh nào vào một nhóm có nhãn và màu — mặc định vẽ bằng nhiều vùng bao ôm sát node, đổi sang chế độ Phân tán hoặc Hình chữ nhật trong khung bên phải"
             on:click={() => runAndClose(() => controller.createBoundaryFromSelection())}>
             <span class="icon-text">▭</span>Nhóm trực quan</button>
+          <div class="menu-sep"></div>
+          <button class="menu-item" title="Thêm file PDF làm nguồn: đọc, tô sáng chữ, biến đoạn trích thành card kèm nguồn. File PDF được lưu trong map." on:click={() => runAndClose(() => pdfInput.click())}>
+            <Icon name="doc-text" />Thêm PDF…</button>
+          <button class="menu-item" title="Mở trình xem PDF của các nguồn trong map này" on:click={() => runAndClose(() => pdfViewerStore.set({ sourceId: null }))}>
+            <Icon name="book" />Nguồn PDF{Object.keys($map.sources ?? {}).length ? ` (${Object.keys($map.sources ?? {}).length})` : ""}…</button>
         </div>
       {/if}
     </div>
@@ -450,6 +457,7 @@
   </div>
 </div>
 
+<input bind:this={pdfInput} type="file" accept="application/pdf,.pdf" on:change={() => { const f = pdfInput.files?.[0]; pdfInput.value = ""; if (f) void addPdfFile(store, f); }} style="display:none" />
 <input bind:this={jsonInput} type="file" accept=".json,application/json" on:change={onImportJsonChange} style="display:none" />
 <input bind:this={jsonMergeInput} type="file" accept=".json,application/json" on:change={onImportJsonMergeChange} style="display:none" />
 <input bind:this={xlsxInput} type="file" accept=".xlsx,.xls" on:change={onImportXlsxChange} style="display:none" />

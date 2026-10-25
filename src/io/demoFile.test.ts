@@ -79,3 +79,20 @@ describe("File demo docs/demo/T17Mind-card-editor.t17m (KW6)", () => {
     expect(md).toContain("- [x] Chốt wireframe");
   });
 });
+
+describe("File demo docs/demo/T17Mind-nguon-pdf.t17m (KW3)", () => {
+  it("mở được; có nguồn PDF thật (byte bắt đầu bằng %PDF), vùng tô sáng chữ + ảnh, card liên kết hai chiều", async () => {
+    const { sourceOfCard, sourcesOf } = await import("../core/sources");
+    const buf = readFileSync(new URL("../../docs/demo/T17Mind-nguon-pdf.t17m", import.meta.url));
+    const res = await parseT17mFile(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const [src] = sourcesOf(res.map);
+    expect(src!.pages).toBe(4);
+    expect(Buffer.from(res.map.assets[src!.assetId]!.dataBase64, "base64").subarray(0, 5).toString()).toBe("%PDF-");
+    expect(src!.highlights.map((h) => h.kind)).toEqual(["text", "text", "text", "area"]);
+    const linked = Object.values(res.map.cards).filter((c) => sourceOfCard(res.map, c));
+    expect(linked).toHaveLength(4);
+    expect(src!.highlights.every((h) => h.cardId && res.map.cards[h.cardId])).toBe(true);
+  });
+});

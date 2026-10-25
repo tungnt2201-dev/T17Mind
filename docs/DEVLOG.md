@@ -4031,3 +4031,19 @@ Phản hồi từ bản dùng thử: node mang 2 Tag có bật "Hiện trên nod
 - Demo `T17Mind-tag-database.t17m` có thêm Tag thứ hai "Phương án" trên hai node để thử.
 
 **Nhiều dòng:** khối Tag/thẻ giá trị ở đáy node giờ có thể nhiều dòng (tối đa 4, dư thì viên "…" cuối dòng cuối). `render/labelRows.ts#packLabelRows` (thuần, có test) chia dòng: viên Tag luôn đi cùng thẻ giá trị đầu tiên của nó, thẻ quá dài tự rút gọn "…". Chiều cao node cộng đúng số dòng × 22 px (đo node, chữ chính, thẻ card, vẽ đều dùng chung `labelBlockHeight`); kết quả được nhớ trong một lần đo/vẽ để không đo chữ lặp lại. Node kéo cỡ tay theo bề rộng thì dòng chia theo bề rộng đó.
+
+## KW3 — PDF Highlight (nguồn PDF, tô sáng chữ, card kèm nguồn)
+
+**Quyết định lưu trữ (theo lựa chọn của người dùng): nhúng PDF vào map/.t17m.** File PDF nằm ở `map.assets[assetId]` (mimeType `application/pdf`) nên đi theo `.json` và được tách thành file nhị phân thật `assets/<id>.pdf` trong `.t17m` như ảnh — gửi file map là gửi luôn PDF, không phụ thuộc đường dẫn. Cảnh báo khi PDF > 20 MB (map sẽ nặng, lưu/mở chậm), từ chối khi > 100 MB. Thư viện: **pdf.js 4.10 (`pdfjs-dist`)**.
+
+- **Dữ liệu (tuỳ chọn, không đổi schema):** `map.sources[id] = { kind: "pdf", name, assetId, pages, highlights[] }`; mỗi vùng tô sáng có `page` (từ 1), `kind` ("text" | "area"), `rects[]` CHUẨN HOÁ 0..1 theo trang (đúng ở mọi mức phóng to), `text`, `color`, `cardId`. `Card.source = { sourceId, highlightId }` liên kết ngược để card "Mở trong PDF". Làm sạch khi đọc file (`core/sources.ts#sanitizeSources`): nguồn thiếu dữ liệu PDF, vùng sai hình/id trùng, màu sai, card/vùng mồ côi bị loại hoặc gỡ liên kết.
+- **Command (`core/sourceCommands.ts`):** thêm nguồn; tô sáng (tạo luôn card vào Inbox và liên kết hai chiều trong MỘT bước hoàn tác, vùng ảnh ghi kèm ảnh cắt); xoá vùng / xoá nguồn (CARD ĐÃ TẠO VẪN GIỮ đoạn trích, chỉ mất liên kết nguồn; hoàn tác khôi phục đủ); đổi màu; đổi tên.
+- **Logic thuần (`core/sources.ts`, có test):** chuẩn hoá hình chữ nhật theo trang, gộp các mảnh vùng chọn cùng dòng, làm gọn chữ trích (nối từ bị gạch nối cuối dòng), dựng card từ vùng tô sáng chữ (trích dẫn + "— Tên nguồn, tr. N") và từ vùng ảnh.
+- **Trình xem (`PdfViewerModal.svelte`, `ui/pdf/pdfEngine.ts`):** nạp LƯỜI pdf.js (không làm chậm lúc khởi động; worker nhúng vào build bằng `?worker&inline` nên bản một-file/exe vẫn chạy offline, đã kiểm chạy từ `file://`). Xem từng trang (PDF dài vẫn mượt), phóng to/thu nhỏ/vừa rộng, phím ←/→. **Chọn chữ:** bôi đen → "Tô sáng và tạo card". **Chọn vùng:** kéo một vùng → cắt thành ảnh + card (cho PDF scan; trang không có lớp chữ có ghi chú nhắc). Danh sách vùng tô sáng bên phải (bấm để nhảy + nháy vùng), bấm vào vùng tô sáng để Mở card / Xoá vùng, đổi màu, Hoàn tác/Làm lại ngay trong hộp, Xoá nguồn.
+- **Điểm vào:** menu Chèn → "Thêm PDF…" / "Nguồn PDF…", Ctrl+K "Nguồn PDF". Trang card có dòng "Nguồn: tên, tr. N — Mở trong PDF" (mở đúng trang, cuộn tới và nháy vùng).
+- **Dung lượng:** bản một-file/exe tăng từ ~1,5 MB lên ~3,3 MB (pdf.js + worker ~1,7 MB). Bản PWA: pdf.js là các file riêng chỉ tải khi mở PDF lần đầu.
+- **Sửa kèm (lỗi có sẵn):** `index.pwa.html` thiếu thẻ `#palette-root` (từ KW2) nên `byId` ném lỗi và bản PWA không mount đủ giao diện. Đã thêm thẻ, kèm `ui/htmlRoots.test.ts` kiểm mọi `byId` trong `main.ts` có mặt ở cả hai trang HTML.
+
+**Giới hạn:** chưa có tìm kiếm chữ trong PDF; chưa có mục lục/dấu trang của PDF; PDF có mật khẩu không mở được; chỉ một trang một lúc (không cuộn liên tục); vùng tô sáng chữ chỉ tạo bằng chuột (chưa hỗ trợ cảm ứng); PWA chưa cache sẵn các file pdf.js để dùng offline lần đầu (service worker hiện chỉ cache lõi). Chưa kiểm trên Windows thật.
+
+**Test:** `core/sources.test.ts` (17: chuẩn hoá, gộp dòng, Command + undo, JSON/.t17m round-trip byte-chính-xác, làm sạch dữ liệu hỏng), `io/demoFile.test.ts` (+1), `ui/htmlRoots.test.ts` (2).
