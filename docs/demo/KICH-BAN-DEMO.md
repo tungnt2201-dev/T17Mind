@@ -182,3 +182,21 @@ Mở `T17Mind-card-editor.t17m` (3 node: "Ghi chú họp", "Tóm tắt tuần", 
 - [ ] Khối nhúng: cả card, một khối, nguồn bị xoá (báo rõ), không tự nhúng chính mình, mở nguồn
 - [ ] Đoạn trích trên node không còn ký hiệu **, `, #
 - [ ] Word mở được: chữ đậm/nghiêng/gạch, danh sách, vạch trích dẫn, khối mã; Markdown nhập lại giữ định dạng
+
+## Bước 16 — Nguồn PDF, tô sáng và card kèm nguồn (KW3)
+Mở `T17Mind-nguon-pdf.t17m` (đã có PDF mẫu `Giao-trinh-mau.pdf`, 3 vùng tô sáng chữ + 1 vùng ảnh) hoặc tự thêm: Chèn → "Thêm PDF…" → chọn `Giao-trinh-mau.pdf`.
+1. Chèn → "Nguồn PDF…": trình xem mở, bên phải là danh sách vùng tô sáng; bấm một vùng để nhảy tới và thấy nó nháy.
+2. Công cụ "Chọn chữ": bôi đen một câu trên trang → "Tô sáng và tạo card". Card mới nằm trong Inbox của Thư viện.
+3. Bấm vào vùng tô sáng → "Mở card": trang card có trích dẫn, dòng "Nguồn: …, tr. N" và nút "Mở trong PDF" (đóng card, quay lại đúng trang/vùng).
+4. Sang trang 4 (trang scan, không có lớp chữ): công cụ "Chọn vùng", kéo quanh bảng số liệu → vùng được cắt thành ảnh và thành card.
+5. Phóng to/thu nhỏ: vùng tô sáng vẫn nằm đúng chỗ. Ctrl+Z trong hộp hoàn tác tô sáng.
+6. "Xoá nguồn": PDF và vùng tô sáng bị gỡ, các card đã tạo vẫn còn đoạn trích; Ctrl+Z khôi phục.
+7. Lưu, đóng, mở lại file: PDF và vùng tô sáng còn nguyên (PDF nằm trong file .t17m).
+
+### Checklist kiểm thử tay (KW3)
+- [ ] PDF 50–100 trang mở trong vài giây, lật trang mượt; PDF > 20 MB có cảnh báo; file không phải PDF báo lỗi rõ
+- [ ] Bôi đen chữ nhiều dòng: vùng tô sáng ôm đúng từng dòng; chữ trích nối đúng từ bị gạch nối cuối dòng
+- [ ] Đổi mức phóng to nhiều lần: vùng tô sáng luôn khớp chữ
+- [ ] Vùng chọn thành ảnh: ảnh nét, card có khối ảnh + chú thích nguồn
+- [ ] Xoá vùng/xoá nguồn: card còn đoạn trích; Ctrl+Z khôi phục đầy đủ (kể cả liên kết "Mở trong PDF")
+- [ ] Bản exe: thêm PDF, tô sáng, lưu .t17m, mở lại — chạy offline, không cần file phụ

@@ -3,7 +3,7 @@
  */
 import type { CommandHost } from "../core/commandPalette";
 import type { AppController } from "./appController";
-import { explorerStore, exportDocStore, libraryStore, mapsModalOpenStore, minimapStore, searchOpenStore, tagDbStore, themeEditorStore } from "./uiStores";
+import { explorerStore, exportDocStore, libraryStore, mapsModalOpenStore, minimapStore, searchOpenStore, tagDbStore, pdfViewerStore, themeEditorStore } from "./uiStores";
 import { toggleShortcutsModal } from "./shortcutsModal";
 
 export function createCommandHost(controller: AppController): CommandHost {
@@ -22,6 +22,7 @@ export function createCommandHost(controller: AppController): CommandHost {
     toggleExplorer: () => explorerStore.update((s) => ({ ...s, open: !s.open })),
     toggleLibrary: () => libraryStore.update((s) => ({ ...s, open: !s.open })),
     toggleMinimap: () => minimapStore.update((s) => ({ ...s, open: !s.open })),
+    openPdfSources: () => pdfViewerStore.set({ sourceId: null }),
     openTagDatabase: () => tagDbStore.set({ tagId: null }),
     toggleLinking: () => controller.toggleLinkingMode(),
     addSticky: () => controller.createStickyNote(),

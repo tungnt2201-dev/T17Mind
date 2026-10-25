@@ -372,6 +372,42 @@ export interface Card {
   /** KW0 — bộ đếm thay đổi, chỉ tăng (kể cả khi hoàn tác) — xem
    *  core/cardCommands.ts#touchCard. Dùng để đồng bộ card giữa nhiều map (KW1). */
   rev: number;
+  /** KW3 — card này sinh ra từ một đoạn tô sáng của nguồn PDF: bấm "Mở trong PDF" nhảy đúng trang và vị trí. */
+  source?: { sourceId: string; highlightId: string };
+}
+
+/** KW3 — một hình chữ nhật CHUẨN HOÁ (0..1) theo kích thước trang PDF, nên đúng ở mọi mức phóng to. */
+export interface PdfRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** KW3 — một vùng tô sáng trên trang PDF (chữ hoặc vùng chọn thành ảnh). */
+export interface PdfHighlight {
+  id: string;
+  /** Trang, bắt đầu từ 1. */
+  page: number;
+  kind: "text" | "area";
+  rects: PdfRect[];
+  /** Đoạn chữ trích (kind "text"); với "area" có thể là chú thích. */
+  text: string;
+  color: string;
+  /** Card sinh ra từ vùng này (null nếu đã xoá card hoặc chưa tạo). */
+  cardId: string | null;
+  createdAt: number;
+}
+
+/** KW3 — một NGUỒN (hiện chỉ có PDF). Dữ liệu file nằm ở `map.assets[assetId]` (mimeType "application/pdf"),
+ *  nên đi theo file .t17m/.json của map như ảnh: gửi file là gửi luôn cả PDF. */
+export interface Source {
+  id: string;
+  kind: "pdf";
+  name: string;
+  assetId: string;
+  pages: number;
+  highlights: PdfHighlight[];
 }
 
 export interface MindMap {
@@ -430,6 +466,9 @@ export interface MindMap {
    *  MindNode.imageAssetId và ImageAsset ở trên) — CÙNG MÔ HÌNH với
    *  `tags`: node chỉ lưu id, dữ liệu thật nằm ở đây, một chỗ duy nhất. */
   assets: Record<string, ImageAsset>;
+
+  /** KW3 — kho nguồn tài liệu (PDF) của map, tra theo id. Tuỳ chọn, không đổi schema; thiếu = chưa có nguồn nào. */
+  sources?: Record<string, Source>;
 
   /** M1 — kho Card của map (xem MindNode.cardId, Card ở trên). */
   cards: Record<string, Card>;

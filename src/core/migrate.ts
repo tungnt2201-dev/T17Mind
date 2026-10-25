@@ -20,6 +20,7 @@ import { sanitizeTheme } from "./theme";
 import { sanitizeTreeSettings } from "./treeSettings";
 import { normalizeVisual } from "./boundaryVisual";
 import { sanitizeTagFields, sanitizeFieldValues } from "./tagDbSanitize";
+import { sanitizeSources } from "./sources";
 
 type UnknownRecord = Record<string, unknown>;
 type MigrationFn = (raw: UnknownRecord) => UnknownRecord;
@@ -612,6 +613,7 @@ export function migrateToLatest(raw: UnknownRecord): MindMap {
     }
   }
   safe.cards = normalizeCardMeta(normalizeTableSizes(normalizeImageBlockSizes(safe.cards)));
+  sanitizeSources(safe as UnknownRecord);
 
   // Cùng lý do, cùng cách sửa — nhưng ở CẤP NODE: children/markers/
   // tagIds cũng là mảng, cũng có thể bị "rơi" giống hệt các mảng cấp

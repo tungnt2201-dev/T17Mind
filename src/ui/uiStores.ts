@@ -154,6 +154,10 @@ export const tableEditorStore = writable<TableEditorTarget | null>(null);
 /** KW5 — Cơ sở dữ liệu Tag (TagDatabaseModal): null = đóng; `tagId` = Tag mở sẵn (null = Tag đầu tiên). */
 export const tagDbStore = writable<{ tagId: string | null } | null>(null);
 
+/** KW3 — trình xem PDF (PdfViewerModal): null = đóng; `sourceId` null = chưa có nguồn nào (màn hình mời thêm PDF);
+ *  `page`/`highlightId` = nhảy tới trang / vùng tô sáng đó khi mở. */
+export const pdfViewerStore = writable<{ sourceId: string | null; page?: number; highlightId?: string } | null>(null);
+
 /** Menu chuột phải đang mở (null = đóng) — AppController mở, component
  *  ContextMenu.svelte hiển thị và gọi `onPick` khi chọn một mục. */
 export interface ContextMenuState {
