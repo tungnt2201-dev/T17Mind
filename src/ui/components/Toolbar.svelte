@@ -46,7 +46,8 @@
   import { themeEditorStore } from "../uiStores";
   import { toggleShortcutsModal } from "../shortcutsModal";
   import Icon from "./Icon.svelte";
-  import { addPdfFile } from "../pdf/pdfController";
+  import { addPdfFile, addPdfLinked } from "../pdf/pdfController";
+  import { isDesktopApp } from "../../io/nativeFs";
   import type { FileFormat } from "../../io/fileFormats";
 
   export let store: Store;
@@ -402,7 +403,11 @@
             <span class="icon-text">▭</span>Nhóm trực quan</button>
           <div class="menu-sep"></div>
           <button class="menu-item" title="Thêm file PDF làm nguồn: đọc, tô sáng chữ, biến đoạn trích thành card kèm nguồn. File PDF được lưu trong map." on:click={() => runAndClose(() => pdfInput.click())}>
-            <Icon name="doc-text" />Thêm PDF…</button>
+            <Icon name="doc-text" />{isDesktopApp() ? "Nhúng PDF vào map…" : "Thêm PDF…"}</button>
+          {#if isDesktopApp()}
+            <button class="menu-item" title="Chỉ nhớ đường dẫn file PDF, không chép vào map: map nhẹ, nhưng file phải còn ở đường dẫn đó (đổi tên/di chuyển sẽ báo mất file và cho chọn lại)." on:click={() => runAndClose(() => void addPdfLinked(store))}>
+              <Icon name="folder" />Liên kết PDF (chỉ giữ đường dẫn)…</button>
+          {/if}
           <button class="menu-item" title="Mở trình xem PDF của các nguồn trong map này" on:click={() => runAndClose(() => pdfViewerStore.set({ sourceId: null }))}>
             <Icon name="book" />Nguồn PDF{Object.keys($map.sources ?? {}).length ? ` (${Object.keys($map.sources ?? {}).length})` : ""}…</button>
         </div>

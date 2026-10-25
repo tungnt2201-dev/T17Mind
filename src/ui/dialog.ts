@@ -47,6 +47,38 @@ export function showConfirm(message: string, confirmLabel = "Đồng ý", cancel
  * <img>/modal riêng của trình duyệt) — lý do y hệt: chạy đúng ở mọi
  * môi trường nhúng, kể cả nơi hộp thoại gốc bị chặn.
  */
+/** Hộp thoại nhiều lựa chọn: trả về chỉ số nút đã bấm, hoặc null nếu đóng (bấm nền / Esc) — nghĩa là HUỶ cả thao tác. */
+export function showChoice(message: string, options: { label: string; primary?: boolean }[]): Promise<number | null> {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay open";
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:440px;">
+        <p style="margin:0 0 18px;font-size:14px;line-height:1.6;">${escapeHtml(message)}</p>
+        <div class="close-row" style="gap:8px;flex-wrap:wrap;">
+          ${options.map((o, i) => `<button class="btn${o.primary ? " primary" : ""}" data-i="${i}">${escapeHtml(o.label)}</button>`).join("")}
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const done = (r: number | null): void => {
+      window.removeEventListener("keydown", onKey, true);
+      overlay.remove();
+      resolve(r);
+    };
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        done(null);
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    overlay.querySelectorAll<HTMLButtonElement>("button[data-i]").forEach((b) => b.addEventListener("click", () => done(Number(b.dataset.i))));
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) done(null);
+    });
+  });
+}
+
 export function showImagePreview(dataBase64: string, mimeType: string): Promise<void> {
   return new Promise((resolve) => {
     const overlay = document.createElement("div");

@@ -81,6 +81,14 @@ export async function nativeSaveBlob(blob: Blob | string, filename: string): Pro
   return path;
 }
 
+/** Hộp thoại Mở một file với bộ lọc theo đuôi bất kỳ (ví dụ ["pdf"]); trả về đường dẫn tuyệt đối, hoặc null nếu bấm Huỷ. */
+export async function nativeOpenAny(title: string, extensions: string[], defaultPath = ""): Promise<string | null> {
+  const n = api();
+  if (!n) return null;
+  const paths = await n.os.showOpenDialog(title, { defaultPath, filters: [{ name: extensions.map((e) => `.${e}`).join(", "), extensions }, { name: "Mọi tệp", extensions: ["*"] }] });
+  return paths[0] ?? null;
+}
+
 export async function nativeWriteFile(path: string, data: Blob | string): Promise<void> {
   const n = api();
   if (!n) throw new Error("Không chạy trong bản exe.");

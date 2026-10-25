@@ -8,6 +8,7 @@
 import type { Card, MindMap, PdfHighlight, PdfRect, Source } from "./types";
 import { createCard, createImageBlock, createTextBlock } from "./cards";
 import { generateId } from "./tree";
+import { isHash, sameHash } from "./hash";
 
 export const HIGHLIGHT_COLORS = ["#ffe066", "#8ce99a", "#74c0fc", "#ffa8a8", "#d0bfff"] as const;
 /** Cảnh báo khi PDF lớn hơn mức này (byte) vì PDF nằm trong file map. */
@@ -103,6 +104,17 @@ export function cardFromAreaHighlight(source: Source, h: PdfHighlight, imageAsse
   return card;
 }
 
+export const isLinkedSource = (s: Pick<Source, "assetId">): boolean => s.assetId === null;
+
+/** Trạng thái file của một nguồn: nhúng luôn "ok"; liên kết: "missing" nếu không đọc được, "changed" nếu mã băm khác lúc thêm. */
+export type SourceFileState = "ok" | "missing" | "changed";
+export function sourceFileState(s: Pick<Source, "assetId" | "sha256">, actual: { found: boolean; sha256?: string }): SourceFileState {
+  if (s.assetId !== null) return "ok";
+  if (!actual.found) return "missing";
+  if (s.sha256 && actual.sha256 && !sameHash(s.sha256, actual.sha256)) return "changed";
+  return "ok";
+}
+
 export function sourcesOf(map: Pick<MindMap, "sources">): Source[] {
   return Object.values(map.sources ?? {});
 }
@@ -137,9 +149,13 @@ export function sanitizeSources(map: Rec): void {
   const out: Record<string, Source> = {};
   if (isRec(map.sources)) {
     for (const [id, raw] of Object.entries(map.sources)) {
-      if (!isRec(raw) || raw.id !== id || raw.kind !== "pdf" || typeof raw.name !== "string" || typeof raw.assetId !== "string") continue;
-      const asset = assets[raw.assetId];
-      if (!isRec(asset) || asset.mimeType !== "application/pdf") continue;
+      if (!isRec(raw) || raw.id !== id || raw.kind !== "pdf" || typeof raw.name !== "string") continue;
+      // Nhúng: có asset PDF thật. Liên kết: assetId null/thiếu và có đường dẫn.
+      const embedded = typeof raw.assetId === "string";
+      if (embedded) {
+        const asset = assets[raw.assetId as string];
+        if (!isRec(asset) || asset.mimeType !== "application/pdf") continue;
+      } else if (typeof raw.path !== "string" || raw.path.trim() === "") continue;
       const seen = new Set<string>();
       const highlights: PdfHighlight[] = [];
       for (const hr of Array.isArray(raw.highlights) ? raw.highlights : []) {
@@ -170,7 +186,18 @@ export function sanitizeSources(map: Rec): void {
         });
       }
       const pages = num(raw.pages);
-      out[id] = { id, kind: "pdf", name: raw.name, assetId: raw.assetId, pages: pages !== null && pages >= 1 ? Math.floor(pages) : 1, highlights };
+      const size = num(raw.size);
+      out[id] = {
+        id,
+        kind: "pdf",
+        name: raw.name,
+        assetId: embedded ? (raw.assetId as string) : null,
+        ...(!embedded ? { path: raw.path as string } : {}),
+        ...(isHash(raw.sha256) ? { sha256: raw.sha256 } : {}),
+        ...(size !== null && size >= 0 ? { size } : {}),
+        pages: pages !== null && pages >= 1 ? Math.floor(pages) : 1,
+        highlights,
+      };
     }
   }
   if (Object.keys(out).length > 0) map.sources = out;

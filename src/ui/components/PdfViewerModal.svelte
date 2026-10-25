@@ -29,8 +29,11 @@
   } from "../../core/sources";
   import { generateId } from "../../core/tree";
   import type { PdfHighlight, PdfRect } from "../../core/types";
-  import { addPdfFile } from "../pdf/pdfController";
-  import { base64ToBytes, openPdf, renderPage, type PageRender } from "../pdf/pdfEngine";
+  import { acceptChangedFile, addPdfFile, addPdfLinked, embedSource, linkSourceToFile, pdfIo, relinkSource } from "../pdf/pdfController";
+  import { openPdf, renderPage, type PageRender } from "../pdf/pdfEngine";
+  import { loadSourceBytes } from "../pdf/sourceFiles";
+  import { isDesktopApp } from "../../io/nativeFs";
+  import { isLinkedSource, type SourceFileState } from "../../core/sources";
 
   export let store: Store;
   export let controller: AppController;
@@ -49,6 +52,12 @@
   let docFor = "";
   let loading = false;
   let loadError = "";
+  /** Trạng thái file của nguồn (liên kết: ok / đã đổi / mất file) và byte đã đọc (để chuyển nhúng / chấp nhận bản mới). */
+  let fileState: SourceFileState = "ok";
+  let loadedBytes: Uint8Array | null = null;
+  let loadedSha = "";
+  // Đánh giá lại mỗi lần mở hộp (cầu nối Neutralino có thể sẵn sàng muộn hơn lúc khởi tạo component).
+  let desktop = false;
   let rendered: PageRender | null = null;
   let pageW = 0;
   let pageH = 0;
@@ -70,6 +79,7 @@
   function onOpenChange(isOpen: boolean): void {
     if (isOpen && !wasOpen) {
       const t = $pdfViewerStore!;
+      desktop = isDesktopApp();
       sourceId = t.sourceId ?? sourcesOf($map).slice(-1)[0]?.id ?? null;
       page = t.page ?? 1;
       fitted = false;
@@ -92,7 +102,7 @@
   $: if (open && wasOpen && $pdfViewerStore !== lastTarget) {
     const t = $pdfViewerStore!;
     lastTarget = t;
-    if (t.sourceId !== sourceId) {
+    if (t.sourceId && t.sourceId !== sourceId) {
       sourceId = t.sourceId;
       void ensureDoc();
     }
@@ -121,11 +131,21 @@
     if (doc && docFor === s.id) return;
     loading = true;
     loadError = "";
+    fileState = "ok";
+    loadedBytes = null;
     try {
       void doc?.destroy();
-      const asset = $map.assets[s.assetId];
-      if (!asset) throw new Error("Dữ liệu PDF không còn trong map.");
-      doc = await openPdf(base64ToBytes(asset.dataBase64));
+      doc = null;
+      const loaded = await loadSourceBytes($map, s, pdfIo);
+      fileState = loaded.state;
+      loadedSha = loaded.sha256 ?? "";
+      if (!loaded.bytes) {
+        docFor = "";
+        loadError = loaded.error ?? "Không đọc được dữ liệu PDF.";
+        return;
+      }
+      loadedBytes = loaded.bytes;
+      doc = await openPdf(loaded.bytes);
       docFor = s.id;
       page = Math.min(Math.max(1, page), doc.numPages);
       if (!fitted) await fitWidth();
@@ -308,6 +328,32 @@
     if (source) store.dispatch(new RemoveHighlightCommand(source.id, h.id));
     if (selectedHl === h.id) selectedHl = null;
   }
+  /** Sau khi đổi cách lưu/đường dẫn của nguồn: nạp lại file. */
+  async function reload(): Promise<void> {
+    docFor = "";
+    fitted = false;
+    await ensureDoc();
+  }
+  async function doRelink(): Promise<void> {
+    if (source && (await relinkSource(store, source))) await reload();
+  }
+  async function doAccept(): Promise<void> {
+    if (!source || !loadedBytes || !doc) return;
+    acceptChangedFile(store, source, loadedBytes, loadedSha, doc.numPages);
+    fileState = "ok";
+  }
+  async function doEmbed(): Promise<void> {
+    if (!source || !loadedBytes) return;
+    const pages = doc?.numPages ?? source.pages;
+    const sha = loadedSha || (await pdfIo.hash(loadedBytes));
+    if (await embedSource(store, source, loadedBytes, sha, pages)) {
+      fileState = "ok";
+    }
+  }
+  async function doLink(): Promise<void> {
+    if (!source || !loadedBytes) return;
+    if (await linkSourceToFile(store, source, loadedBytes)) fileState = "ok";
+  }
   async function removeSource(): Promise<void> {
     if (!source) return;
     const n = source.highlights.length;
@@ -326,6 +372,10 @@
     selectedHl = null;
     fitted = false;
     await ensureDoc();
+  }
+  async function linkNew(): Promise<void> {
+    const id = await addPdfLinked(store);
+    if (id) await pickSource(id);
   }
   let fileInput: HTMLInputElement | undefined;
   async function onFile(e: Event): Promise<void> {
@@ -376,7 +426,10 @@
             {#each sources as s (s.id)}<option value={s.id}>{s.name}</option>{/each}
           </select>
         {/if}
-        <button type="button" class="btn small-btn" on:click={() => fileInput?.click()}>+ Thêm PDF…</button>
+        <button type="button" class="btn small-btn" title="Chép PDF vào map (đi theo file map)" on:click={() => fileInput?.click()}>{desktop ? "+ Nhúng PDF…" : "+ Thêm PDF…"}</button>
+        {#if desktop}
+          <button type="button" class="btn small-btn" title="Chỉ nhớ đường dẫn file PDF, không chép vào map (map nhẹ; file phải còn ở đường dẫn đó)" on:click={() => void linkNew()}>+ Liên kết PDF…</button>
+        {/if}
         <input bind:this={fileInput} type="file" accept="application/pdf,.pdf" hidden on:change={onFile} />
         {#if source}
           <span class="pv-sep"></span>
@@ -404,6 +457,13 @@
         <button type="button" class="btn small-btn" on:click={() => store.undo()} aria-label="Hoàn tác">↶</button>
         <button type="button" class="btn small-btn" on:click={() => store.redo()} aria-label="Làm lại">↷</button>
         {#if source}<button type="button" class="btn small-btn" class:active={showList} on:click={() => (showList = !showList)}>Vùng tô sáng ({source.highlights.length})</button>{/if}
+        {#if source && desktop && loadedBytes}
+          {#if isLinkedSource(source)}
+            <button type="button" class="btn small-btn" title="Chép PDF vào map để map tự chứa, không phụ thuộc file ngoài" on:click={() => void doEmbed()}>Nhúng vào map</button>
+          {:else}
+            <button type="button" class="btn small-btn" title="Ghi PDF ra file rồi gỡ bản nhúng khỏi map (map nhẹ đi)" on:click={() => void doLink()}>Chuyển sang liên kết…</button>
+          {/if}
+        {/if}
         {#if source}<button type="button" class="btn danger small-btn" on:click={() => void removeSource()}>Xoá nguồn</button>{/if}
         <button type="button" class="btn small-btn" aria-label="Đóng" on:click={close}>✕</button>
       </div>
@@ -417,8 +477,27 @@
               <button type="button" class="btn primary" on:click={() => fileInput?.click()}>+ Thêm PDF…</button>
             </div>
           {:else if loadError}
-            <div class="pv-empty"><p><b>Không mở được PDF.</b></p><p>{loadError}</p></div>
+            <div class="pv-empty">
+              {#if isLinkedSource(source) && fileState === "missing"}
+                <p><b>Mất file PDF liên kết.</b></p>
+                <p>Nguồn "{source.name}" chỉ nhớ đường dẫn:<br /><code>{source.path}</code><br />File đã bị đổi tên, di chuyển, xoá, hoặc ổ đĩa không còn gắn. Các vùng tô sáng và card đã tạo vẫn còn nguyên.</p>
+                {#if desktop}<button type="button" class="btn primary" on:click={() => void doRelink()}>Chọn lại file…</button>{/if}
+              {:else}
+                <p><b>Không mở được PDF.</b></p><p>{loadError}</p>
+              {/if}
+            </div>
           {:else}
+            {#if source && isLinkedSource(source)}
+              {#if fileState === "changed"}
+                <div class="pv-note pv-warn">
+                  File liên kết <b>đã thay đổi</b> so với lúc thêm — vùng tô sáng có thể lệch khỏi chữ.
+                  <button type="button" class="btn small-btn" on:click={() => void doAccept()}>Chấp nhận bản hiện tại</button>
+                  {#if desktop}<button type="button" class="btn small-btn" on:click={() => void doRelink()}>Chọn file khác…</button>{/if}
+                </div>
+              {:else}
+                <div class="pv-note pv-ok" title={source.path}>✓ Liên kết tới file trên đĩa — khớp với lúc thêm. <span class="pv-path">{source.path}</span></div>
+              {/if}
+            {/if}
             {#if loading}<div class="pv-loading">Đang mở PDF…</div>{/if}
             {#if noText}
               <div class="pv-note">Trang này không có lớp chữ (PDF scan hoặc ảnh) — dùng công cụ <b>Chọn vùng</b> để cắt thành ảnh.</div>
@@ -513,6 +592,9 @@
   .pv-empty { max-width: 460px; margin: 60px auto; text-align: center; color: #374151; display: flex; flex-direction: column; gap: 8px; align-items: center; }
   .pv-loading { position: absolute; left: 50%; top: 24px; transform: translateX(-50%); background: #1f2933; color: #fff; padding: 4px 12px; border-radius: 12px; font-size: 12.5px; z-index: 5; }
   .pv-note { max-width: 560px; margin: 0 auto 10px; background: #fff7e0; border: 1px solid #f0d78a; border-radius: 8px; padding: 6px 12px; font-size: 12.5px; color: #6b5200; }
+  .pv-warn { background: #fff0ee; border-color: #f0b8b0; color: #8a2d1f; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .pv-ok { background: #eefaf0; border-color: #b8e0c0; color: #1f6b34; }
+  .pv-path { color: #5d8b69; word-break: break-all; font-size: 11.5px; }
   .pv-hl-layer, .pv-area-layer { position: absolute; inset: 0; pointer-events: none; }
   .pv-hl { position: absolute; background: var(--c); opacity: 0.45; mix-blend-mode: multiply; border-radius: 2px; pointer-events: auto; cursor: pointer; }
   .pv-hl.area { background: transparent; border: 2px solid var(--c); opacity: 0.95; mix-blend-mode: normal; }

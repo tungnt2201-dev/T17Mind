@@ -399,13 +399,22 @@ export interface PdfHighlight {
   createdAt: number;
 }
 
-/** KW3 — một NGUỒN (hiện chỉ có PDF). Dữ liệu file nằm ở `map.assets[assetId]` (mimeType "application/pdf"),
- *  nên đi theo file .t17m/.json của map như ảnh: gửi file là gửi luôn cả PDF. */
+/** KW3 — một NGUỒN (hiện chỉ có PDF). Hai cách lưu:
+ *  - NHÚNG (mặc định): dữ liệu ở `map.assets[assetId]` (mimeType "application/pdf"), đi theo file .t17m/.json của map
+ *    như ảnh — gửi file là gửi luôn PDF.
+ *  - LIÊN KẾT (chỉ bản exe): `assetId = null`, chỉ nhớ `path` (đường dẫn tuyệt đối) — map nhẹ nhưng PDF phải còn
+ *    ở đường dẫn đó; thiếu/đổi file thì trình xem báo trạng thái và cho chọn lại. */
 export interface Source {
   id: string;
   kind: "pdf";
   name: string;
-  assetId: string;
+  assetId: string | null;
+  /** Chỉ có với nguồn liên kết. */
+  path?: string;
+  /** Mã băm nội dung (SHA-256 hex) lúc thêm — nhận PDF trùng, phát hiện file liên kết đã bị sửa. Tuỳ chọn (nguồn cũ không có). */
+  sha256?: string;
+  /** Dung lượng byte lúc thêm. */
+  size?: number;
   pages: number;
   highlights: PdfHighlight[];
 }
