@@ -64,6 +64,10 @@ export interface MindNode {
    *  core/cardCommands.ts, KHÔNG qua UpdateNodeStyleCommand. */
   cardId: string | null;
 
+  /** Bố cục HAI BÊN — bên đã chọn (ghim) cho nhánh cấp 1 (con trực tiếp của gốc cây hai bên): kéo sang bên nào thì
+   *  ở yên bên đó. Không có = tự chia theo chiều cao như trước. Tuỳ chọn (không đổi schema); bố cục khác bỏ qua. */
+  side?: "left" | "right";
+
   /** P2.2 — biến node thành mục công việc. */
   /** Danh sách biểu tượng (ký tự emoji), vẽ thành một hàng phía trên node. */
   markers: string[];

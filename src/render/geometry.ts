@@ -263,15 +263,27 @@ export function summaryGeometry(map: MindMap, s: Summary): SummaryGeometry | nul
  *    `otherId` = node kề bên kia của khe (cùng phía), nếu có.
  */
 export type DropTarget =
-  | { kind: "child"; parentId: string }
-  | { kind: "gap"; parentId: string; index: number; refId: string; after: boolean; otherId: string | null };
+  | { kind: "child"; parentId: string; side?: Side }
+  | { kind: "gap"; parentId: string; index: number; refId: string; after: boolean; otherId: string | null; side?: Side };
+/** `side` (chỉ khi cha là gốc của cây HAI BÊN): thả xong nhánh được ghim ở bên này (node.side). */
+type Side = "left" | "right";
+
+/** Gốc của một cây bố cục hai bên (cây chính hoặc nhánh trôi). */
+export function isBothSidesRoot(map: MindMap, id: string): boolean {
+  const n = map.nodes[id];
+  return !!n && n.parentId === null && layoutOfNode(map, id) === "logicBoth";
+}
+/** Bên hiện tại (nhìn thấy) của con `n` so với cha. */
+const sideOfChild = (parent: MindNode, n: MindNode): Side => (n.x + n.width <= parent.x ? "left" : "right");
 
 /** Khoảng (world) quanh một nhóm anh em mà con trỏ còn được coi là "đang nhắm vào nhóm đó". */
 const GROUP_REACH = 56;
 /** Bề dày (world) dải "chèn trước/sau" ở mép một node có kích thước `size` theo trục xếp anh em. */
-export const dropBand = (size: number): number => Math.min(Math.max(size * 0.22, 6), 12);
+export const dropBand = (size: number): number => Math.min(Math.max(size * 0.2, 6), 10);
 /** Nới thêm (world) cho dải đang được chọn ở khung hình trước — "vào dễ, ra khó", tránh nhấp nháy ở ranh giới. */
 const HYSTERESIS = 5;
+/** Nới ở ranh giới dải trên thân node — nhỏ hơn, để dải giữa "làm con" luôn đủ rộng khi đi vào từ mép. */
+const BAND_HYSTERESIS = 3;
 
 interface Axis {
   /** Toạ độ / kích thước theo trục XẾP anh em (dọc với bố cục ngang, ngang với bố cục cây xuống/lên). */
@@ -309,7 +321,9 @@ function gapAt(map: MindMap, parentId: string, group: MindNode[], refPos: number
   const ref = group[refPos] as MindNode;
   const list = (map.nodes[parentId] as MindNode).children.filter((id) => !excluded.has(id));
   const other = group[after ? refPos + 1 : refPos - 1] ?? null;
-  return { kind: "gap", parentId, index: list.indexOf(ref.id) + (after ? 1 : 0), refId: ref.id, after, otherId: other?.id ?? null };
+  const t: DropTarget = { kind: "gap", parentId, index: list.indexOf(ref.id) + (after ? 1 : 0), refId: ref.id, after, otherId: other?.id ?? null };
+  if (isBothSidesRoot(map, parentId)) t.side = sideOfChild(map.nodes[parentId] as MindNode, ref);
+  return t;
 }
 
 /** Khe trong nhóm ứng với vị trí `m` trên trục xếp: trước node đầu tiên có tâm nằm sau `m`, hoặc sau node cuối. */
@@ -319,7 +333,7 @@ function gapByPosition(map: MindMap, parentId: string, group: MindNode[], m: num
 }
 
 const sameTarget = (a: DropTarget | null, b: DropTarget | null): boolean =>
-  !!a && !!b && a.kind === b.kind && a.parentId === b.parentId && (a.kind === "child" || (b.kind === "gap" && a.index === b.index));
+  !!a && !!b && a.kind === b.kind && a.parentId === b.parentId && a.side === b.side && (a.kind === "child" || (b.kind === "gap" && a.index === b.index));
 
 /**
  * Xác định nơi thả node `draggedId` khi con trỏ ở (worldX, worldY). Trả null = không có chỗ thả theo cấu trúc
@@ -355,7 +369,7 @@ export function computeDropTarget(
   for (const rootId of getRootIds(map)) visit(rootId);
   if (body) {
     const node = body as MindNode;
-    if (!node.parentId) return { kind: "child", parentId: node.id };
+    if (!node.parentId) return rootChildTarget(map, node, worldX);
     const ax = axisOf(map, node.parentId);
     const size = ax.size(node);
     // Dải chèn mỏng (khoảng trống giữa hai node cũng là vùng chèn — bước 2), để dải giữa "làm con" đủ rộng cả khi thu nhỏ.
@@ -365,8 +379,8 @@ export function computeDropTarget(
     const curBefore = cur?.kind === "gap" && cur.refId === node.id && !cur.after;
     const curAfter = cur?.kind === "gap" && cur.refId === node.id && cur.after;
     const curChild = cur?.kind === "child" && cur.parentId === node.id;
-    const beforeEdge = band + (curBefore ? HYSTERESIS : curChild ? -HYSTERESIS : 0);
-    const afterEdge = size - band - (curAfter ? HYSTERESIS : curChild ? -HYSTERESIS : 0);
+    const beforeEdge = band + (curBefore ? BAND_HYSTERESIS : curChild ? -BAND_HYSTERESIS : 0);
+    const afterEdge = size - band - (curAfter ? BAND_HYSTERESIS : curChild ? -BAND_HYSTERESIS : 0);
     if (rel > beforeEdge && rel < afterEdge) return { kind: "child", parentId: node.id };
     const group = siblingGroups(map, node.parentId, excluded).find((g) => g.includes(node));
     if (!group) return { kind: "child", parentId: node.id };
@@ -396,6 +410,23 @@ export function computeDropTarget(
       if (!best || d < best.d) best = { d, t };
     }
   }
+  // Cây hai bên mà một bên còn TRỐNG: con trỏ ở phía đó, ngang tầm gốc → làm con của gốc, ghim sang bên đó.
+  for (const rootId of getRootIds(map)) {
+    if (excluded.has(rootId) || !isBothSidesRoot(map, rootId)) continue;
+    const root = map.nodes[rootId] as MindNode;
+    if (root.collapsed) continue;
+    const kids = root.children.filter((id) => !excluded.has(id)).map((id) => map.nodes[id]).filter((n): n is MindNode => Boolean(n));
+    const cy = root.y + root.height / 2;
+    if (Math.abs(worldY - cy) > 140) continue;
+    for (const side of ["left", "right"] as const) {
+      if (kids.some((n) => sideOfChild(root, n) === side)) continue;
+      const beyond = side === "left" ? root.x - worldX : worldX - (root.x + root.width);
+      if (beyond < 0 || beyond > 260) continue;
+      const t: DropTarget = { kind: "child", parentId: rootId, side };
+      const d = Math.max(0, beyond - GROUP_REACH) * 0.25 - (sameTarget(t, currentTarget) ? HYSTERESIS : 0);
+      if (!best || d < best.d) best = { d, t };
+    }
+  }
   if (best) return best.t;
 
   // 3) Bám về nhóm anh em cũ.
@@ -411,10 +442,20 @@ export function computeDropTarget(
   return gapByPosition(map, parentId, group, ax.main(worldX, worldY), ax, excluded);
 }
 
+/** Thả làm con của một gốc cây: với cây hai bên thì ghim theo phía con trỏ so với tâm gốc. */
+function rootChildTarget(map: MindMap, root: MindNode, worldX: number): DropTarget {
+  if (!isBothSidesRoot(map, root.id)) return { kind: "child", parentId: root.id };
+  return { kind: "child", parentId: root.id, side: worldX < root.x + root.width / 2 ? "left" : "right" };
+}
+
 /** Thả vào `target` có làm thay đổi cấu trúc so với hiện tại không (thả về đúng chỗ cũ = không). */
 export function dropChangesStructure(map: MindMap, draggedId: string, target: DropTarget): boolean {
   const node = map.nodes[draggedId];
   if (!node) return false;
+  if (target.side && node.parentId === target.parentId) {
+    const p = map.nodes[target.parentId] as MindNode;
+    if ((node.side ?? sideOfChild(p, node)) !== target.side) return true;
+  }
   if (target.kind === "child") {
     const p = map.nodes[target.parentId];
     return node.parentId !== target.parentId || !p || p.children[p.children.length - 1] !== draggedId;
@@ -446,7 +487,7 @@ export function describeDropTarget(map: MindMap, target: DropTarget | null): str
     return `«${t.length > 28 ? `${t.slice(0, 27)}…` : t}»`;
   };
   if (!target) return "Dời tự do";
-  if (target.kind === "child") return `Làm nhánh con của ${name(target.parentId)}`;
+  if (target.kind === "child") return `Làm nhánh con của ${name(target.parentId)}${target.side ? (target.side === "left" ? ", bên trái" : ", bên phải") : ""}`;
   const vertical = axisOf(map, target.parentId) === V_AXIS;
   const where = vertical ? (target.after ? "bên phải" : "bên trái") : target.after ? "phía dưới" : "phía trên";
   return `Chèn ${where} ${name(target.refId)}`;

@@ -1,4 +1,4 @@
-# Bài test kéo thả node (đợt 1)
+# Bài test kéo thả node (đợt 1 + đợt 2)
 
 File dùng để test: `T17Mind-keo-tha.t17m` (mở bằng Tệp → Mở). Mỗi bài làm trên một nhánh riêng của map. Làm xong một bài có thể bấm `Ctrl+Z` để trở lại như cũ, hoặc làm tiếp luôn.
 
@@ -37,7 +37,27 @@ File dùng để test: `T17Mind-keo-tha.t17m` (mở bằng Tệp → Mở). Mỗ
 
 Ghi lại số bài, map đang ở bố cục nào (Logic Right, Logic Both Sides, Cây xuống…), mức zoom, và chụp màn hình **lúc đang kéo** để thấy lời nhắc. Như vậy tôi biết app đã hiểu ý định thả là gì.
 
-## Chưa nằm trong đợt 1
+## Đợt 2: node dạt ra nhường chỗ, nhớ bên trái/phải
 
-- Bố cục **hai bên (Logic Both Sides)**: nhánh cấp 1 vẫn tự chia trái/phải theo chiều cao, nên kéo nhánh sang bên kia có thể bị xếp lại bên cũ. Việc này để sang đợt 2: nhớ bên đã chọn cho từng nhánh.
-- Các node anh em **dạt ra nhường chỗ** khi kéo cũng để sang đợt 2. Hiện tại chỗ thả được báo bằng vạch xanh, khung xanh và lời nhắc.
+**Thay đổi:**
+- **Các node anh em trượt ra nhường chỗ** ngay trong lúc kéo. Khoảng trống mở ra đúng nơi sẽ thả, chỗ cũ của node đang kéo khép lại. Những gì thấy lúc kéo chính là kết quả sau khi thả, không còn cú nhảy nào. Giữ Alt thì mọi node trượt về chỗ cũ.
+- **Cây hai bên (Logic Both Sides) nhớ bên đã chọn.**
+  - Kéo một nhánh cấp 1 sang bên nào thì nhánh ở yên bên đó, kể cả khi sau này thêm con làm nhánh cao lên.
+  - Khi bạn đã tự chọn bên, các nhánh khác cũng được giữ nguyên bên đang hiện, không tự cân lại.
+  - Kéo sang một bên đang trống: đưa chuột sang phía đó, ngang tầm node gốc. Lời nhắc hiện "Làm nhánh con của «…», bên trái".
+- **Menu chuột phải (cây hai bên):**
+  - Trên một nhánh cấp 1: "Chuyển nhánh sang bên trái/phải", và "Để tự chia bên (bỏ ghim)".
+  - Trên node gốc: "Tự chia lại hai bên", để trở về chia tự động như trước.
+- **Thêm nhánh cùng cấp** (Enter) cạnh một nhánh đã ghim bên thì nhánh mới cũng ở bên đó.
+
+| # | Làm gì | Kết quả đúng |
+|---|---|---|
+| 11 | Nhánh **1**: kéo chậm **B** dọc xuống qua C, D, E | Các node lần lượt **trượt lên/xuống** nhường chỗ, khoảng trống đi theo chuột. Thả ra thì không có node nào nhảy |
+| 12 | Đang kéo như bài 11 thì nhấn giữ **Alt** | Các node trượt về chỗ cũ, lời nhắc thành "Dời tự do" |
+| 13 | Cây **7. Hai bên**: P, Q, R đang ở bên trái, "Nhánh lớn" ở bên phải. Kéo **P** sang bên phải, thả phía trên "Nhánh lớn" | P sang phải, nằm trên Nhánh lớn. Q, R **vẫn ở bên trái** |
+| 14 | Chọn **P**, bấm **Tab** 3 lần để thêm 3 con cho P (nhánh cao lên) | P **vẫn ở bên phải**, không nhánh nào đổi bên |
+| 15 | Chuột phải lên **Q** → "Chuyển nhánh sang bên phải" | Q sang phải, các nhánh khác đứng yên |
+| 16 | Chuột phải lên gốc **"7. Hai bên…"** → "Tự chia lại hai bên" | Các nhánh tự chia lại theo chiều cao như trước khi ghim. `Ctrl+Z` trả về đúng các bên đã ghim |
+| 17 | Kéo hết các nhánh về một bên, rồi kéo một nhánh sang **bên trống** (đưa chuột sang phía đó, ngang tầm gốc) | Lời nhắc "Làm nhánh con của «7. Hai bên…», bên …". Thả xong nhánh sang đúng bên trống |
+| 18 | Chọn một nhánh đã ghim bên trái → **Enter** (thêm cùng cấp) | Nhánh mới xuất hiện ở bên trái |
+| 19 | Lưu file, đóng, mở lại | Các bên đã ghim còn nguyên |

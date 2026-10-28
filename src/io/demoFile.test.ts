@@ -107,7 +107,7 @@ describe("File test docs/demo/T17Mind-keo-tha.t17m (kéo thả)", () => {
     const byText = (t: string) => nodes.find((n) => n.text === t)!;
     expect(byText("1. Đổi thứ tự").children.map((id) => res.map.nodes[id]!.text)).toEqual(["A", "B", "C", "D", "E", "F"]);
     expect(byText("Bước 3 (đang lệch)").offsetX).not.toBe(0);
-    expect(getRootIds(res.map)).toHaveLength(3);
+    expect(getRootIds(res.map)).toHaveLength(4);
     expect(res.map.treeSettings[byText("6. Cây xuống — đổi thứ tự ngang").id]!.layoutType).toBe("treeDown");
   });
 });

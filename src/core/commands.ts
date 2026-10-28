@@ -514,6 +514,27 @@ export class SetNodeNotesCommand implements Command {
   }
 }
 
+/** Bố cục hai bên — ghim (hoặc bỏ ghim, `side` = null) bên trái/phải của một nhánh cấp 1. */
+export class SetNodeSideCommand implements Command {
+  readonly label = "Đổi bên nhánh";
+  private old: "left" | "right" | undefined;
+  constructor(
+    private readonly nodeId: string,
+    private readonly side: "left" | "right" | null
+  ) {}
+  apply(map: MindMap): void {
+    const node = requireNode(map, this.nodeId);
+    this.old = node.side;
+    if (this.side) node.side = this.side;
+    else delete node.side;
+  }
+  revert(map: MindMap): void {
+    const node = requireNode(map, this.nodeId);
+    if (this.old) node.side = this.old;
+    else delete node.side;
+  }
+}
+
 // =====================================================================
 // Thêm / xoá / di chuyển node trong cây
 // =====================================================================
@@ -522,7 +543,12 @@ export class AddChildCommand implements Command {
   readonly label = "Thêm node con";
   private created: MindNode | null = null;
 
-  constructor(private readonly parentId: string, private readonly text: string) {}
+  /** `side`: bên ghim cho node mới (bố cục hai bên — thêm nhánh cùng cấp cạnh một nhánh đã ghim thì theo bên đó). */
+  constructor(
+    private readonly parentId: string,
+    private readonly text: string,
+    private readonly side: "left" | "right" | null = null
+  ) {}
 
   apply(map: MindMap): void {
     const parent = requireNode(map, this.parentId);
@@ -532,6 +558,7 @@ export class AddChildCommand implements Command {
     // undo/redo qua lại) sẽ trỏ vào hư không.
     const isFirstCreate = !this.created;
     const node = this.created ? this.created : createNode(this.text, this.parentId);
+    if (isFirstCreate && this.side) node.side = this.side;
     this.created = node;
     map.nodes[node.id] = node;
     if (!parent.children.includes(node.id)) parent.children.push(node.id);

@@ -50,14 +50,21 @@ function layoutBothSidesRoot(map: MindMap, rootId: string): void {
     heights.set(childId, layoutSubtreeRight(map, childId, 0, 0));
   }
 
-  // 2) Cân bằng tham lam: nhánh CAO NHẤT xử lý trước, luôn nhét vào
-  //    bên đang NHẸ HƠN tại thời điểm đó.
-  const sortedByHeight = [...root.children].sort(
-    (a, b) => (heights.get(b) ?? 0) - (heights.get(a) ?? 0)
-  );
+  // 2) Nhánh đã GHIM bên (node.side — người dùng kéo sang) ở yên bên đó. Các nhánh còn lại cân bằng tham lam: nhánh
+  //    CAO NHẤT xử lý trước, luôn nhét vào bên đang NHẸ HƠN (tính cả chiều cao các nhánh đã ghim).
   const sideOf = new Map<string, "left" | "right">();
   let rightTotal = 0;
   let leftTotal = 0;
+  for (const childId of root.children) {
+    const pinned = map.nodes[childId]?.side;
+    if (pinned !== "left" && pinned !== "right") continue;
+    sideOf.set(childId, pinned);
+    if (pinned === "right") rightTotal += heights.get(childId) ?? 0;
+    else leftTotal += heights.get(childId) ?? 0;
+  }
+  const sortedByHeight = root.children
+    .filter((id) => !sideOf.has(id))
+    .sort((a, b) => (heights.get(b) ?? 0) - (heights.get(a) ?? 0));
   for (const childId of sortedByHeight) {
     const h = heights.get(childId) ?? 0;
     if (rightTotal <= leftTotal) {
