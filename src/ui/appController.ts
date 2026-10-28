@@ -19,7 +19,7 @@ import { layoutOfNode, rootIdOf, settingsOfRoot } from "../core/treeSettings";
 import type { NodeStylePatch } from "../core/commands";
 import type { MapDisplayFlag } from "../core/commands";
 import type { LayoutType } from "../core/types";
-import { createEmptyMap, requireNode, getRootIds, generateId, getAutoArrangeTargetIds } from "../core/tree";
+import { createEmptyMap, requireNode, getRootIds, generateId, getAutoArrangeTargetIds, collectSubtreeIds } from "../core/tree";
 import type { Store } from "../core/store";
 import type { SelectionModel } from "./selection";
 import {
@@ -29,14 +29,13 @@ import {
   type DragPreview,
   type SearchPulse,
 } from "../render/CanvasRenderer";
-import { computeDropTarget, summaryGeometry, findVisuallyNearestNode, visibleRepresentativeId, type BoundaryGeometry, type DropTarget } from "../render/geometry";
+import { computeDropTarget, describeDropTarget, isBothSidesRoot, summaryGeometry, findVisuallyNearestNode, visibleRepresentativeId, type BoundaryGeometry, type DropTarget } from "../render/geometry";
 import { defaultVisual } from "../core/boundaryVisual";
 import { computeGroupGeometry } from "../render/groupGeometry";
 import {
   AddChildCommand,
   UpdateTextCommand,
   DeleteNodeCommand,
-  MoveNodeCommand,
   ToggleCollapseCommand,
   CycleCollapseLevelCommand,
   ExpandAllCommand,
@@ -68,6 +67,7 @@ import {
   DuplicateNodeCommand,
   PasteSubtreeCommand,
   CompositeCommand,
+  SetNodeSideCommand,
   type Command,
   SetNodeImageCommand,
 } from "../core/commands";
@@ -94,6 +94,7 @@ import {
 import { createCard } from "../core/cards";
 import { buildMenu, type MenuAction, type MenuTarget } from "./contextMenuModel";
 import { CARD_DRAG_TYPE } from "./uiStores";
+import { asOneCommand, buildDropCommands, pinSiblingSides, previewDropPositions } from "./dragPreview";
 import { getNodeImageBlocks } from "../render/imageThumb";
 import { getNodeThumbTable } from "../render/tableThumb";
 import { cardImageBlocks, formatBytes, MAP_ASSETS_WARN_BYTES, totalAssetBytes } from "../core/image";
@@ -174,6 +175,9 @@ export class AppController {
   private offsetStartValue = { x: 0, y: 0 };
   private offsetStartWorld = { x: 0, y: 0 };
   private dropTargetPreview: DropTarget | null = null;
+  /** Đang giữ Alt khi kéo node: dời tự do (chỉ đổi offset), không bám vào khe nào. */
+  private dragFree = false;
+  private lastDragScreen = { x: 0, y: 0 };
 
   // resize
   private resizeNodeId: string | null = null;
@@ -226,6 +230,8 @@ export class AppController {
 
   private readonly marqueeBox: HTMLElement;
   private readonly linkingHint: HTMLElement;
+  /** Lời nhắc nhỏ ở đáy canvas, CHỈ hiện trong lúc kéo node (thả ra là ẩn). */
+  private readonly dragHint: HTMLElement;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -237,6 +243,7 @@ export class AppController {
   ) {
     this.marqueeBox = byId("marquee-box");
     this.linkingHint = byId("linking-hint");
+    this.dragHint = byId("drag-hint");
     searchOpenStore.subscribe((open) => {
       this.searchIsOpen = open;
     });
@@ -253,13 +260,26 @@ export class AppController {
 
   draw(): void {
     const sel = this.selection.snapshot();
-    this.renderer.draw(
-      this.store.getMap(),
-      this.view,
-      { ...sel, linkSourceId: this.linkSourceId },
-      this.getDragPreview(),
-      this.computeSearchPulse()
-    );
+    const map = this.store.getMap();
+    // Xem trước khi kéo: vẽ các node ở vị trí đang trượt (chỉ trong lúc vẽ — dữ liệu và phép dò chỗ thả vẫn dùng vị trí thật).
+    const saved: [MindNode, number, number][] = [];
+    if (this.dropShown && this.dragMode === "node-drag") {
+      for (const [id, p] of this.dropShown) {
+        const n = map.nodes[id];
+        if (!n) continue;
+        saved.push([n, n.x, n.y]);
+        n.x = p.x;
+        n.y = p.y;
+      }
+    }
+    try {
+      this.renderer.draw(map, this.view, { ...sel, linkSourceId: this.linkSourceId }, this.getDragPreview(), this.computeSearchPulse());
+    } finally {
+      for (const [n, x, y] of saved) {
+        n.x = x;
+        n.y = y;
+      }
+    }
   }
 
   /** Dao động hình sin theo thời gian trôi qua kể từ lúc nhảy tới kết
@@ -970,7 +990,8 @@ export class AppController {
     const map = this.store.getMap();
     const node = this.selection.primary ? map.nodes[this.selection.primary] : null;
     const parentId = node?.parentId ?? map.rootId;
-    const cmd = new AddChildCommand(parentId, "Ý mới");
+    // Cây hai bên: thêm nhánh cùng cấp cạnh một nhánh đã ghim bên thì nhánh mới cũng ở bên đó.
+    const cmd = new AddChildCommand(parentId, "Ý mới", node?.side ?? null);
     this.store.dispatch(cmd);
     this.selection.selectSingleNode(cmd.newNodeId);
     requestAnimationFrame(() => this.startEditNodeText(cmd.newNodeId));
@@ -1458,6 +1479,8 @@ export class AppController {
     this.canvas.addEventListener("wheel", (e) => this.onWheel(e), { passive: false });
     this.canvas.addEventListener("dblclick", (e) => this.onDblClick(e));
     window.addEventListener("keydown", (e) => this.onSpaceKeyDown(e));
+    window.addEventListener("keydown", (e) => this.onDragAltKey(e));
+    window.addEventListener("keyup", (e) => this.onDragAltKey(e));
     window.addEventListener("keyup", (e) => this.onSpaceKeyUp(e));
     window.addEventListener("keydown", (e) => this.onActionKeyDown(e));
     window.addEventListener("keyup", (e) => {
@@ -1527,6 +1550,7 @@ export class AppController {
           tableBlockId: getNodeThumbTable(map, node)?.id ?? null,
           imageCount: getNodeImageBlocks(map, node).length,
           canPaste: !!this.internalClipboard,
+          bothSides: this.bothSidesInfo(node),
         };
       }
     } else {
@@ -1555,6 +1579,15 @@ export class AppController {
     });
   }
 
+  /** Thông tin bên trái/phải cho menu chuột phải (chỉ với cây hai bên). */
+  private bothSidesInfo(node: MindNode): Extract<MenuTarget, { kind: "node" }>["bothSides"] {
+    const map = this.store.getMap();
+    if (isBothSidesRoot(map, node.id)) return { rootWithPinned: node.children.some((id) => !!map.nodes[id]?.side) };
+    const parent = node.parentId ? map.nodes[node.parentId] : null;
+    if (!parent || !isBothSidesRoot(map, parent.id)) return undefined;
+    return { side: node.x + node.width <= parent.x ? "left" : "right", pinned: !!node.side };
+  }
+
   /** Chạy một mục menu chuột phải — chỉ gọi lại các thao tác đã có. */
   runMenuAction(action: MenuAction, target: MenuTarget): void {
     const nodeId = target.kind === "node" ? target.nodeId : null;
@@ -1562,6 +1595,29 @@ export class AppController {
       case "addChild":
         this.addChildToSelection();
         break;
+      case "switchSide":
+      case "unpinSide": {
+        const b = target.kind === "node" ? target.bothSides : undefined;
+        if (nodeId && b && "side" in b) {
+          if (action === "unpinSide") this.store.dispatch(new SetNodeSideCommand(nodeId, null));
+          else {
+            const map = this.store.getMap();
+            const parentId = map.nodes[nodeId]?.parentId ?? map.rootId;
+            const cmds = [new SetNodeSideCommand(nodeId, b.side === "left" ? "right" : "left"), ...pinSiblingSides(map, parentId, nodeId)];
+            this.store.dispatch(new CompositeCommand(cmds, "Đổi bên nhánh"));
+          }
+        }
+        break;
+      }
+      case "resetSides": {
+        const map = this.store.getMap();
+        const root = nodeId ? map.nodes[nodeId] : null;
+        const pinned = root ? root.children.filter((id) => !!map.nodes[id]?.side) : [];
+        if (pinned.length > 0) {
+          this.store.dispatch(new CompositeCommand(pinned.map((id) => new SetNodeSideCommand(id, null)), "Tự chia lại hai bên"));
+        }
+        break;
+      }
       case "addSibling":
         this.addSiblingToSelection();
         break;
@@ -1980,7 +2036,7 @@ export class AppController {
         this.onViewChange?.();
         break;
       case "node-drag":
-        this.updateNodeDrag(x, y);
+        this.updateNodeDrag(x, y, e.altKey);
         break;
       case "sticky-drag":
         this.updateStickyDrag(x, y);
@@ -2155,22 +2211,112 @@ export class AppController {
     this.dragMode = "node-drag";
   }
 
-  private updateNodeDrag(screenX: number, screenY: number): void {
+  private updateNodeDrag(screenX: number, screenY: number, alt: boolean): void {
     if (!this.draggedNodeId || !this.offsetCommand) return;
     const map = this.store.getMap();
+    this.lastDragScreen = { x: screenX, y: screenY };
     const world = this.renderer.toWorld(screenX, screenY, this.view);
     const dx = world.x - this.offsetStartWorld.x;
     const dy = world.y - this.offsetStartWorld.y;
 
-    // Truyền dropTargetPreview HIỆN TẠI (kết quả từ khung hình TRƯỚC)
-    // làm currentTarget — đây là điều kiện BẮT BUỘC để cơ chế "vào dễ,
-    // ra khó" (hysteresis) trong computeDropTarget hoạt động: nếu
-    // không truyền, hàm không có gì để so sánh, sẽ luôn dùng ngưỡng
-    // HẸP (ENTER_RATIO) cho mọi khe kể cả khe đang giữ, quay lại đúng
-    // vấn đề "nhích nhẹ là đổi hẳn vị trí".
-    this.dropTargetPreview = computeDropTarget(map, this.draggedNodeId, world.x, world.y, this.dropTargetPreview);
+    // Truyền đích của khung hình TRƯỚC để computeDropTarget giữ ổn định ở ranh giới ("vào dễ, ra khó").
+    // Giữ Alt = dời tự do: không bám khe nào.
+    this.dragFree = alt;
+    this.dropTargetPreview = alt ? null : computeDropTarget(map, this.draggedNodeId, world.x, world.y, this.dropTargetPreview);
     this.offsetCommand.setTarget({ x: this.offsetStartValue.x + dx, y: this.offsetStartValue.y + dy });
     this.store.updateSession(this.offsetCommand);
+    this.updateDropPreview();
+    this.showDragHint();
+  }
+
+  /** Đích đang xem trước (khoá so sánh) và vị trí hiển thị của các node trong lúc kéo (null = vị trí thật). */
+  private dropPreviewKey = "";
+  private dropShown: Map<string, { x: number; y: number }> | null = null;
+  private dropAnim: { from: Map<string, { x: number; y: number }>; to: Map<string, { x: number; y: number }> | null; start: number } | null = null;
+  private dropAnimRaf: number | null = null;
+  private static readonly DROP_ANIM_MS = 150;
+
+  /** Đích đổi → tính bố cục SAU KHI thả và cho các node trượt tới đó; hết đích (Alt, nhánh trôi) → trượt về chỗ thật. */
+  private updateDropPreview(): void {
+    if (!this.draggedNodeId) return;
+    const target = this.dragFree ? null : this.dropTargetPreview;
+    const key = target ? JSON.stringify(target) : "";
+    if (key === this.dropPreviewKey) return;
+    this.dropPreviewKey = key;
+    const map = this.store.getMap();
+    const to = target
+      ? previewDropPositions(map, this.draggedNodeId, target, this.offsetStartValue, this.renderer.getMeasurer(map))
+      : null;
+    if (!to && !this.dropShown) return; // không có gì đang lệch, cũng không cần lệch
+    const moving = new Set(collectSubtreeIds(map, this.draggedNodeId)); // node đang kéo + nhánh con: đi theo chuột
+    const from =
+      this.dropShown ?? new Map(Object.values(map.nodes).filter((n) => !moving.has(n.id)).map((n) => [n.id, { x: n.x, y: n.y }]));
+    this.dropAnim = { from, to, start: performance.now() };
+    if (this.dropAnimRaf === null) this.dropAnimRaf = requestAnimationFrame(() => this.tickDropAnim());
+  }
+
+  private tickDropAnim(): void {
+    this.dropAnimRaf = null;
+    const anim = this.dropAnim;
+    if (!anim || this.dragMode !== "node-drag") return;
+    const map = this.store.getMap();
+    const t = Math.min(1, (performance.now() - anim.start) / AppController.DROP_ANIM_MS);
+    const k = 1 - (1 - t) * (1 - t) * (1 - t); // ease-out
+    const shown = new Map<string, { x: number; y: number }>();
+    for (const [id, a] of anim.from) {
+      const real = map.nodes[id];
+      if (!real) continue;
+      const b = anim.to?.get(id) ?? (anim.to ? a : { x: real.x, y: real.y });
+      shown.set(id, { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k });
+    }
+    if (anim.to) for (const [id, b] of anim.to) if (!shown.has(id)) shown.set(id, b);
+    this.dropShown = t >= 1 && !anim.to ? null : shown;
+    if (t >= 1) this.dropAnim = null;
+    this.draw();
+    if (t < 1) this.dropAnimRaf = requestAnimationFrame(() => this.tickDropAnim());
+  }
+
+  private stopDropPreview(): void {
+    if (this.dropAnimRaf !== null) cancelAnimationFrame(this.dropAnimRaf);
+    this.dropAnimRaf = null;
+    this.dropAnim = null;
+    this.dropShown = null;
+    this.dropPreviewKey = "";
+  }
+
+  /** Lời nhắc trong lúc kéo: sẽ thả vào đâu + cách kéo tự do. Không bắt chuột, ẩn ngay khi thả. */
+  private showDragHint(): void {
+    if (!this.draggedNodeId) return;
+    const map = this.store.getMap();
+    const floating = !map.nodes[this.draggedNodeId]?.parentId;
+    const action = this.dragFree
+      ? "Dời tự do — thứ tự trong cây giữ nguyên"
+      : this.dropTargetPreview
+        ? describeDropTarget(map, this.dropTargetPreview)
+        : floating
+          ? "Dời nhánh trôi"
+          : "Giữ nguyên vị trí";
+    const tip = this.dragFree ? "Thả Alt để bám vào vị trí trong cây" : "Giữ Alt để kéo tự do";
+    this.dragHint.replaceChildren();
+    const b = document.createElement("b");
+    b.textContent = action;
+    const span = document.createElement("span");
+    span.textContent = ` · ${tip} · Esc để huỷ`;
+    this.dragHint.append(b, span);
+    this.dragHint.classList.add("open");
+  }
+
+  private hideDragHint(): void {
+    this.dragHint.classList.remove("open");
+  }
+
+  /** Nhấn/thả Alt khi đang kéo mà chưa nhích chuột: tính lại ngay. */
+  private onDragAltKey(e: KeyboardEvent): void {
+    if (this.dragMode !== "node-drag" || e.key !== "Alt") return;
+    e.preventDefault(); // không để Alt mở menu/đổi focus của cửa sổ giữa lúc kéo
+    const alt = e.type === "keydown";
+    if (alt === this.dragFree) return;
+    this.updateNodeDrag(this.lastDragScreen.x, this.lastDragScreen.y, alt);
   }
 
   private finishNodeDrag(): void {
@@ -2180,25 +2326,28 @@ export class AppController {
 
     if (!this.dragMoved) {
       this.store.cancelSession();
-    } else if (target) {
+    } else if (target && !this.dragFree) {
       this.store.cancelSession(); // bỏ phần "kéo tự do xem trước", chỉ giữ lại việc đổi cấu trúc
-      const map = this.store.getMap();
-      const targetIndex = target.kind === "child" ? map.nodes[target.parentId]?.children.length ?? 0 : target.index;
-      try {
-        this.store.dispatch(new MoveNodeCommand(draggedId, target.parentId, targetIndex));
-      } catch (err) {
-        // an toàn cuối cùng: nếu vì lý do gì đó lệnh không hợp lệ (ví
-        // dụ vòng lặp lọt qua computeDropTarget), không làm sập ứng
-        // dụng — chỉ bỏ qua thao tác thả này.
-        console.warn("Không thể di chuyển node:", err);
+      const commands = buildDropCommands(this.store.getMap(), draggedId, target);
+      if (commands.length > 0) {
+        try {
+          this.store.dispatch(asOneCommand(commands));
+        } catch (err) {
+          // an toàn cuối cùng: lệnh không hợp lệ (ví dụ vòng lặp) thì bỏ qua thao tác thả này, không làm sập ứng dụng.
+          console.warn("Không thể di chuyển node:", err);
+        }
       }
     } else {
-      this.store.endSession();
+      this.store.endSession(); // Alt (dời tự do) hoặc nhánh trôi không thả vào đâu: giữ độ lệch mới
     }
 
     this.draggedNodeId = null;
     this.offsetCommand = null;
     this.dropTargetPreview = null;
+    this.dragFree = false;
+    this.hideDragHint();
+    this.stopDropPreview();
+    this.draw();
   }
 
   // --- kéo ghi chú dán (P2.5b) — đơn giản hơn node-drag hẳn, không có
@@ -2690,6 +2839,9 @@ export class AppController {
         this.draggedNodeId = null;
         this.offsetCommand = null;
         this.dropTargetPreview = null;
+        this.dragFree = false;
+        this.hideDragHint();
+        this.stopDropPreview();
         this.dragMode = null;
         this.draw();
         return;

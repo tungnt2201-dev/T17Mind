@@ -4054,3 +4054,17 @@ Phản hồi từ bản dùng thử: node mang 2 Tag có bật "Hiện trên nod
 - `ChangeSourceStorageCommand` gói relink, chấp nhận bản mới, nhúng↔liên kết thành một bước undo.
 - Sửa lỗi: mở lại trình xem từ menu Chèn bị rỗng (ghi đè `sourceId` bằng null).
 - Chưa thử trên Windows thật: đọc/ghi file ngoài bằng Neutralino.
+
+### Kéo thả node — đợt 1 (sửa thứ tự, bám vị trí, Alt để kéo tự do)
+- `computeDropTarget` viết lại: chỉ số khe tính trên danh sách con đã bỏ node đang kéo (hết lệch một ô khi kéo xuống, thả về chỗ cũ = không đổi); có khe đầu/cuối nhóm; thân node chia 3 dải (trước / làm con / sau, `dropBand`); khoảng trống gần nhóm anh em = chèn theo vị trí THẬT (nhóm trái/phải riêng ở cây hai bên, trục ngang ở cây xuống/lên); thả hụt bám về nhóm anh em cũ; hysteresis ở ranh giới dải.
+- `finishNodeDrag`: chỉ ghi lệnh khi có thay đổi; thả vào cây xoá offset kéo tay cũ (Move + SetNodeOffset trong một CompositeCommand = một bước undo). Giữ Alt = dời tự do (offset), nhánh trôi không có đích vẫn dời tự do.
+- Lời nhắc `#drag-hint` ở đáy canvas chỉ hiện khi kéo (`describeDropTarget`); Alt nhấn/thả giữa chừng tính lại ngay; Esc huỷ.
+- Vạch chỉ khe (`gapIndicatorGeometry`) vẽ theo node tham chiếu, dọc với bố cục cây xuống.
+- Test: 14 test mới trong `render/geometry.test.ts`; file test tay `docs/demo/T17Mind-keo-tha.t17m` + `KICH-BAN-TEST-KEO-THA.md`; e2e Playwright kéo chuột thật 9 tình huống đạt.
+
+### Kéo thả node — đợt 2 (node dạt ra nhường chỗ, cây hai bên nhớ bên)
+- `ui/dragPreview.ts`: `buildDropCommands` (dùng chung cho thả thật và xem trước), `previewDropPositions` chạy thử lệnh trên bản sao nhẹ (chỉ chép node) + `applyLayout` → vị trí sau khi thả; controller cho các node trượt tới đó (ease-out 150 ms) chỉ trong lúc vẽ (dữ liệu và phép dò chỗ thả vẫn dùng vị trí thật). Thả xong không có cú nhảy (test: vị trí xem trước = vị trí sau khi thả).
+- `MindNode.side?: "left" | "right"` (tuỳ chọn, không đổi schema; mở file bỏ giá trị sai). `logicBoth`: nhánh ghim ở yên, nhánh chưa ghim cân tham lam tính cả chiều cao nhánh ghim. Thả vào gốc cây hai bên mang `side` (khe theo nhóm trái/phải, thân gốc theo phía con trỏ, bên trống ngang tầm gốc); chọn bên thì ghim luôn bên đang hiện của các nhánh anh em (`pinSiblingSides`) để không tự cân lại; rời gốc thì bỏ ghim. `SetNodeSideCommand`; `AddChildCommand(…, side)` cho Enter cạnh nhánh đã ghim.
+- Menu chuột phải: "Chuyển nhánh sang bên trái/phải", "Để tự chia bên (bỏ ghim)", trên gốc "Tự chia lại hai bên".
+- Dải chèn trên thân node mỏng hơn (`dropBand` 20%, 6–10), hysteresis dải 3 → dải "làm con" rộng hơn khi thu nhỏ.
+- Test: `ui/dragPreview.test.ts` (8), menu (2); file test có thêm cây "7. Hai bên"; e2e kéo chuột thật đợt 1 (9) + đợt 2 (dạt chỗ, đổi bên, thêm con, tự chia lại + Ctrl+Z, menu đổi bên) đạt.

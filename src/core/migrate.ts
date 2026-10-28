@@ -626,6 +626,7 @@ export function migrateToLatest(raw: UnknownRecord): MindMap {
       if (!Array.isArray(node.tagIds)) node.tagIds = [];
       if (typeof node.imageAssetId !== "string") node.imageAssetId = null;
       if (typeof node.cardId !== "string") node.cardId = null;
+      if ("side" in node && node.side !== "left" && node.side !== "right") delete node.side;
     }
   }
 

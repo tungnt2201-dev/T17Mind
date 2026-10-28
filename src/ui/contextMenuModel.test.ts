@@ -83,3 +83,17 @@ describe("Vị trí menu", () => {
     expect(placeMenu(50, 50, 200, 300, 100, 100)).toEqual({ left: 4, top: 4 });
   });
 });
+
+describe("Menu chuột phải — cây hai bên", () => {
+  it("nhánh cấp 1: chuyển sang bên kia; đã ghim thì có thêm 'bỏ ghim'", () => {
+    expect(find(buildMenu(node({ bothSides: { side: "left", pinned: false } })), "switchSide")?.label).toBe("Chuyển nhánh sang bên phải");
+    expect(find(buildMenu(node({ bothSides: { side: "left", pinned: false } })), "unpinSide")).toBeUndefined();
+    expect(find(buildMenu(node({ bothSides: { side: "right", pinned: true } })), "unpinSide")).toBeDefined();
+  });
+  it("gốc: 'Tự chia lại hai bên' chỉ bấm được khi có nhánh đang ghim; bố cục khác không có mục nào", () => {
+    expect(find(buildMenu(node({ isRoot: true, bothSides: { rootWithPinned: false } })), "resetSides")?.disabled).toBe(true);
+    expect(find(buildMenu(node({ isRoot: true, bothSides: { rootWithPinned: true } })), "resetSides")?.disabled).toBeFalsy();
+    const plain = actions(buildMenu(node()));
+    expect(plain.some((a) => a === "switchSide" || a === "resetSides")).toBe(false);
+  });
+});

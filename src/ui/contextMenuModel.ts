@@ -22,6 +22,8 @@ export type MenuTarget =
       tableBlockId: string | null;
       imageCount: number;
       canPaste: boolean;
+      /** Cây hai bên: node là nhánh cấp 1 → bên đang hiện + đã ghim chưa; node là gốc → có nhánh nào đang ghim. */
+      bothSides?: { side: "left" | "right"; pinned: boolean } | { rootWithPinned: boolean };
     }
   | { kind: "multi"; count: number }
   | { kind: "relationship"; id: string; bent: boolean }
@@ -56,6 +58,9 @@ export type MenuAction =
   | "addSticky"
   | "fitView"
   | "home"
+  | "switchSide"
+  | "unpinSide"
+  | "resetSides"
   | "delete";
 
 export type MenuEntry =
@@ -91,6 +96,7 @@ export function buildMenu(t: MenuTarget): MenuEntry[] {
         ...(t.imageCount > 0 ? [item("viewImages", t.imageCount > 1 ? `Xem ${t.imageCount} ảnh` : "Xem ảnh")] : []),
         item("startLink", "Tạo liên kết từ node này"),
         item("detachFloating", "Tách thành nhánh trôi", undefined, { disabled: t.isRoot }),
+        ...sideItems(t.bothSides),
         item("exportBranch", "Xuất nhánh này thành tài liệu…"),
         SEP,
         item("delete", "Xoá", "Del", { disabled: t.isRoot, danger: true }),
@@ -127,6 +133,16 @@ export function buildMenu(t: MenuTarget): MenuEntry[] {
         item("home", "Về gốc", "Home"),
       ];
   }
+}
+
+/** Mục đổi bên cho cây hai bên (rỗng với bố cục khác). */
+function sideItems(b: Extract<MenuTarget, { kind: "node" }>["bothSides"]): MenuEntry[] {
+  if (!b) return [];
+  if ("rootWithPinned" in b) return [item("resetSides", "Tự chia lại hai bên", undefined, { disabled: !b.rootWithPinned })];
+  return [
+    item("switchSide", b.side === "left" ? "Chuyển nhánh sang bên phải" : "Chuyển nhánh sang bên trái"),
+    ...(b.pinned ? [item("unpinSide", "Để tự chia bên (bỏ ghim)")] : []),
+  ];
 }
 
 /** Vị trí menu sao cho nằm trọn trong khung nhìn: gần mép phải/dưới thì
