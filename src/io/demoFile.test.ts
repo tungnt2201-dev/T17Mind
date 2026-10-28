@@ -96,3 +96,18 @@ describe("File demo docs/demo/T17Mind-nguon-pdf.t17m (KW3)", () => {
     expect(src!.highlights.every((h) => h.cardId && res.map.cards[h.cardId])).toBe(true);
   });
 });
+
+describe("File test docs/demo/T17Mind-keo-tha.t17m (kéo thả)", () => {
+  it("mở được, đủ các nhánh bài test, có node đang bị kéo lệch và cây xuống", async () => {
+    const buf = readFileSync(new URL("../../docs/demo/T17Mind-keo-tha.t17m", import.meta.url));
+    const res = await parseT17mFile(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const nodes = Object.values(res.map.nodes);
+    const byText = (t: string) => nodes.find((n) => n.text === t)!;
+    expect(byText("1. Đổi thứ tự").children.map((id) => res.map.nodes[id]!.text)).toEqual(["A", "B", "C", "D", "E", "F"]);
+    expect(byText("Bước 3 (đang lệch)").offsetX).not.toBe(0);
+    expect(getRootIds(res.map)).toHaveLength(3);
+    expect(res.map.treeSettings[byText("6. Cây xuống — đổi thứ tự ngang").id]!.layoutType).toBe("treeDown");
+  });
+});
