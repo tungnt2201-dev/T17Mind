@@ -1,104 +1,173 @@
 import { describe, it, expect } from "vitest";
-import { computeViewportWorldRect, isRectVisibleInViewport, computeDropTarget, summaryGeometry } from "./geometry";
+import { computeViewportWorldRect, isRectVisibleInViewport, computeDropTarget, summaryGeometry, dropChangesStructure, describeDropTarget, gapIndicatorGeometry, dropBand, type DropTarget } from "./geometry";
+import { MoveNodeCommand } from "../core/commands";
+import { applyLayout } from "../layout";
 import { createEmptyMap, createNode } from "../core/tree";
 import type { MindMap, MindNode } from "../core/types";
 
-/** Dựng map với 3 node anh em (A, B, C) xếp dọc, vị trí Y CỤ THỂ để
- *  kiểm soát chính xác toạ độ các khe khi test. Mỗi node cao 40, đặt
- *  cách nhau 10 (khe A-B tại y=145, khe B-C tại y=195). */
-function buildThreeSiblings(): { map: MindMap; a: MindNode; b: MindNode; c: MindNode } {
+/** Map có gốc + các con (mỗi con có thể có cháu), xếp bằng layout THẬT với node cỡ cố định 120x36. */
+function buildMap(layout: MindMap["layoutType"], names: string[], grandkids: Record<string, string[]> = {}) {
   const map = createEmptyMap("Gốc");
+  map.layoutType = layout;
   const root = map.nodes[map.rootId] as MindNode;
-  root.width = 100;
-  root.height = 40;
-
-  const a = createNode("A", root.id);
-  a.width = 100;
-  a.height = 40;
-  a.baseY = 100;
-  a.y = 100;
-  map.nodes[a.id] = a;
-  root.children.push(a.id);
-
-  const b = createNode("B", root.id);
-  b.width = 100;
-  b.height = 40;
-  b.baseY = 150;
-  b.y = 150;
-  map.nodes[b.id] = b;
-  root.children.push(b.id);
-
-  const c = createNode("C", root.id);
-  c.width = 100;
-  c.height = 40;
-  c.baseY = 200;
-  c.y = 200;
-  map.nodes[c.id] = c;
-  root.children.push(c.id);
-
-  return { map, a, b, c };
+  const by: Record<string, MindNode> = {};
+  const add = (text: string, parent: MindNode) => {
+    const n = createNode(text, parent.id);
+    map.nodes[n.id] = n;
+    parent.children.push(n.id);
+    by[text] = n;
+    return n;
+  };
+  for (const t of names) {
+    const n = add(t, root);
+    for (const g of grandkids[t] ?? []) add(g, n);
+  }
+  const relayout = () => applyLayout(map, () => ({ width: 120, height: 36 }));
+  relayout();
+  return { map, root, by, relayout };
 }
+const order = (map: MindMap, parentId: string) => (map.nodes[parentId] as MindNode).children.map((id) => map.nodes[id]!.text).join(",");
+/** Thả giống finishNodeDrag: chỉ dispatch khi đổi cấu trúc. */
+function drop(map: MindMap, draggedId: string, t: DropTarget | null) {
+  if (!t) return;
+  if (!dropChangesStructure(map, draggedId, t)) return;
+  const index = t.kind === "child" ? map.nodes[t.parentId]!.children.length : t.index;
+  new MoveNodeCommand(draggedId, t.parentId, index).apply(map);
+}
+const midX = (n: MindNode) => n.x + n.width / 2;
+const midY = (n: MindNode) => n.y + n.height / 2;
 
-describe("computeDropTarget — hysteresis (sửa lỗi 'kéo lệch một chút xíu là đổi hẳn vị trí')", () => {
-  it("con trỏ THỰC SỰ SÁT khe (trong vùng ENTER hẹp) -> nhận diện khe dù CHƯA có khe nào đang active", () => {
-    const { map, a } = buildThreeSiblings();
-    // Khe A-B tại y = (140+150)/2 = 145. Cách tâm khe 5 đơn vị — trong
-    // vùng ENTER (0.18*40=7.2) nên phải nhận diện dù currentTarget=null.
-    const target = computeDropTarget(map, "khong-ton-tai", 50, 140, null);
-    expect(target).toEqual({ kind: "gap", parentId: a.parentId, index: expect.any(Number) });
+describe("computeDropTarget — kéo thả đúng thứ tự (bố cục ngang)", () => {
+  it("kéo B xuống khe giữa C và D → A,C,B,D (trước đây lệch thành A,C,D,B)", () => {
+    const { map, root, by } = buildMap("logicRight", ["A", "B", "C", "D"]);
+    const y = (by.C!.y + by.C!.height + by.D!.y) / 2;
+    const t = computeDropTarget(map, by.B!.id, midX(by.C!), y);
+    drop(map, by.B!.id, t);
+    expect(order(map, root.id)).toBe("A,C,B,D");
   });
 
-  it("con trỏ CÁCH khe một khoảng VỪA PHẢI (ngoài ENTER, trong STAY) nhưng CHƯA có khe nào active -> KHÔNG nhận diện (đúng thiết kế: chưa 'vào' hẳn thì chưa tính)", () => {
-    const { map } = buildThreeSiblings();
-    // Cách tâm khe A-B (145) một khoảng 10 -> ngoài ENTER (7.2) nhưng
-    // trong STAY (0.4*40=16). currentTarget=null nên phải dùng ngưỡng
-    // HẸP (ENTER) -> không nhận diện được khe này.
-    const target = computeDropTarget(map, "khong-ton-tai", 50, 135, null);
-    expect(target?.kind).not.toBe("gap");
+  it("kéo B lên trên A → B,A,C,D; xuống dưới D → A,C,D,B", () => {
+    let m = buildMap("logicRight", ["A", "B", "C", "D"]);
+    drop(m.map, m.by.B!.id, computeDropTarget(m.map, m.by.B!.id, midX(m.by.A!), m.by.A!.y - 10));
+    expect(order(m.map, m.root.id)).toBe("B,A,C,D");
+    m = buildMap("logicRight", ["A", "B", "C", "D"]);
+    drop(m.map, m.by.B!.id, computeDropTarget(m.map, m.by.B!.id, midX(m.by.D!), m.by.D!.y + m.by.D!.height + 12));
+    expect(order(m.map, m.root.id)).toBe("A,C,D,B");
   });
 
-  it("CÙNG một vị trí con trỏ như trên, nhưng khe A-B ĐANG được giữ (currentTarget) -> VẪN giữ nguyên, không rớt ra — đây chính là phần sửa lỗi chính", () => {
-    const { map, a, b } = buildThreeSiblings();
-    const indexOfB = (map.nodes[a.parentId as string] as MindNode).children.indexOf(b.id);
-    const currentTarget = { kind: "gap" as const, parentId: a.parentId as string, index: indexOfB };
-    // Y=135 giống hệt test trên (ngoài ENTER, trong STAY) — nhưng lần
-    // này currentTarget ĐANG LÀ đúng khe A-B, nên phải dùng ngưỡng
-    // RỘNG (STAY=16) và tiếp tục nhận diện đúng khe đó, KHÔNG đổi
-    // sang trạng thái khác dù con trỏ đã lệch 10 đơn vị khỏi tâm khe.
-    const target = computeDropTarget(map, "khong-ton-tai", 50, 135, currentTarget);
-    expect(target).toEqual(currentTarget);
+  it("thả B về đúng chỗ cũ: không đổi cấu trúc", () => {
+    const { map, by } = buildMap("logicRight", ["A", "B", "C", "D"]);
+    const t = computeDropTarget(map, by.B!.id, midX(by.A!), midY(by.B!))!;
+    expect(t.kind).toBe("gap");
+    expect(dropChangesStructure(map, by.B!.id, t)).toBe(false);
   });
 
-  it("con trỏ RA HẲN KHỎI vùng STAY của khe đang giữ -> mới thực sự đổi sang trạng thái khác", () => {
-    const { map, a, b } = buildThreeSiblings();
-    const parentId = a.parentId as string;
-    const indexOfB = (map.nodes[parentId] as MindNode).children.indexOf(b.id);
-    const currentTarget = { kind: "gap" as const, parentId, index: indexOfB };
-    // Y=125 — cách tâm khe A-B (145) những 20 đơn vị, VƯỢT QUÁ cả
-    // STAY (16) — phải không còn là khe A-B nữa (đổi sang thân A, vì
-    // 125 nằm trong thân A [100,140]... thực ra 125 nằm trong [100,140]
-    // nên sẽ hit thân A làm con, không phải gap nào khác).
-    const target = computeDropTarget(map, "khong-ton-tai", 50, 125, currentTarget);
-    expect(target).not.toEqual(currentTarget);
+  it("trên thân node: dải đầu = chèn trước, giữa = làm con, dải cuối = chèn sau", () => {
+    const { map, by } = buildMap("logicRight", ["A", "B", "C", "D"]);
+    const C = by.C!;
+    const before = computeDropTarget(map, by.A!.id, midX(C), C.y + 3)!;
+    expect(before).toMatchObject({ kind: "gap", refId: C.id, after: false });
+    expect(computeDropTarget(map, by.A!.id, midX(C), midY(C))).toEqual({ kind: "child", parentId: C.id });
+    expect(computeDropTarget(map, by.A!.id, midX(C), C.y + C.height - 3)).toMatchObject({ kind: "gap", refId: C.id, after: true });
+    expect(describeDropTarget(map, before)).toBe("Chèn phía trên «C»");
+    expect(describeDropTarget(map, { kind: "child", parentId: C.id })).toBe("Làm nhánh con của «C»");
   });
 
-  it("node ĐANG KÉO (và con cháu nó) bị loại trừ hoàn toàn khỏi việc dò — không thể thả vào chính nó", () => {
-    const { map, a, b } = buildThreeSiblings();
-    // Kéo CHÍNH node A — dò tại đúng vị trí thân A phải KHÔNG trả về
-    // { kind: "child", parentId: a.id } (không thể làm con của chính
-    // mình) — nhưng CÓ THỂ trả về kết quả khác (ví dụ null hoặc thân
-    // node khác), miễn không phải chính A.
-    const target = computeDropTarget(map, a.id, 50, 120, null);
-    expect(target).not.toEqual({ kind: "child", parentId: a.id });
-    void b;
+  it("ổn định ở ranh giới dải (hysteresis): đang 'làm con' thì nhích sát mép vẫn giữ", () => {
+    const { map, by } = buildMap("logicRight", ["A", "B", "C"]);
+    const C = by.C!;
+    const edge = C.y + dropBand(C.height);
+    const y = edge - 2;
+    expect(computeDropTarget(map, by.A!.id, midX(C), y, null)?.kind).toBe("gap");
+    expect(computeDropTarget(map, by.A!.id, midX(C), y, { kind: "child", parentId: C.id })).toEqual({ kind: "child", parentId: C.id });
   });
 
-  it("thân node (không phải khe) vẫn nhận diện đúng để làm con — không bị hysteresis ảnh hưởng", () => {
-    const { map, a } = buildThreeSiblings();
-    // Y=120 nằm giữa thân A [100,140], cách xa mọi khe — phải nhận
-    // diện là muốn làm con của A.
-    const target = computeDropTarget(map, "khong-ton-tai", 50, 120, null);
-    expect(target).toEqual({ kind: "child", parentId: a.id });
+  it("thả hụt ra xa: bám về khe gần nhất trong nhóm anh em cũ (không bao giờ null với node có cha)", () => {
+    const { map, root, by } = buildMap("logicRight", ["A", "B", "C", "D"]);
+    const t = computeDropTarget(map, by.A!.id, by.D!.x + 3000, midY(by.D!) + 1);
+    expect(t).toMatchObject({ kind: "gap", parentId: root.id });
+    drop(map, by.A!.id, t);
+    expect(order(map, root.id)).toBe("B,C,D,A");
+  });
+
+  it("nhánh trôi kéo ra chỗ trống: null (dời tự do)", () => {
+    const { map, by } = buildMap("logicRight", ["A"]);
+    const f = createNode("Trôi", null);
+    f.x = 900; f.y = 900; f.width = 120; f.height = 36;
+    map.nodes[f.id] = f;
+    expect(computeDropTarget(map, f.id, 3000, 3000)).toBeNull();
+    expect(computeDropTarget(map, f.id, midX(by.A!), midY(by.A!))).toEqual({ kind: "child", parentId: by.A!.id });
+  });
+
+  it("không thả được vào chính nhánh con của mình", () => {
+    const { map, root, by } = buildMap("logicRight", ["A", "B"], { A: ["A1", "A2"] });
+    const t = computeDropTarget(map, by.A!.id, midX(by.A1!), midY(by.A1!));
+    expect(t?.parentId).toBe(root.id);
+  });
+
+  it("chỗ trống cạnh nhóm cháu: chèn vào nhóm đó theo vị trí", () => {
+    const { map, by } = buildMap("logicRight", ["A", "B"], { A: ["A1", "A2"] });
+    const y = (by.A1!.y + by.A1!.height + by.A2!.y) / 2;
+    const t = computeDropTarget(map, by.B!.id, midX(by.A1!), y)!;
+    expect(t).toMatchObject({ kind: "gap", parentId: by.A!.id, index: 1 });
+  });
+
+  it("cột anh em chồng nhau (cha tên dài): thả vào chỗ trống của chính node đang kéo vẫn thuộc nhóm của nó", () => {
+    const map = createEmptyMap("Gốc");
+    map.layoutType = "logicRight";
+    const root = map.nodes[map.rootId] as MindNode;
+    const p1 = createNode("Ngắn", root.id);
+    const p2 = createNode("Một nhánh có tên rất rất dài", root.id);
+    for (const p of [p1, p2]) { map.nodes[p.id] = p; root.children.push(p.id); }
+    const kids = ["A", "B", "C"].map((t) => { const n = createNode(t, p1.id); map.nodes[n.id] = n; p1.children.push(n.id); return n; });
+    applyLayout(map, (n) => ({ width: n.text.length > 20 ? 400 : 120, height: 36 }));
+    const B = kids[1]!;
+    expect(p2.x + p2.width).toBeGreaterThan(B.x); // hai cột chồng nhau theo trục X
+    const t = computeDropTarget(map, B.id, B.x + B.width / 2, B.y + B.height / 2)!;
+    expect(t.parentId).toBe(p1.id);
+    expect(dropChangesStructure(map, B.id, t)).toBe(false);
+  });
+
+  it("theo VỊ TRÍ THẬT: node anh em bị kéo lệch lên đầu thì chèn 'trên nó' vẫn đúng chỗ nhìn thấy", () => {
+    const { map, root, by, relayout } = buildMap("logicRight", ["A", "B", "C", "D"]);
+    by.D!.offsetY = -400; // D bị kéo tay lên cao nhất
+    relayout();
+    const t = computeDropTarget(map, by.B!.id, midX(by.D!), by.D!.y + 3)!;
+    expect(t).toMatchObject({ kind: "gap", refId: by.D!.id, after: false });
+    drop(map, by.B!.id, t);
+    expect(order(map, root.id)).toBe("A,C,B,D");
+  });
+
+  it("vạch chỉ chỗ chèn: trước node đầu nằm sát trên node đó; giữa hai node nằm giữa khe", () => {
+    const { map, by } = buildMap("logicRight", ["A", "B", "C"]);
+    const t1 = computeDropTarget(map, by.C!.id, midX(by.A!), by.A!.y - 10) as Extract<DropTarget, { kind: "gap" }>;
+    expect(gapIndicatorGeometry(map, t1)!.y1).toBe(by.A!.y - 7);
+    const t2 = computeDropTarget(map, by.C!.id, midX(by.A!), by.A!.y + by.A!.height - 2) as Extract<DropTarget, { kind: "gap" }>;
+    expect(gapIndicatorGeometry(map, t2)!.y1).toBe((by.A!.y + by.A!.height + by.B!.y) / 2);
+  });
+});
+
+describe("computeDropTarget — bố cục cây xuống và hai bên", () => {
+  it("cây xuống: anh em xếp ngang, chèn bên phải node cuối", () => {
+    const { map, root, by } = buildMap("treeDown", ["A", "B", "C"]);
+    const t = computeDropTarget(map, by.A!.id, by.C!.x + by.C!.width + 15, midY(by.C!))!;
+    expect(describeDropTarget(map, t)).toBe("Chèn bên phải «C»");
+    drop(map, by.A!.id, t);
+    expect(order(map, root.id)).toBe("B,C,A");
+    const geo = gapIndicatorGeometry(map, t as Extract<DropTarget, { kind: "gap" }>)!;
+    expect(geo.x1).toBe(geo.x2); // vạch dọc
+  });
+
+  it("hai bên: con của gốc tách nhóm trái/phải, chèn theo đúng nhóm phía con trỏ", () => {
+    const { map, root, by } = buildMap("logicBoth", ["A", "B", "C", "D"]);
+    const left = Object.values(by).filter((n) => n.x + n.width <= root.x);
+    const right = Object.values(by).filter((n) => n.x > root.x);
+    expect(left.length).toBeGreaterThan(0);
+    expect(right.length).toBeGreaterThan(0);
+    const L = [...left].sort((a, b) => a.y - b.y)[0]!;
+    const mover = right[0]!;
+    const t = computeDropTarget(map, mover.id, midX(L), L.y - 10)!;
+    expect(t).toMatchObject({ kind: "gap", refId: L.id, after: false });
   });
 });
 

@@ -251,61 +251,88 @@ export function summaryGeometry(map: MindMap, s: Summary): SummaryGeometry | nul
 
 
 // ---------------------------------------------------------------------
-// P1.8 — kéo thả đổi cấu trúc cây
+// P1.8 — kéo thả đổi cấu trúc cây (viết lại: kéo thả mượt, đúng thứ tự)
 // ---------------------------------------------------------------------
 
+/**
+ * Nơi sẽ thả node đang kéo.
+ *  - "child": làm con CUỐI của `parentId`.
+ *  - "gap": chèn vào danh sách con của `parentId` tại `index` — chỉ số tính trên danh sách con ĐÃ BỎ node đang kéo
+ *    (đúng thứ tự MoveNodeCommand thao tác: gỡ node ra trước rồi mới chèn). Nhờ vậy kéo xuống không còn bị lệch một
+ *    ô, và thả về chỗ cũ là giữ nguyên. `refId`/`after` = chèn trước/sau node nào (để vẽ vạch và ghi nhãn);
+ *    `otherId` = node kề bên kia của khe (cùng phía), nếu có.
+ */
 export type DropTarget =
   | { kind: "child"; parentId: string }
-  | { kind: "gap"; parentId: string; index: number };
+  | { kind: "gap"; parentId: string; index: number; refId: string; after: boolean; otherId: string | null };
 
-const GAP_SLACK = 8; // world units — vùng nhạy quanh mỗi khe, rộng hơn một chút cho dễ nhắm
-/** Tỉ lệ (so với chiều cao/rộng node liền kề nhỏ hơn) của vùng nhạy để
- *  BẮT ĐẦU coi một khe là mục tiêu — HẸP, vì đây là khe CHƯA được
- *  chọn, phải kéo thực sự gần mới tính là muốn đổi sang khe đó. */
-const ENTER_RATIO = 0.18;
-/** Tỉ lệ của vùng nhạy để TIẾP TỤC giữ một khe ĐANG được chọn — RỘNG
- *  hơn hẳn ENTER_RATIO, để nhích nhẹ quanh vị trí đang kéo dở không
- *  làm "rớt" sang khe khác — đây chính là phần giải quyết "kéo lệch
- *  một chút xíu là đổi hẳn vị trí" mà ENTER_RATIO một mình không làm
- *  được (nếu chỉ có một ngưỡng duy nhất, ở giữa hai khe liền kề luôn
- *  có một ranh giới cứng khiến việc "nhích qua nhích lại" quanh ranh
- *  giới đó gây nhảy liên tục, bất kể ngưỡng đặt rộng hay hẹp). Nhỏ
- *  hơn 0.5 để hai vùng STAY của hai khe liền kề không chồng lấn nhau
- *  (tránh mơ hồ giữa 2 khe cùng lúc muốn "giữ" con trỏ). */
-const STAY_RATIO = 0.4;
+/** Khoảng (world) quanh một nhóm anh em mà con trỏ còn được coi là "đang nhắm vào nhóm đó". */
+const GROUP_REACH = 56;
+/** Bề dày (world) dải "chèn trước/sau" ở mép một node có kích thước `size` theo trục xếp anh em. */
+export const dropBand = (size: number): number => Math.min(Math.max(size * 0.22, 6), 12);
+/** Nới thêm (world) cho dải đang được chọn ở khung hình trước — "vào dễ, ra khó", tránh nhấp nháy ở ranh giới. */
+const HYSTERESIS = 5;
+
+interface Axis {
+  /** Toạ độ / kích thước theo trục XẾP anh em (dọc với bố cục ngang, ngang với bố cục cây xuống/lên). */
+  pos: (n: MindNode) => number;
+  size: (n: MindNode) => number;
+  /** Trục vuông góc (trục độ sâu). */
+  cpos: (n: MindNode) => number;
+  csize: (n: MindNode) => number;
+  main: (x: number, y: number) => number;
+  cross: (x: number, y: number) => number;
+}
+const H_AXIS: Axis = { pos: (n) => n.y, size: (n) => n.height, cpos: (n) => n.x, csize: (n) => n.width, main: (_x, y) => y, cross: (x) => x };
+const V_AXIS: Axis = { pos: (n) => n.x, size: (n) => n.width, cpos: (n) => n.y, csize: (n) => n.height, main: (x) => x, cross: (_x, y) => y };
+const axisOf = (map: MindMap, parentId: string): Axis => (isVerticalLayout(layoutOfNode(map, parentId)) ? V_AXIS : H_AXIS);
+
+/** Các nhóm anh em đang hiển thị của `parentId` (bỏ node đang kéo), mỗi nhóm SẮP THEO VỊ TRÍ THẬT trên trục xếp.
+ *  Cây hai bên: con của gốc tách thành nhóm trái và nhóm phải. */
+function siblingGroups(map: MindMap, parentId: string, excluded: Set<string>): MindNode[][] {
+  const parent = map.nodes[parentId];
+  if (!parent || parent.collapsed) return [];
+  const ax = axisOf(map, parentId);
+  const kids = parent.children.filter((id) => !excluded.has(id)).map((id) => map.nodes[id]).filter((n): n is MindNode => Boolean(n));
+  if (kids.length === 0) return [];
+  const sortGroup = (g: MindNode[]): MindNode[] => [...g].sort((a, b) => ax.pos(a) + ax.size(a) / 2 - (ax.pos(b) + ax.size(b) / 2));
+  if (ax === H_AXIS) {
+    const left = kids.filter((n) => n.x + n.width <= parent.x);
+    const right = kids.filter((n) => n.x + n.width > parent.x);
+    return [left, right].filter((g) => g.length > 0).map(sortGroup);
+  }
+  return [sortGroup(kids)];
+}
+
+/** Khe trước/sau `ref` trong nhóm (đã sắp), quy ra chỉ số trên danh sách con đã bỏ node đang kéo. */
+function gapAt(map: MindMap, parentId: string, group: MindNode[], refPos: number, after: boolean, excluded: Set<string>): DropTarget {
+  const ref = group[refPos] as MindNode;
+  const list = (map.nodes[parentId] as MindNode).children.filter((id) => !excluded.has(id));
+  const other = group[after ? refPos + 1 : refPos - 1] ?? null;
+  return { kind: "gap", parentId, index: list.indexOf(ref.id) + (after ? 1 : 0), refId: ref.id, after, otherId: other?.id ?? null };
+}
+
+/** Khe trong nhóm ứng với vị trí `m` trên trục xếp: trước node đầu tiên có tâm nằm sau `m`, hoặc sau node cuối. */
+function gapByPosition(map: MindMap, parentId: string, group: MindNode[], m: number, ax: Axis, excluded: Set<string>): DropTarget {
+  const i = group.findIndex((n) => ax.pos(n) + ax.size(n) / 2 > m);
+  return i === -1 ? gapAt(map, parentId, group, group.length - 1, true, excluded) : gapAt(map, parentId, group, i, false, excluded);
+}
+
+const sameTarget = (a: DropTarget | null, b: DropTarget | null): boolean =>
+  !!a && !!b && a.kind === b.kind && a.parentId === b.parentId && (a.kind === "child" || (b.kind === "gap" && a.index === b.index));
 
 /**
- * Xác định con trỏ (toạ độ world) đang chỉ vào đâu để quyết định thả
- * node đang kéo (draggedId) vào đó: làm CON của một node (thả lên
- * thân), hay CHÈN vào giữa hai node anh em (thả vào khe giữa chúng).
+ * Xác định nơi thả node `draggedId` khi con trỏ ở (worldX, worldY). Trả null = không có chỗ thả theo cấu trúc
+ * (chỉ xảy ra với nhánh trôi — node có cha luôn bám về một khe; muốn dời tự do thì giữ Alt, do nơi gọi xử lý).
  *
- * Loại trừ hoàn toàn draggedId và mọi con cháu của nó khỏi việc dò —
- * không thể thả một node vào chính nó hay vào con cháu của nó.
- *
- * SỬA LỖI trải nghiệm (người dùng báo): "kéo lệch một chút xíu là đổi
- * hẳn vị trí với node trên/dưới" — nguyên nhân là vùng nhạy "chèn vào
- * khe" trước đó rộng tới ĐÚNG ĐIỂM GIỮA mỗi node liền kề (50% chiều
- * cao mỗi node) và được tính LẠI TỪ ĐẦU mỗi khung hình, không "nhớ"
- * gì từ khung hình trước — chỉ cần nhích qua MỘT ranh giới tĩnh là
- * nhảy ngay sang khe kế tiếp, dù còn cách rất xa khe đó về mặt cảm
- * nhận. Đây là lần sửa THỨ HAI theo hướng ngược lại lần sửa trước
- * (lần trước mở RỘNG vùng nhạy vì "quá hẹp, khó nhắm" — giờ hoá ra
- * rộng đến mức "quá nhạy, dễ đổi ngoài ý muốn") — bài học: vùng nhạy
- * KHÔNG THỂ giải quyết bằng một ngưỡng tĩnh duy nhất, cần HAI ngưỡng
- * khác nhau tuỳ NGỮ CẢNH (đây có phải khe đang được chọn hay không).
- *
- * Cách sửa — HYSTERESIS (độ trễ chuyển trạng thái), mẫu hình chuẩn
- * trong tương tác kéo-thả/nam châm (Figma, Illustrator...): "vào dễ,
- * ra khó" — hai ngưỡng cho mỗi khe, không phải một:
- *  - `currentTarget` (khe đang được ÁP DỤNG từ khung hình TRƯỚC, do
- *    nơi gọi lưu lại và truyền vào) dùng ngưỡng RỘNG (`STAY_RATIO`)
- *    để TIẾP TỤC giữ nguyên — khó "rớt ra" khỏi khe đang chọn.
- *  - Mọi khe KHÁC (chưa được chọn) dùng ngưỡng HẸP (`ENTER_RATIO`) để
- *    BẮT ĐẦU được chọn — phải kéo THỰC SỰ gần khe đó mới tính.
- * Nhờ vậy: nhích nhẹ quanh vị trí đang kéo dở sẽ tiếp tục giữ đúng
- * khe cũ (nằm trong vùng STAY rộng của chính nó); chỉ khi kéo đủ xa
- * (ra khỏi STAY của khe cũ, rồi vào ENTER của khe mới) mới thực sự
- * đổi — đúng "chỉ thay đổi trong một biên độ xác định".
+ * Thứ tự ưu tiên:
+ *  1. Con trỏ nằm TRÊN THÂN một node: chia thân theo trục xếp anh em thành 3 dải — dải đầu = chèn TRƯỚC node đó,
+ *     dải giữa = làm CON của node đó, dải cuối = chèn SAU node đó (gốc của cây: cả thân là "làm con").
+ *  2. Con trỏ ở khoảng trống GẦN một nhóm anh em (trong GROUP_REACH): chèn vào khe gần nhất của nhóm đó, kể cả
+ *     trước node đầu và sau node cuối.
+ *  3. Còn lại: bám về khe gần nhất trong NHÓM ANH EM CŨ của chính node đang kéo (thả hụt không làm mất thứ tự).
+ * Mọi phép so dùng VỊ TRÍ THẬT sau layout (kể cả node từng bị kéo lệch), không dùng thứ tự mảng — nên vạch xanh
+ * thấy ở đâu thì thả vào đúng đó.
  */
 export function computeDropTarget(
   map: MindMap,
@@ -315,109 +342,114 @@ export function computeDropTarget(
   currentTarget: DropTarget | null = null
 ): DropTarget | null {
   const excluded = new Set(collectSubtreeIds(map, draggedId));
-  // P2.7c — Tree Down xếp anh em THEO HÀNG NGANG (không phải dọc như
-  // mọi layout khác), nên khe hở giữa 2 anh em liên tiếp cũng nằm
-  // theo trục X, không phải trục Y — phải đảo hẳn cách dò so với logic
-  // gốc (viết cho layout ngang, nơi anh em xếp CỘT DỌC).
 
-  // 1) Khe giữa hai anh em liên tiếp — ưu tiên kiểm tra trước vì vùng
-  //    nhạy của nó hẹp, nếu để hit-test thân node chạy trước sẽ nuốt mất.
-  for (const parentId of Object.keys(map.nodes)) {
-    if (excluded.has(parentId)) continue;
-    const parent = map.nodes[parentId];
-    if (!parent || parent.collapsed) continue;
-
-    const visibleChildIds = parent.children.filter((id) => !excluded.has(id));
-    const childNodes = visibleChildIds
-      .map((id) => map.nodes[id])
-      .filter((n): n is MindNode => Boolean(n));
-    if (childNodes.length < 2) continue;
-
-    // Bố cục của CÂY chứa node cha (mỗi cây có thể một kiểu).
-    if (isVerticalLayout(layoutOfNode(map, parentId))) {
-      // Anh em xếp ngang (trái->phải theo đúng thứ tự mảng, xem
-      // layoutSubtreeDown) — kiểm dải Y CHUNG trước, rồi tìm khe theo X.
-      const top = Math.min(...childNodes.map((n) => n.y)) - GAP_SLACK;
-      const bottom = Math.max(...childNodes.map((n) => n.y + n.height)) + GAP_SLACK;
-      if (worldY < top || worldY > bottom) continue;
-
-      for (let i = 1; i < childNodes.length; i++) {
-        const leftN = childNodes[i - 1] as MindNode;
-        const rightN = childNodes[i] as MindNode;
-        const rightIndexInFullList = parent.children.indexOf(rightN.id);
-        const isCurrent =
-          currentTarget?.kind === "gap" && currentTarget.parentId === parentId && currentTarget.index === rightIndexInFullList;
-        // Tâm thật của khe (giữa mép phải leftN và mép trái rightN) —
-        // không phải điểm giữa của node như ngưỡng cũ.
-        const gapCenter = (leftN.x + leftN.width + rightN.x) / 2;
-        const ratio = isCurrent ? STAY_RATIO : ENTER_RATIO;
-        const halfWidth = Math.min(leftN.width, rightN.width) * ratio;
-        if (worldX >= gapCenter - halfWidth && worldX <= gapCenter + halfWidth) {
-          return { kind: "gap", parentId, index: rightIndexInFullList };
-        }
-      }
-    } else {
-      const left = Math.min(...childNodes.map((n) => n.x)) - GAP_SLACK;
-      const right = Math.max(...childNodes.map((n) => n.x + n.width)) + GAP_SLACK;
-      if (worldX < left || worldX > right) continue;
-
-      for (let i = 1; i < childNodes.length; i++) {
-        const above = childNodes[i - 1] as MindNode;
-        const below = childNodes[i] as MindNode;
-        // index tính trên parent.children GỐC (kể cả phần tử bị loại
-        // trừ), vì lệnh MoveNodeCommand thao tác trên mảng gốc đó.
-        const belowIndexInFullList = parent.children.indexOf(below.id);
-        const isCurrent =
-          currentTarget?.kind === "gap" && currentTarget.parentId === parentId && currentTarget.index === belowIndexInFullList;
-        // Tâm thật của khe (giữa mép dưới above và mép trên below) —
-        // không phải điểm giữa của node như ngưỡng cũ.
-        const gapCenter = (above.y + above.height + below.y) / 2;
-        const ratio = isCurrent ? STAY_RATIO : ENTER_RATIO;
-        const halfHeight = Math.min(above.height, below.height) * ratio;
-        if (worldY >= gapCenter - halfHeight && worldY <= gapCenter + halfHeight) {
-          return { kind: "gap", parentId, index: belowIndexInFullList };
-        }
-      }
-    }
-  }
-
-  // 2) Không rơi vào khe nào — kiểm tra thân node để làm con.
-  let bodyHit: string | null = null;
+  // 1) Trên thân node.
+  let body: MindNode | null = null;
   const visit = (id: string): void => {
-    if (bodyHit) return;
-    if (excluded.has(id)) return;
+    if (body || excluded.has(id)) return;
     const node = map.nodes[id];
     if (!node) return;
-    if (worldX >= node.x && worldX <= node.x + node.width && worldY >= node.y && worldY <= node.y + node.height) {
-      bodyHit = id;
-    }
+    if (worldX >= node.x && worldX <= node.x + node.width && worldY >= node.y && worldY <= node.y + node.height) body = node;
     if (!node.collapsed) for (const childId of node.children) visit(childId);
   };
   for (const rootId of getRootIds(map)) visit(rootId);
+  if (body) {
+    const node = body as MindNode;
+    if (!node.parentId) return { kind: "child", parentId: node.id };
+    const ax = axisOf(map, node.parentId);
+    const size = ax.size(node);
+    // Dải chèn mỏng (khoảng trống giữa hai node cũng là vùng chèn — bước 2), để dải giữa "làm con" đủ rộng cả khi thu nhỏ.
+    const band = dropBand(size);
+    const rel = ax.main(worldX, worldY) - ax.pos(node);
+    const cur = currentTarget;
+    const curBefore = cur?.kind === "gap" && cur.refId === node.id && !cur.after;
+    const curAfter = cur?.kind === "gap" && cur.refId === node.id && cur.after;
+    const curChild = cur?.kind === "child" && cur.parentId === node.id;
+    const beforeEdge = band + (curBefore ? HYSTERESIS : curChild ? -HYSTERESIS : 0);
+    const afterEdge = size - band - (curAfter ? HYSTERESIS : curChild ? -HYSTERESIS : 0);
+    if (rel > beforeEdge && rel < afterEdge) return { kind: "child", parentId: node.id };
+    const group = siblingGroups(map, node.parentId, excluded).find((g) => g.includes(node));
+    if (!group) return { kind: "child", parentId: node.id };
+    return gapAt(map, node.parentId, group, group.indexOf(node), rel >= afterEdge, excluded);
+  }
 
-  return bodyHit ? { kind: "child", parentId: bodyHit } : null;
+  // 2) Gần một nhóm anh em.
+  let best: { d: number; t: DropTarget } | null = null;
+  for (const parentId of Object.keys(map.nodes)) {
+    if (excluded.has(parentId)) continue;
+    if (visibleRepresentativeId(map, parentId) !== parentId) continue;
+    const ax = axisOf(map, parentId);
+    const m = ax.main(worldX, worldY);
+    const c = ax.cross(worldX, worldY);
+    for (const group of siblingGroups(map, parentId, excluded)) {
+      // Khoảng cách tới node GẦN NHẤT của nhóm (không phải tới khung bao cả nhóm): các cột anh em của những cha khác
+      // nhau có thể chồng lên nhau theo trục độ sâu (một cha có tên dài), khung bao sẽ "nuốt" con trỏ sai nhóm.
+      let d = Infinity;
+      for (const n of group) {
+        const dc = Math.max(ax.cpos(n) - c, 0, c - (ax.cpos(n) + ax.csize(n)));
+        const dm = Math.max(ax.pos(n) - m, 0, m - (ax.pos(n) + ax.size(n)));
+        d = Math.min(d, Math.hypot(dc, dm));
+      }
+      if (d > GROUP_REACH) continue;
+      const t = gapByPosition(map, parentId, group, m, ax, excluded);
+      if (sameTarget(t, currentTarget)) d -= HYSTERESIS;
+      if (!best || d < best.d) best = { d, t };
+    }
+  }
+  if (best) return best.t;
+
+  // 3) Bám về nhóm anh em cũ.
+  const dragged = map.nodes[draggedId];
+  const parentId = dragged?.parentId;
+  if (!parentId || !map.nodes[parentId]) return null;
+  const groups = siblingGroups(map, parentId, excluded);
+  if (groups.length === 0) return { kind: "child", parentId };
+  const ax = axisOf(map, parentId);
+  const c = ax.cross(worldX, worldY);
+  const centerC = (g: MindNode[]): number => (Math.min(...g.map(ax.cpos)) + Math.max(...g.map((n) => ax.cpos(n) + ax.csize(n)))) / 2;
+  const group = groups.reduce((a, b) => (Math.abs(centerC(b) - c) < Math.abs(centerC(a) - c) ? b : a));
+  return gapByPosition(map, parentId, group, ax.main(worldX, worldY), ax, excluded);
 }
 
-/** Toạ độ world của đường chỉ báo "khe" để renderer vẽ — tính lại từ
- *  parentId + index thay vì truyền kèm từ computeDropTarget, để
- *  DropTarget giữ tối giản (chỉ mô tả Ý ĐỊNH, không mô tả CÁCH VẼ). */
-export function gapIndicatorGeometry(
-  map: MindMap,
-  parentId: string,
-  index: number
-): { x1: number; x2: number; y: number } | null {
-  const parent = map.nodes[parentId];
-  if (!parent) return null;
-  const childNodes = parent.children.map((id) => map.nodes[id]).filter((n): n is MindNode => Boolean(n));
-  if (childNodes.length === 0) return null;
+/** Thả vào `target` có làm thay đổi cấu trúc so với hiện tại không (thả về đúng chỗ cũ = không). */
+export function dropChangesStructure(map: MindMap, draggedId: string, target: DropTarget): boolean {
+  const node = map.nodes[draggedId];
+  if (!node) return false;
+  if (target.kind === "child") {
+    const p = map.nodes[target.parentId];
+    return node.parentId !== target.parentId || !p || p.children[p.children.length - 1] !== draggedId;
+  }
+  if (node.parentId !== target.parentId) return true;
+  return (map.nodes[target.parentId] as MindNode).children.indexOf(draggedId) !== target.index;
+}
 
-  const clamped = Math.max(0, Math.min(index, childNodes.length));
-  const above = childNodes[clamped - 1];
-  const below = childNodes[clamped];
-  const y = above && below ? (above.y + above.height + below.y) / 2 : (above ?? below)?.y ?? 0;
-  const left = Math.min(...childNodes.map((n) => n.x));
-  const right = Math.max(...childNodes.map((n) => n.x + n.width));
-  return { x1: left, x2: right, y };
+/** Vạch chỉ chỗ chèn: đoạn thẳng (world) giữa `refId` và node kề `otherId`, hoặc sát mép `refId` nếu ở đầu/cuối nhóm. */
+export function gapIndicatorGeometry(map: MindMap, target: Extract<DropTarget, { kind: "gap" }>): { x1: number; y1: number; x2: number; y2: number } | null {
+  const ref = map.nodes[target.refId];
+  if (!ref) return null;
+  const ax = axisOf(map, target.parentId);
+  const other = target.otherId ? map.nodes[target.otherId] : undefined;
+  const edge = target.after ? ax.pos(ref) + ax.size(ref) : ax.pos(ref);
+  let at: number;
+  if (other) at = target.after ? (edge + ax.pos(other)) / 2 : (edge + ax.pos(other) + ax.size(other)) / 2;
+  else at = target.after ? edge + 7 : edge - 7;
+  const nodes = other ? [ref, other] : [ref];
+  const c0 = Math.min(...nodes.map(ax.cpos)) - 10;
+  const c1 = Math.max(...nodes.map((n) => ax.cpos(n) + ax.csize(n))) + 10;
+  return ax === H_AXIS ? { x1: c0, y1: at, x2: c1, y2: at } : { x1: at, y1: c0, x2: at, y2: c1 };
+}
+
+/** Nhãn ngắn mô tả nơi sẽ thả (hiện trong gợi ý lúc kéo). */
+export function describeDropTarget(map: MindMap, target: DropTarget | null): string {
+  const name = (id: string): string => {
+    const t = (map.nodes[id]?.text ?? "").replace(/\s+/g, " ").trim() || "(không tên)";
+    return `«${t.length > 28 ? `${t.slice(0, 27)}…` : t}»`;
+  };
+  if (!target) return "Dời tự do";
+  if (target.kind === "child") return `Làm nhánh con của ${name(target.parentId)}`;
+  const vertical = axisOf(map, target.parentId) === V_AXIS;
+  const where = vertical ? (target.after ? "bên phải" : "bên trái") : target.after ? "phía dưới" : "phía trên";
+  return `Chèn ${where} ${name(target.refId)}`;
 }
 
 // ---------------------------------------------------------------------

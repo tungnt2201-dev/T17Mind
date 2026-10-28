@@ -4054,3 +4054,10 @@ Phản hồi từ bản dùng thử: node mang 2 Tag có bật "Hiện trên nod
 - `ChangeSourceStorageCommand` gói relink, chấp nhận bản mới, nhúng↔liên kết thành một bước undo.
 - Sửa lỗi: mở lại trình xem từ menu Chèn bị rỗng (ghi đè `sourceId` bằng null).
 - Chưa thử trên Windows thật: đọc/ghi file ngoài bằng Neutralino.
+
+### Kéo thả node — đợt 1 (sửa thứ tự, bám vị trí, Alt để kéo tự do)
+- `computeDropTarget` viết lại: chỉ số khe tính trên danh sách con đã bỏ node đang kéo (hết lệch một ô khi kéo xuống, thả về chỗ cũ = không đổi); có khe đầu/cuối nhóm; thân node chia 3 dải (trước / làm con / sau, `dropBand`); khoảng trống gần nhóm anh em = chèn theo vị trí THẬT (nhóm trái/phải riêng ở cây hai bên, trục ngang ở cây xuống/lên); thả hụt bám về nhóm anh em cũ; hysteresis ở ranh giới dải.
+- `finishNodeDrag`: chỉ ghi lệnh khi có thay đổi; thả vào cây xoá offset kéo tay cũ (Move + SetNodeOffset trong một CompositeCommand = một bước undo). Giữ Alt = dời tự do (offset), nhánh trôi không có đích vẫn dời tự do.
+- Lời nhắc `#drag-hint` ở đáy canvas chỉ hiện khi kéo (`describeDropTarget`); Alt nhấn/thả giữa chừng tính lại ngay; Esc huỷ.
+- Vạch chỉ khe (`gapIndicatorGeometry`) vẽ theo node tham chiếu, dọc với bố cục cây xuống.
+- Test: 14 test mới trong `render/geometry.test.ts`; file test tay `docs/demo/T17Mind-keo-tha.t17m` + `KICH-BAN-TEST-KEO-THA.md`; e2e Playwright kéo chuột thật 9 tình huống đạt.

@@ -643,6 +643,27 @@ input[type="file"] {
 #linking-hint.open {
   display: block;
 }
+/* Lời nhắc khi kéo node: nhỏ, ở đáy canvas, không bắt chuột; chỉ hiện trong lúc kéo. */
+#drag-hint {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: rgba(20, 22, 43, 0.82);
+  color: #e5e7eb;
+  padding: 6px 14px;
+  border-radius: 16px;
+  font-size: 12px;
+  display: none;
+  z-index: 1400;
+  pointer-events: none;
+}
+#drag-hint b { color: #fff; font-weight: 600; }
+#drag-hint.open { display: block; }
 
 /* M1 — mục Card trong SidePanel */
 .card-section { margin: 4px 0 2px; }

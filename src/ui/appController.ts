@@ -29,7 +29,7 @@ import {
   type DragPreview,
   type SearchPulse,
 } from "../render/CanvasRenderer";
-import { computeDropTarget, summaryGeometry, findVisuallyNearestNode, visibleRepresentativeId, type BoundaryGeometry, type DropTarget } from "../render/geometry";
+import { computeDropTarget, dropChangesStructure, describeDropTarget, summaryGeometry, findVisuallyNearestNode, visibleRepresentativeId, type BoundaryGeometry, type DropTarget } from "../render/geometry";
 import { defaultVisual } from "../core/boundaryVisual";
 import { computeGroupGeometry } from "../render/groupGeometry";
 import {
@@ -174,6 +174,9 @@ export class AppController {
   private offsetStartValue = { x: 0, y: 0 };
   private offsetStartWorld = { x: 0, y: 0 };
   private dropTargetPreview: DropTarget | null = null;
+  /** Đang giữ Alt khi kéo node: dời tự do (chỉ đổi offset), không bám vào khe nào. */
+  private dragFree = false;
+  private lastDragScreen = { x: 0, y: 0 };
 
   // resize
   private resizeNodeId: string | null = null;
@@ -226,6 +229,8 @@ export class AppController {
 
   private readonly marqueeBox: HTMLElement;
   private readonly linkingHint: HTMLElement;
+  /** Lời nhắc nhỏ ở đáy canvas, CHỈ hiện trong lúc kéo node (thả ra là ẩn). */
+  private readonly dragHint: HTMLElement;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -237,6 +242,7 @@ export class AppController {
   ) {
     this.marqueeBox = byId("marquee-box");
     this.linkingHint = byId("linking-hint");
+    this.dragHint = byId("drag-hint");
     searchOpenStore.subscribe((open) => {
       this.searchIsOpen = open;
     });
@@ -1458,6 +1464,8 @@ export class AppController {
     this.canvas.addEventListener("wheel", (e) => this.onWheel(e), { passive: false });
     this.canvas.addEventListener("dblclick", (e) => this.onDblClick(e));
     window.addEventListener("keydown", (e) => this.onSpaceKeyDown(e));
+    window.addEventListener("keydown", (e) => this.onDragAltKey(e));
+    window.addEventListener("keyup", (e) => this.onDragAltKey(e));
     window.addEventListener("keyup", (e) => this.onSpaceKeyUp(e));
     window.addEventListener("keydown", (e) => this.onActionKeyDown(e));
     window.addEventListener("keyup", (e) => {
@@ -1980,7 +1988,7 @@ export class AppController {
         this.onViewChange?.();
         break;
       case "node-drag":
-        this.updateNodeDrag(x, y);
+        this.updateNodeDrag(x, y, e.altKey);
         break;
       case "sticky-drag":
         this.updateStickyDrag(x, y);
@@ -2155,22 +2163,56 @@ export class AppController {
     this.dragMode = "node-drag";
   }
 
-  private updateNodeDrag(screenX: number, screenY: number): void {
+  private updateNodeDrag(screenX: number, screenY: number, alt: boolean): void {
     if (!this.draggedNodeId || !this.offsetCommand) return;
     const map = this.store.getMap();
+    this.lastDragScreen = { x: screenX, y: screenY };
     const world = this.renderer.toWorld(screenX, screenY, this.view);
     const dx = world.x - this.offsetStartWorld.x;
     const dy = world.y - this.offsetStartWorld.y;
 
-    // Truyền dropTargetPreview HIỆN TẠI (kết quả từ khung hình TRƯỚC)
-    // làm currentTarget — đây là điều kiện BẮT BUỘC để cơ chế "vào dễ,
-    // ra khó" (hysteresis) trong computeDropTarget hoạt động: nếu
-    // không truyền, hàm không có gì để so sánh, sẽ luôn dùng ngưỡng
-    // HẸP (ENTER_RATIO) cho mọi khe kể cả khe đang giữ, quay lại đúng
-    // vấn đề "nhích nhẹ là đổi hẳn vị trí".
-    this.dropTargetPreview = computeDropTarget(map, this.draggedNodeId, world.x, world.y, this.dropTargetPreview);
+    // Truyền đích của khung hình TRƯỚC để computeDropTarget giữ ổn định ở ranh giới ("vào dễ, ra khó").
+    // Giữ Alt = dời tự do: không bám khe nào.
+    this.dragFree = alt;
+    this.dropTargetPreview = alt ? null : computeDropTarget(map, this.draggedNodeId, world.x, world.y, this.dropTargetPreview);
     this.offsetCommand.setTarget({ x: this.offsetStartValue.x + dx, y: this.offsetStartValue.y + dy });
     this.store.updateSession(this.offsetCommand);
+    this.showDragHint();
+  }
+
+  /** Lời nhắc trong lúc kéo: sẽ thả vào đâu + cách kéo tự do. Không bắt chuột, ẩn ngay khi thả. */
+  private showDragHint(): void {
+    if (!this.draggedNodeId) return;
+    const map = this.store.getMap();
+    const floating = !map.nodes[this.draggedNodeId]?.parentId;
+    const action = this.dragFree
+      ? "Dời tự do — thứ tự trong cây giữ nguyên"
+      : this.dropTargetPreview
+        ? describeDropTarget(map, this.dropTargetPreview)
+        : floating
+          ? "Dời nhánh trôi"
+          : "Giữ nguyên vị trí";
+    const tip = this.dragFree ? "Thả Alt để bám vào vị trí trong cây" : "Giữ Alt để kéo tự do";
+    this.dragHint.replaceChildren();
+    const b = document.createElement("b");
+    b.textContent = action;
+    const span = document.createElement("span");
+    span.textContent = ` · ${tip} · Esc để huỷ`;
+    this.dragHint.append(b, span);
+    this.dragHint.classList.add("open");
+  }
+
+  private hideDragHint(): void {
+    this.dragHint.classList.remove("open");
+  }
+
+  /** Nhấn/thả Alt khi đang kéo mà chưa nhích chuột: tính lại ngay. */
+  private onDragAltKey(e: KeyboardEvent): void {
+    if (this.dragMode !== "node-drag" || e.key !== "Alt") return;
+    e.preventDefault(); // không để Alt mở menu/đổi focus của cửa sổ giữa lúc kéo
+    const alt = e.type === "keydown";
+    if (alt === this.dragFree) return;
+    this.updateNodeDrag(this.lastDragScreen.x, this.lastDragScreen.y, alt);
   }
 
   private finishNodeDrag(): void {
@@ -2180,25 +2222,32 @@ export class AppController {
 
     if (!this.dragMoved) {
       this.store.cancelSession();
-    } else if (target) {
+    } else if (target && !this.dragFree) {
       this.store.cancelSession(); // bỏ phần "kéo tự do xem trước", chỉ giữ lại việc đổi cấu trúc
       const map = this.store.getMap();
       const targetIndex = target.kind === "child" ? map.nodes[target.parentId]?.children.length ?? 0 : target.index;
-      try {
-        this.store.dispatch(new MoveNodeCommand(draggedId, target.parentId, targetIndex));
-      } catch (err) {
-        // an toàn cuối cùng: nếu vì lý do gì đó lệnh không hợp lệ (ví
-        // dụ vòng lặp lọt qua computeDropTarget), không làm sập ứng
-        // dụng — chỉ bỏ qua thao tác thả này.
-        console.warn("Không thể di chuyển node:", err);
+      const node = map.nodes[draggedId];
+      const commands: Command[] = [];
+      if (dropChangesStructure(map, draggedId, target)) commands.push(new MoveNodeCommand(draggedId, target.parentId, targetIndex));
+      // Thả vào cây thì node nằm ĐÚNG chỗ bố cục tính — bỏ độ lệch kéo tay cũ (nếu còn), để không "trôi" khỏi khe.
+      if (node && (node.offsetX !== 0 || node.offsetY !== 0)) commands.push(new SetNodeOffsetCommand(draggedId, { x: 0, y: 0 }));
+      if (commands.length > 0) {
+        try {
+          this.store.dispatch(commands.length === 1 ? (commands[0] as Command) : new CompositeCommand(commands, "Di chuyển trong cây"));
+        } catch (err) {
+          // an toàn cuối cùng: lệnh không hợp lệ (ví dụ vòng lặp) thì bỏ qua thao tác thả này, không làm sập ứng dụng.
+          console.warn("Không thể di chuyển node:", err);
+        }
       }
     } else {
-      this.store.endSession();
+      this.store.endSession(); // Alt (dời tự do) hoặc nhánh trôi không thả vào đâu: giữ độ lệch mới
     }
 
     this.draggedNodeId = null;
     this.offsetCommand = null;
     this.dropTargetPreview = null;
+    this.dragFree = false;
+    this.hideDragHint();
   }
 
   // --- kéo ghi chú dán (P2.5b) — đơn giản hơn node-drag hẳn, không có
@@ -2690,6 +2739,8 @@ export class AppController {
         this.draggedNodeId = null;
         this.offsetCommand = null;
         this.dropTargetPreview = null;
+        this.dragFree = false;
+        this.hideDragHint();
         this.dragMode = null;
         this.draw();
         return;
