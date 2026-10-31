@@ -313,6 +313,70 @@ export class CycleCollapseLevelCommand implements Command {
   }
 }
 
+/** Độ sâu (tính từ `nodeId`, chính nó = 0) của tầng con cháu SÂU NHẤT đang hiện trên sơ đồ. Node thu gọn hoặc lá = 0. */
+export function visibleDepth(map: MindMap, nodeId: string): number {
+  const n = map.nodes[nodeId];
+  if (!n || n.collapsed || n.children.length === 0) return 0;
+  let d = 0;
+  for (const c of n.children) d = Math.max(d, 1 + visibleDepth(map, c));
+  return d;
+}
+
+/** Độ sâu của tầng con cháu sâu nhất (không xét thu gọn). Lá = 0. */
+export function subtreeDepth(map: MindMap, nodeId: string): number {
+  const n = map.nodes[nodeId];
+  if (!n || n.children.length === 0) return 0;
+  let d = 0;
+  for (const c of n.children) d = Math.max(d, 1 + subtreeDepth(map, c));
+  return d;
+}
+
+/**
+ * Thu gọn / bung THEO TỪNG CẤP: hiện đúng `depth` tầng con cháu dưới `nodeId` (0 = thu gọn hẳn node).
+ * Các node có con nằm ở tầng < depth được mở; ở đúng tầng `depth` được thu gọn. Phím C dùng lệnh này để mỗi lần bấm
+ * chỉ rút (hoặc bung) MỘT cấp, thay vì rút hết về một nút.
+ */
+export class SetVisibleDepthCommand implements Command {
+  readonly label = "Thu gọn / bung một cấp";
+  private snapshot = new Map<string, boolean>();
+  constructor(
+    private readonly nodeId: string,
+    private readonly depth: number
+  ) {}
+  apply(map: MindMap): void {
+    this.snapshot = new Map();
+    const set = (n: MindNode, value: boolean): void => {
+      if (n.collapsed === value) return;
+      if (!this.snapshot.has(n.id)) this.snapshot.set(n.id, n.collapsed);
+      n.collapsed = value;
+    };
+    const root = requireNode(map, this.nodeId);
+    if (this.depth <= 0) {
+      set(root, true);
+      return;
+    }
+    const walk = (n: MindNode, k: number): void => {
+      if (n.children.length === 0) return;
+      if (k >= this.depth) {
+        set(n, true);
+        return;
+      }
+      set(n, false);
+      for (const c of n.children) {
+        const child = map.nodes[c];
+        if (child) walk(child, k + 1);
+      }
+    };
+    walk(root, 0);
+  }
+  revert(map: MindMap): void {
+    for (const [id, old] of this.snapshot) {
+      const n = map.nodes[id];
+      if (n) n.collapsed = old;
+    }
+  }
+}
+
 /** P2.7g — mở NGAY toàn bộ cây con (bỏ qua các nấc giữa của cycle ở
  *  trên) — dành cho ai vẫn muốn hành vi "mở hết một phát" quen thuộc,
  *  gán cho Shift+bấm/Shift+C (xem appController.ts). */
@@ -514,6 +578,27 @@ export class SetNodeNotesCommand implements Command {
   }
 }
 
+/** Bố cục hai bên — ghim (hoặc bỏ ghim, `side` = null) bên trái/phải của một nhánh cấp 1. */
+export class SetNodeSideCommand implements Command {
+  readonly label = "Đổi bên nhánh";
+  private old: "left" | "right" | undefined;
+  constructor(
+    private readonly nodeId: string,
+    private readonly side: "left" | "right" | null
+  ) {}
+  apply(map: MindMap): void {
+    const node = requireNode(map, this.nodeId);
+    this.old = node.side;
+    if (this.side) node.side = this.side;
+    else delete node.side;
+  }
+  revert(map: MindMap): void {
+    const node = requireNode(map, this.nodeId);
+    if (this.old) node.side = this.old;
+    else delete node.side;
+  }
+}
+
 // =====================================================================
 // Thêm / xoá / di chuyển node trong cây
 // =====================================================================
@@ -522,7 +607,12 @@ export class AddChildCommand implements Command {
   readonly label = "Thêm node con";
   private created: MindNode | null = null;
 
-  constructor(private readonly parentId: string, private readonly text: string) {}
+  /** `side`: bên ghim cho node mới (bố cục hai bên — thêm nhánh cùng cấp cạnh một nhánh đã ghim thì theo bên đó). */
+  constructor(
+    private readonly parentId: string,
+    private readonly text: string,
+    private readonly side: "left" | "right" | null = null
+  ) {}
 
   apply(map: MindMap): void {
     const parent = requireNode(map, this.parentId);
@@ -532,6 +622,7 @@ export class AddChildCommand implements Command {
     // undo/redo qua lại) sẽ trỏ vào hư không.
     const isFirstCreate = !this.created;
     const node = this.created ? this.created : createNode(this.text, this.parentId);
+    if (isFirstCreate && this.side) node.side = this.side;
     this.created = node;
     map.nodes[node.id] = node;
     if (!parent.children.includes(node.id)) parent.children.push(node.id);

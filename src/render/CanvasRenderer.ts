@@ -482,19 +482,19 @@ export class CanvasRenderer {
       ctx.stroke();
       ctx.restore();
     } else {
-      const geo = gapIndicatorGeometry(map, target.parentId, target.index);
+      const geo = gapIndicatorGeometry(map, target);
       if (!geo) return;
       ctx.save();
       ctx.strokeStyle = "#2f6fed";
       ctx.lineWidth = 3;
       ctx.lineCap = "round";
       ctx.beginPath();
-      ctx.moveTo(geo.x1 - 10, geo.y);
-      ctx.lineTo(geo.x2 + 10, geo.y);
+      ctx.moveTo(geo.x1, geo.y1);
+      ctx.lineTo(geo.x2, geo.y2);
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(geo.x1 - 10, geo.y, 3.5, 0, Math.PI * 2);
-      ctx.arc(geo.x2 + 10, geo.y, 3.5, 0, Math.PI * 2);
+      ctx.arc(geo.x1, geo.y1, 3.5, 0, Math.PI * 2);
+      ctx.arc(geo.x2, geo.y2, 3.5, 0, Math.PI * 2);
       ctx.fillStyle = "#2f6fed";
       ctx.fill();
       ctx.restore();
