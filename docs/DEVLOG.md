@@ -4068,3 +4068,8 @@ Phản hồi từ bản dùng thử: node mang 2 Tag có bật "Hiện trên nod
 - Menu chuột phải: "Chuyển nhánh sang bên trái/phải", "Để tự chia bên (bỏ ghim)", trên gốc "Tự chia lại hai bên".
 - Dải chèn trên thân node mỏng hơn (`dropBand` 20%, 6–10), hysteresis dải 3 → dải "làm con" rộng hơn khi thu nhỏ.
 - Test: `ui/dragPreview.test.ts` (8), menu (2); file test có thêm cây "7. Hai bên"; e2e kéo chuột thật đợt 1 (9) + đợt 2 (dạt chỗ, đổi bên, thêm con, tự chia lại + Ctrl+Z, menu đổi bên) đạt.
+
+### Thu gọn từng cấp + giữ map trong khung nhìn
+- Phím C / bấm chấm thu gọn: `SetVisibleDepthCommand(node, depth)` hiện đúng `depth` tầng dưới node; controller (`stepCollapse`) mỗi lần bấm rút một tầng sâu nhất tới khi chỉ còn node, rồi bung lại từng tầng (hướng nhớ trong phiên, không lưu tài liệu). Shift+C mở hết. `visibleDepth`/`subtreeDepth` trong core/commands.ts.
+- Khung nhìn: `withViewAnchor` giữ node vừa bấm đứng yên trên màn hình rồi kéo map vào khung (`clampViewToContent` "contain": nhỏ hơn khung thì nằm trọn, lớn hơn thì không hở mép); gốc bị thu về chỉ còn một nút thì canh giữa. Sau mọi thay đổi dữ liệu (`afterLayout`), khi kéo nền và khi lăn zoom: `keepSomeNodeVisible` — nếu không còn node nào lộ ra trong khung thì kéo node gần nhất vào (theo từng node, không theo khung bao vì map có nhánh trôi/ghi chú dán rải rác).
+- Test: `core/collapseDepth.test.ts` (4), `ui/viewLogic.test.ts` (+8); e2e trên map 177 node: C 8 lần (4→0→4), gốc ra giữa ở mức 0, kéo nền ra xa bị chặn. Kịch bản: `docs/demo/KICH-BAN-TEST-THU-GON.md`.

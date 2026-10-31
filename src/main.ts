@@ -133,6 +133,7 @@ async function bootstrap(): Promise<void> {
 
   function fullRefresh(): void {
     applyLayout(store.getMap(), renderer.getMeasurer(store.getMap()));
+    controller.afterLayout();
     controller.draw();
     updateStatusBar();
     void saveMap(store.getMap()); // P1.11 — fire-and-forget, saveMap() tự bọc lỗi bên trong, không cần await
@@ -155,6 +156,7 @@ async function bootstrap(): Promise<void> {
 
   window.addEventListener("resize", () => {
     renderer.resize();
+    controller.afterLayout();
     controller.draw();
   });
 

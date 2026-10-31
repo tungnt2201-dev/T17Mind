@@ -52,3 +52,100 @@ export function zoomToRectView(rect: ScreenRect, view: ViewTransformLike, canvas
   const cy = (wy1 + wy2) / 2;
   return { scale, offsetX: canvasW / 2 - cx * scale, offsetY: canvasH / 2 - cy * scale };
 }
+
+export interface WorldBounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+/**
+ * Độ dịch khung nhìn (px màn hình) để nội dung `content` (toạ độ thế giới) không bị đẩy ra ngoài canvas.
+ *  - "contain": nội dung VỪA khung thì nằm trọn bên trong (chừa lề `margin`); LỚN hơn khung thì không để hở mép
+ *    trống — mép nội dung không được lùi vào trong lề (giống cuộn một trang tài liệu). Dùng sau khi thu gọn/bung,
+ *    đổi bố cục…: map luôn nằm trong khung nhìn.
+ *  - "keep": nhẹ hơn, dùng khi người dùng tự kéo/zoom — chỉ chặn không cho nội dung trôi hẳn ra ngoài: luôn còn ít
+ *    nhất `keep` px (hoặc cả nội dung nếu nhỏ hơn) nằm trong khung mỗi chiều.
+ */
+export function clampViewToContent(
+  view: ViewTransformLike,
+  content: WorldBounds | null,
+  canvasW: number,
+  canvasH: number,
+  mode: "contain" | "keep",
+  margin = 40,
+  keep = 140
+): { dx: number; dy: number } {
+  if (!content || canvasW <= 0 || canvasH <= 0) return { dx: 0, dy: 0 };
+  const axis = (lo: number, hi: number, size: number): number => {
+    const a = lo * view.scale;
+    const b = hi * view.scale;
+    if (mode === "keep") {
+      const need = Math.min(keep, b - a, size);
+      if (b + 0 < need) return need - b; // trôi ra bên trái/trên
+      if (a > size - need) return size - need - a; // trôi ra bên phải/dưới
+      return 0;
+    }
+    const len = b - a;
+    if (len <= size - 2 * margin) {
+      if (a < margin) return margin - a;
+      if (b > size - margin) return size - margin - b;
+      return 0;
+    }
+    if (len <= size) return (size - len) / 2 - a; // vừa khít khung nhưng không đủ lề: canh giữa
+    if (a > margin) return margin - a;
+    if (b < size - margin) return size - margin - b;
+    return 0;
+  };
+  return {
+    dx: axis(content.minX + view.offsetX / view.scale, content.maxX + view.offsetX / view.scale, canvasW),
+    dy: axis(content.minY + view.offsetY / view.scale, content.maxY + view.offsetY / view.scale, canvasH),
+  };
+}
+
+export interface WorldRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Kiểu "keep" theo TỪNG NODE (không theo khung bao — map có nhánh trôi, ghi chú dán nằm rải rác thì khung bao chứa
+ * cả khoảng trống, nhìn vào đó vẫn là màn hình trắng): nếu không còn node nào lộ ra trong khung ít nhất
+ * `minW`×`minH` px thì dịch để node GẦN khung nhất vào hẳn bên trong (chừa lề `margin`).
+ */
+export function keepSomeNodeVisible(
+  view: ViewTransformLike,
+  rects: WorldRect[],
+  canvasW: number,
+  canvasH: number,
+  minW = 60,
+  minH = 24,
+  margin = 40
+): { dx: number; dy: number } {
+  if (rects.length === 0 || canvasW <= 0 || canvasH <= 0) return { dx: 0, dy: 0 };
+  let best: { d: number; x1: number; y1: number; x2: number; y2: number } | null = null;
+  for (const r of rects) {
+    const x1 = r.x * view.scale + view.offsetX;
+    const y1 = r.y * view.scale + view.offsetY;
+    const x2 = x1 + r.width * view.scale;
+    const y2 = y1 + r.height * view.scale;
+    const ow = Math.min(x2, canvasW) - Math.max(x1, 0);
+    const oh = Math.min(y2, canvasH) - Math.max(y1, 0);
+    if (ow >= Math.min(minW, x2 - x1) && oh >= Math.min(minH, y2 - y1)) return { dx: 0, dy: 0 };
+    const dxOut = x2 < 0 ? -x2 : x1 > canvasW ? x1 - canvasW : 0;
+    const dyOut = y2 < 0 ? -y2 : y1 > canvasH ? y1 - canvasH : 0;
+    const d = Math.hypot(dxOut, dyOut);
+    if (!best || d < best.d) best = { d, x1, y1, x2, y2 };
+  }
+  if (!best) return { dx: 0, dy: 0 };
+  const fit = (a: number, b: number, size: number): number => {
+    if (b - a > size - 2 * margin) return (size - (b - a)) / 2 - a; // node to hơn khung: canh giữa
+    if (a < margin) return margin - a;
+    if (b > size - margin) return size - margin - b;
+    return 0;
+  };
+  return { dx: fit(best.x1, best.x2, canvasW), dy: fit(best.y1, best.y2, canvasH) };
+}
